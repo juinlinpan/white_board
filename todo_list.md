@@ -17,26 +17,26 @@
 
 ### 2. 本機資料與路徑規則
 
-- [ ] 定義 backend root 下的 `data/` 與 `logs/`
-- [ ] 設定 SQLite 路徑為 `<backend_root>/data/whiteboard.db`
-- [ ] 設定 log 路徑為 `<backend_root>/logs/`
-- [ ] 啟動時自動建立缺少的資料夾
+- [x] 定義 backend root 下的 `data/` 與 `logs/`
+- [x] 設定 SQLite 路徑為 `<backend_root>/data/whiteboard.db`
+- [x] 設定 log 路徑為 `<backend_root>/logs/`
+- [x] 啟動時自動建立缺少的資料夾
 - [ ] 補上路徑初始化與錯誤處理
 
 ### 3. SQLite Schema
 
-- [ ] 建立 `projects` table
-- [ ] 建立 `pages` table
-- [ ] 建立 `board_items` table
-- [ ] 建立 `connector_links` table
-- [ ] 建立 migration 或 schema 初始化流程
-- [ ] 建立 DB 存取層
-- [ ] 補上關聯欄位與索引：`project_id`、`page_id`、`parent_item_id`
+- [x] 建立 `projects` table
+- [x] 建立 `pages` table
+- [x] 建立 `board_items` table
+- [x] 建立 `connector_links` table
+- [x] 建立 migration 或 schema 初始化流程
+- [x] 建立 DB 存取層
+- [x] 補上關聯欄位與索引：`project_id`、`page_id`、`parent_item_id`
 
 ### 4. Backend API
 
-- [ ] 實作 Project CRUD API
-- [ ] 實作 Page CRUD API
+- [x] 實作 Project CRUD API
+- [x] 實作 Page CRUD API
 - [ ] 實作 board item CRUD API
 - [ ] 實作 connector CRUD API
 - [ ] 實作 Page viewport API
@@ -45,25 +45,25 @@
 
 ### 5. Frontend App Shell
 
-- [ ] 建立整體 app layout
-- [ ] 實作左側 Project / Page 導覽
-- [ ] 實作中央白板區域
+- [x] 建立整體 app layout
+- [x] 實作左側 Project / Page 導覽
+- [x] 實作中央白板區域
 - [ ] 實作基本工具列與側欄
-- [ ] 串接 backend API
-- [ ] 處理初次載入、空狀態與錯誤狀態
+- [x] 串接 backend API
+- [x] 處理初次載入、空狀態與錯誤狀態
 
 ### 6. Project / Page UI
 
-- [ ] 新增 Project
-- [ ] 重新命名 Project
-- [ ] 刪除 Project
+- [x] 新增 Project
+- [x] 重新命名 Project
+- [x] 刪除 Project
 - [ ] 調整 Project 排序
-- [ ] 新增 Page
-- [ ] 重新命名 Page
-- [ ] 刪除 Page
+- [x] 新增 Page
+- [x] 重新命名 Page
+- [x] 刪除 Page
 - [ ] 複製 Page
 - [ ] 調整 Page 排序
-- [ ] 切換 Page
+- [x] 切換 Page
 
 ### 7. 白板通用能力
 
