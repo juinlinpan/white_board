@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+logs/
+data/
+.DS_Store
+Thumbs.db

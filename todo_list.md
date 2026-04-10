@@ -1,0 +1,219 @@
+# Whiteboard Planner Todo List
+
+依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
+
+## MVP Todo
+
+### 1. 專案基礎建置
+
+- [x] 建立清楚的多目錄結構：`frontend/`、`backend/`
+- [x] 建立 React + TypeScript + Vite 前端專案
+- [x] 建立 Python 3.12 + FastAPI backend 專案
+- [x] 建立 root scripts：`npm run dev`、`dev:frontend`、`dev:backend`、`build`、`lint`、`format`、`typecheck`、`check`
+- [x] 固定前端 dev port `5173` 與 backend dev port `18000`
+- [x] 建立 `GET /healthz` 與前端健康檢查頁
+- [x] 建立 lint / formatter / type check
+- [x] 建立 Windows preflight / bootstrap scripts，至少涵蓋 Python 3.12 與本機開發環境檢查
+
+### 2. 本機資料與路徑規則
+
+- [ ] 定義 backend root 下的 `data/` 與 `logs/`
+- [ ] 設定 SQLite 路徑為 `<backend_root>/data/whiteboard.db`
+- [ ] 設定 log 路徑為 `<backend_root>/logs/`
+- [ ] 啟動時自動建立缺少的資料夾
+- [ ] 補上路徑初始化與錯誤處理
+
+### 3. SQLite Schema
+
+- [ ] 建立 `projects` table
+- [ ] 建立 `pages` table
+- [ ] 建立 `board_items` table
+- [ ] 建立 `connector_links` table
+- [ ] 建立 migration 或 schema 初始化流程
+- [ ] 建立 DB 存取層
+- [ ] 補上關聯欄位與索引：`project_id`、`page_id`、`parent_item_id`
+
+### 4. Backend API
+
+- [ ] 實作 Project CRUD API
+- [ ] 實作 Page CRUD API
+- [ ] 實作 board item CRUD API
+- [ ] 實作 connector CRUD API
+- [ ] 實作 Page viewport API
+- [ ] 實作 Page 全量載入 API
+- [ ] 統一 response format 與錯誤格式
+
+### 5. Frontend App Shell
+
+- [ ] 建立整體 app layout
+- [ ] 實作左側 Project / Page 導覽
+- [ ] 實作中央白板區域
+- [ ] 實作基本工具列與側欄
+- [ ] 串接 backend API
+- [ ] 處理初次載入、空狀態與錯誤狀態
+
+### 6. Project / Page UI
+
+- [ ] 新增 Project
+- [ ] 重新命名 Project
+- [ ] 刪除 Project
+- [ ] 調整 Project 排序
+- [ ] 新增 Page
+- [ ] 重新命名 Page
+- [ ] 刪除 Page
+- [ ] 複製 Page
+- [ ] 調整 Page 排序
+- [ ] 切換 Page
+
+### 7. 白板通用能力
+
+- [ ] 建立白板畫布
+- [ ] 支援拖曳與選取
+- [ ] 支援 viewport 平移與縮放
+- [ ] 支援多選
+- [ ] 支援 resize
+- [ ] 支援 z-index 調整
+- [ ] 支援複製 / 貼上
+- [ ] 支援 Delete
+- [ ] 支援 Undo / Redo
+- [ ] 支援自動儲存
+
+### 8. 物件模型
+
+- [ ] 定義 item type 與 category 常數
+- [ ] 定義前後端共用 item model
+- [ ] 建立 toolbar 物件建立入口
+- [ ] 建立物件基本序列化 / 反序列化
+- [ ] 支援建立 `line`
+- [ ] 支援建立 `table`
+- [ ] 支援建立 `text_box`
+- [ ] 支援建立 `sticky_note`
+- [ ] 支援建立 `note_paper`
+- [ ] 支援建立 `frame`
+- [ ] 支援建立 `arrow`
+
+### 9. `shape`
+
+- [ ] 實作 `line`
+- [ ] 支援 `line` 長度 / 方向調整
+- [ ] 支援 `line` 樣式設定
+- [ ] 實作 `table`
+- [ ] 支援列數 / 欄數調整
+- [ ] 支援儲存 table 內容
+- [ ] 支援 table 樣式設定
+
+### 10. `small_item`
+
+- [ ] 實作 `text_box`
+- [ ] 支援 `text_box` 內容編輯
+- [ ] 實作 `sticky_note`
+- [ ] 支援 `sticky_note` 顏色與文字樣式
+- [ ] 實作 `note_paper`
+- [ ] 支援 Markdown 儲存
+- [ ] 支援 `note_paper` 基本預覽
+
+### 11. `frame`
+
+- [ ] 實作 `frame`
+- [ ] 支援 `frame` 移動
+- [ ] 支援 `frame` resize
+- [ ] 支援 `frame` 展開 / 縮回
+- [ ] 支援把 `small_item` 放入 `frame`
+- [ ] 支援把 `small_item` 從 `frame` 移出
+- [ ] 支援 frame 內物件版面更新
+- [ ] 支援縮回摘要資料計算
+
+### 12. 縮回摘要規則
+
+- [ ] `text_box` 縮回時顯示完整文字
+- [ ] `sticky_note` 縮回時顯示部分文字
+- [ ] `note_paper` 縮回時只顯示第一個 Markdown H1
+- [ ] 若沒有 H1，定義 fallback 顯示規則
+- [ ] 定義 frame 縮回摘要的樣式與排序
+
+### 13. `arrow`
+
+- [ ] 實作 `arrow`
+- [ ] 支援 `arrow` 兩端 endpoint
+- [ ] 支援 endpoint 連到 `small_item`
+- [ ] 支援 endpoint 連到 `frame`
+- [ ] 目標移動時更新連線
+- [ ] 目標刪除時清理 connector
+- [ ] 支援 endpoint 與目標錨點同步
+
+### 14. Snap / 對齊
+
+- [ ] 實作基礎 snap 規則
+- [ ] 實作對齊輔助線
+- [ ] 實作對齊到其他白板物件
+- [ ] 實作對齊到 frame 邊界
+- [ ] 定義 snap 容忍距離
+- [ ] 支援可調整的 snap 設定
+- [ ] 支援暫時停用 snap
+
+### 15. 右側編輯面板
+
+- [ ] 根據選取物件顯示不同內容
+- [ ] 顯示位置資訊
+- [ ] 顯示尺寸資訊
+- [ ] 顯示樣式欄位
+- [ ] 顯示文字或內容設定
+- [ ] 支援顏色調整
+- [ ] 支援基本字體樣式
+- [ ] 顯示目前物件型別
+
+### 16. 快捷鍵
+
+- [ ] `Delete` 刪除
+- [ ] `Ctrl/Cmd + C` 複製
+- [ ] `Ctrl/Cmd + V` 貼上
+- [ ] `Ctrl/Cmd + Z` Undo
+- [ ] `Ctrl/Cmd + Shift + Z` Redo
+- [ ] `Space + Drag` 平移畫布
+
+### 17. 本機啟動與部署流程
+
+- [ ] 定義 frontend / backend 的本機啟動流程
+- [ ] 規劃前端靜態檔正式提供方式
+- [ ] 初始化 `data/` 與 `logs/`
+- [ ] 文件化設定、啟動與備份流程
+- [ ] 補上基本 smoke test
+
+### 18. 驗收測試
+
+- [ ] 驗收 Project / Page CRUD
+- [ ] 驗收物件建立 / 編輯 / 刪除
+- [ ] 驗收 frame 展開 / 縮回
+- [ ] 驗收縮回摘要規則
+- [ ] 驗收 arrow 連線更新
+- [ ] 驗收 snap 對齊
+- [ ] 驗收 Undo / Redo
+- [ ] 驗收本機持久化
+- [ ] 對照 `spec.md` 驗收條件逐項確認
+
+## 延後項目
+
+### 19. 進階內容功能
+
+- [ ] Markdown rich preview
+- [ ] table 進階排版
+- [ ] Undo / Redo 歷史優化
+- [ ] 多人協作
+
+### 20. 非核心能力
+
+- [ ] 使用者帳號
+- [ ] 雲端同步
+- [ ] 權限系統
+- [ ] 行動裝置版本
+- [ ] 匯出 / 匯入流程優化
+
+## 建議實作順序
+
+1. 專案基礎建置
+2. SQLite Schema 與 backend CRUD
+3. Frontend App Shell 與 Project / Page UI
+4. 白板通用能力
+5. 物件模型與各型別實作
+6. Snap、connector 與驗收
+7. 本機部署流程與測試
