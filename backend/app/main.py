@@ -10,11 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import WhiteboardRepository, initialize_storage
 from app.schemas import (
+    BoardItem,
+    BoardItemCreatePayload,
+    BoardItemListResponse,
+    BoardItemUpdatePayload,
+    ConnectorLink,
+    ConnectorLinkCreatePayload,
+    ConnectorLinkListResponse,
+    ConnectorLinkUpdatePayload,
     HealthResponse,
     Page,
+    PageBoardDataResponse,
     PageCreatePayload,
     PageListResponse,
     PageUpdatePayload,
+    PageViewportPayload,
     Project,
     ProjectCreatePayload,
     ProjectListResponse,
@@ -164,6 +174,107 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     ) -> Response:
         repository.delete_page(page_id)
         LOGGER.info("Deleted page %s", page_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.patch("/pages/{page_id}/viewport", response_model=Page)
+    def update_page_viewport(
+        page_id: str,
+        payload: PageViewportPayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> Page:
+        page = repository.update_page_viewport(page_id, payload)
+        LOGGER.info("Updated viewport for page %s", page.id)
+        return page
+
+    @app.get("/pages/{page_id}/board-data", response_model=PageBoardDataResponse)
+    def get_page_board_data(
+        page_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> PageBoardDataResponse:
+        return repository.get_page_board_data(page_id)
+
+    @app.get("/pages/{page_id}/board-items", response_model=BoardItemListResponse)
+    def list_board_items(
+        page_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> BoardItemListResponse:
+        return BoardItemListResponse(items=repository.list_board_items(page_id))
+
+    @app.post("/board-items", response_model=BoardItem, status_code=status.HTTP_201_CREATED)
+    def create_board_item(
+        payload: BoardItemCreatePayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> BoardItem:
+        item = repository.create_board_item(payload)
+        LOGGER.info("Created board item %s", item.id)
+        return item
+
+    @app.get("/board-items/{item_id}", response_model=BoardItem)
+    def get_board_item(
+        item_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> BoardItem:
+        return repository.get_board_item(item_id)
+
+    @app.patch("/board-items/{item_id}", response_model=BoardItem)
+    def update_board_item(
+        item_id: str,
+        payload: BoardItemUpdatePayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> BoardItem:
+        item = repository.update_board_item(item_id, payload)
+        LOGGER.info("Updated board item %s", item.id)
+        return item
+
+    @app.delete("/board-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_board_item(
+        item_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> Response:
+        repository.delete_board_item(item_id)
+        LOGGER.info("Deleted board item %s", item_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.get("/pages/{page_id}/connectors", response_model=ConnectorLinkListResponse)
+    def list_connectors(
+        page_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> ConnectorLinkListResponse:
+        return ConnectorLinkListResponse(items=repository.list_connector_links(page_id))
+
+    @app.post("/connectors", response_model=ConnectorLink, status_code=status.HTTP_201_CREATED)
+    def create_connector(
+        payload: ConnectorLinkCreatePayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> ConnectorLink:
+        connector = repository.create_connector_link(payload)
+        LOGGER.info("Created connector %s", connector.id)
+        return connector
+
+    @app.get("/connectors/{connector_id}", response_model=ConnectorLink)
+    def get_connector(
+        connector_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> ConnectorLink:
+        return repository.get_connector_link(connector_id)
+
+    @app.patch("/connectors/{connector_id}", response_model=ConnectorLink)
+    def update_connector(
+        connector_id: str,
+        payload: ConnectorLinkUpdatePayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> ConnectorLink:
+        connector = repository.update_connector_link(connector_id, payload)
+        LOGGER.info("Updated connector %s", connector.id)
+        return connector
+
+    @app.delete("/connectors/{connector_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_connector(
+        connector_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> Response:
+        repository.delete_connector_link(connector_id)
+        LOGGER.info("Deleted connector %s", connector_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return app

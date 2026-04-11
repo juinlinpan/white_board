@@ -108,3 +108,111 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
 
         missing_pages_response = client.get(f"/projects/{project['id']}/pages")
         assert missing_pages_response.status_code == 404
+
+
+def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        project = client.post("/projects", json={"name": "Execution"}).json()
+        page = client.post(
+            f"/projects/{project['id']}/pages",
+            json={"name": "Main Board"},
+        ).json()
+
+        update_viewport_response = client.patch(
+            f"/pages/{page['id']}/viewport",
+            json={"viewport_x": 120, "viewport_y": 80, "zoom": 1.25},
+        )
+        assert update_viewport_response.status_code == 200
+        assert update_viewport_response.json()["zoom"] == 1.25
+
+        text_box_payload = {
+            "page_id": page["id"],
+            "parent_item_id": None,
+            "category": "small_item",
+            "type": "text_box",
+            "title": "Idea",
+            "content": "Launch checklist",
+            "content_format": "plain_text",
+            "x": 20,
+            "y": 40,
+            "width": 220,
+            "height": 80,
+            "rotation": 0,
+            "z_index": 1,
+            "is_collapsed": False,
+            "style_json": '{"fontSize":14}',
+            "data_json": None,
+        }
+        create_item_response = client.post("/board-items", json=text_box_payload)
+        assert create_item_response.status_code == 201
+        text_box = create_item_response.json()
+
+        arrow_payload = {
+            "page_id": page["id"],
+            "parent_item_id": None,
+            "category": "connector",
+            "type": "arrow",
+            "title": None,
+            "content": None,
+            "content_format": None,
+            "x": 0,
+            "y": 0,
+            "width": 150,
+            "height": 30,
+            "rotation": 0,
+            "z_index": 2,
+            "is_collapsed": False,
+            "style_json": None,
+            "data_json": '{"kind":"straight"}',
+        }
+        create_arrow_response = client.post("/board-items", json=arrow_payload)
+        assert create_arrow_response.status_code == 201
+        arrow_item = create_arrow_response.json()
+
+        connector_payload = {
+            "connector_item_id": arrow_item["id"],
+            "from_item_id": text_box["id"],
+            "to_item_id": text_box["id"],
+            "from_anchor": "right",
+            "to_anchor": "left",
+        }
+        create_connector_response = client.post("/connectors", json=connector_payload)
+        assert create_connector_response.status_code == 201
+        connector = create_connector_response.json()
+
+        list_items_response = client.get(f"/pages/{page['id']}/board-items")
+        assert list_items_response.status_code == 200
+        assert len(list_items_response.json()["items"]) == 2
+
+        update_item_response = client.patch(
+            f"/board-items/{text_box['id']}",
+            json={**text_box_payload, "content": "Updated launch checklist"},
+        )
+        assert update_item_response.status_code == 200
+        assert update_item_response.json()["content"] == "Updated launch checklist"
+
+        list_connectors_response = client.get(f"/pages/{page['id']}/connectors")
+        assert list_connectors_response.status_code == 200
+        assert list_connectors_response.json()["items"][0]["id"] == connector["id"]
+
+        update_connector_response = client.patch(
+            f"/connectors/{connector['id']}",
+            json={**connector_payload, "to_anchor": "top"},
+        )
+        assert update_connector_response.status_code == 200
+        assert update_connector_response.json()["to_anchor"] == "top"
+
+        board_data_response = client.get(f"/pages/{page['id']}/board-data")
+        assert board_data_response.status_code == 200
+        payload = board_data_response.json()
+        assert payload["page"]["id"] == page["id"]
+        assert len(payload["board_items"]) == 2
+        assert len(payload["connector_links"]) == 1
+
+        delete_connector_response = client.delete(f"/connectors/{connector['id']}")
+        assert delete_connector_response.status_code == 204
+
+        delete_item_response = client.delete(f"/board-items/{text_box['id']}")
+        assert delete_item_response.status_code == 204

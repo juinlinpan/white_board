@@ -10,9 +10,17 @@ from uuid import uuid4
 from fastapi import HTTPException, status
 
 from app.schemas import (
+    BoardItem,
+    BoardItemCreatePayload,
+    BoardItemUpdatePayload,
+    ConnectorLink,
+    ConnectorLinkCreatePayload,
+    ConnectorLinkUpdatePayload,
     Page,
+    PageBoardDataResponse,
     PageCreatePayload,
     PageUpdatePayload,
+    PageViewportPayload,
     Project,
     ProjectCreatePayload,
     ProjectUpdatePayload,
@@ -388,6 +396,416 @@ class WhiteboardRepository:
                     detail=f"Page '{page_id}' was not found.",
                 )
 
+    def update_page_viewport(self, page_id: str, payload: PageViewportPayload) -> Page:
+        timestamp = utc_timestamp()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE pages
+                SET viewport_x = ?, viewport_y = ?, zoom = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.viewport_x,
+                    payload.viewport_y,
+                    payload.zoom,
+                    timestamp,
+                    page_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Page '{page_id}' was not found.",
+                )
+
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    project_id,
+                    name,
+                    sort_order,
+                    viewport_x,
+                    viewport_y,
+                    zoom,
+                    created_at,
+                    updated_at
+                FROM pages
+                WHERE id = ?
+                """,
+                (page_id,),
+            ).fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Page viewport update did not persist correctly.",
+            )
+
+        return self._page_from_row(row)
+
+    def list_board_items(self, page_id: str) -> list[BoardItem]:
+        self.get_page(page_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    page_id,
+                    parent_item_id,
+                    category,
+                    type,
+                    title,
+                    content,
+                    content_format,
+                    x,
+                    y,
+                    width,
+                    height,
+                    rotation,
+                    z_index,
+                    is_collapsed,
+                    style_json,
+                    data_json,
+                    created_at,
+                    updated_at
+                FROM board_items
+                WHERE page_id = ?
+                ORDER BY z_index ASC, created_at ASC
+                """,
+                (page_id,),
+            ).fetchall()
+        return [self._board_item_from_row(row) for row in rows]
+
+    def get_board_item(self, item_id: str) -> BoardItem:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    page_id,
+                    parent_item_id,
+                    category,
+                    type,
+                    title,
+                    content,
+                    content_format,
+                    x,
+                    y,
+                    width,
+                    height,
+                    rotation,
+                    z_index,
+                    is_collapsed,
+                    style_json,
+                    data_json,
+                    created_at,
+                    updated_at
+                FROM board_items
+                WHERE id = ?
+                """,
+                (item_id,),
+            ).fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Board item '{item_id}' was not found.",
+            )
+
+        return self._board_item_from_row(row)
+
+    def create_board_item(self, payload: BoardItemCreatePayload) -> BoardItem:
+        self.get_page(payload.page_id)
+        if payload.parent_item_id is not None:
+            self.get_board_item(payload.parent_item_id)
+        item_id = str(uuid4())
+        timestamp = utc_timestamp()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO board_items (
+                    id,
+                    page_id,
+                    parent_item_id,
+                    category,
+                    type,
+                    title,
+                    content,
+                    content_format,
+                    x,
+                    y,
+                    width,
+                    height,
+                    rotation,
+                    z_index,
+                    is_collapsed,
+                    style_json,
+                    data_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item_id,
+                    payload.page_id,
+                    payload.parent_item_id,
+                    payload.category,
+                    payload.type,
+                    payload.title,
+                    payload.content,
+                    payload.content_format,
+                    payload.x,
+                    payload.y,
+                    payload.width,
+                    payload.height,
+                    payload.rotation,
+                    payload.z_index,
+                    int(payload.is_collapsed),
+                    payload.style_json,
+                    payload.data_json,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM board_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Board item creation did not persist correctly.",
+            )
+        return self._board_item_from_row(row)
+
+    def update_board_item(self, item_id: str, payload: BoardItemUpdatePayload) -> BoardItem:
+        self.get_page(payload.page_id)
+        if payload.parent_item_id is not None:
+            self.get_board_item(payload.parent_item_id)
+        timestamp = utc_timestamp()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE board_items
+                SET
+                    page_id = ?,
+                    parent_item_id = ?,
+                    category = ?,
+                    type = ?,
+                    title = ?,
+                    content = ?,
+                    content_format = ?,
+                    x = ?,
+                    y = ?,
+                    width = ?,
+                    height = ?,
+                    rotation = ?,
+                    z_index = ?,
+                    is_collapsed = ?,
+                    style_json = ?,
+                    data_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.page_id,
+                    payload.parent_item_id,
+                    payload.category,
+                    payload.type,
+                    payload.title,
+                    payload.content,
+                    payload.content_format,
+                    payload.x,
+                    payload.y,
+                    payload.width,
+                    payload.height,
+                    payload.rotation,
+                    payload.z_index,
+                    int(payload.is_collapsed),
+                    payload.style_json,
+                    payload.data_json,
+                    timestamp,
+                    item_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Board item '{item_id}' was not found.",
+                )
+            row = connection.execute(
+                "SELECT * FROM board_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Board item update did not persist correctly.",
+            )
+        return self._board_item_from_row(row)
+
+    def delete_board_item(self, item_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM board_items WHERE id = ?", (item_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Board item '{item_id}' was not found.",
+                )
+
+    def list_connector_links(self, page_id: str) -> list[ConnectorLink]:
+        self.get_page(page_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    cl.id,
+                    cl.connector_item_id,
+                    cl.from_item_id,
+                    cl.to_item_id,
+                    cl.from_anchor,
+                    cl.to_anchor
+                FROM connector_links cl
+                INNER JOIN board_items bi ON bi.id = cl.connector_item_id
+                WHERE bi.page_id = ?
+                ORDER BY cl.id ASC
+                """,
+                (page_id,),
+            ).fetchall()
+        return [self._connector_from_row(row) for row in rows]
+
+    def get_connector_link(self, connector_id: str) -> ConnectorLink:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    connector_item_id,
+                    from_item_id,
+                    to_item_id,
+                    from_anchor,
+                    to_anchor
+                FROM connector_links
+                WHERE id = ?
+                """,
+                (connector_id,),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Connector '{connector_id}' was not found.",
+            )
+        return self._connector_from_row(row)
+
+    def create_connector_link(self, payload: ConnectorLinkCreatePayload) -> ConnectorLink:
+        self.get_board_item(payload.connector_item_id)
+        if payload.from_item_id is not None:
+            self.get_board_item(payload.from_item_id)
+        if payload.to_item_id is not None:
+            self.get_board_item(payload.to_item_id)
+        connector_id = str(uuid4())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO connector_links (
+                    id,
+                    connector_item_id,
+                    from_item_id,
+                    to_item_id,
+                    from_anchor,
+                    to_anchor
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    connector_id,
+                    payload.connector_item_id,
+                    payload.from_item_id,
+                    payload.to_item_id,
+                    payload.from_anchor,
+                    payload.to_anchor,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM connector_links WHERE id = ?",
+                (connector_id,),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Connector creation did not persist correctly.",
+            )
+        return self._connector_from_row(row)
+
+    def update_connector_link(
+        self,
+        connector_id: str,
+        payload: ConnectorLinkUpdatePayload,
+    ) -> ConnectorLink:
+        self.get_board_item(payload.connector_item_id)
+        if payload.from_item_id is not None:
+            self.get_board_item(payload.from_item_id)
+        if payload.to_item_id is not None:
+            self.get_board_item(payload.to_item_id)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE connector_links
+                SET
+                    connector_item_id = ?,
+                    from_item_id = ?,
+                    to_item_id = ?,
+                    from_anchor = ?,
+                    to_anchor = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.connector_item_id,
+                    payload.from_item_id,
+                    payload.to_item_id,
+                    payload.from_anchor,
+                    payload.to_anchor,
+                    connector_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Connector '{connector_id}' was not found.",
+                )
+            row = connection.execute(
+                "SELECT * FROM connector_links WHERE id = ?",
+                (connector_id,),
+            ).fetchone()
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Connector update did not persist correctly.",
+            )
+        return self._connector_from_row(row)
+
+    def delete_connector_link(self, connector_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM connector_links WHERE id = ?", (connector_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Connector '{connector_id}' was not found.",
+                )
+
+    def get_page_board_data(self, page_id: str) -> PageBoardDataResponse:
+        page = self.get_page(page_id)
+        return PageBoardDataResponse(
+            page=page,
+            board_items=self.list_board_items(page_id),
+            connector_links=self.list_connector_links(page_id),
+        )
+
     def _next_sort_order(
         self,
         connection: sqlite3.Connection,
@@ -409,6 +827,14 @@ class WhiteboardRepository:
 
     def _page_from_row(self, row: sqlite3.Row) -> Page:
         return Page.model_validate(dict(row))
+
+    def _board_item_from_row(self, row: sqlite3.Row) -> BoardItem:
+        payload = dict(row)
+        payload["is_collapsed"] = bool(payload["is_collapsed"])
+        return BoardItem.model_validate(payload)
+
+    def _connector_from_row(self, row: sqlite3.Row) -> ConnectorLink:
+        return ConnectorLink.model_validate(dict(row))
 
 
 def utc_timestamp() -> str:

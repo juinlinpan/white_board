@@ -37,10 +37,10 @@
 
 - [x] 實作 Project CRUD API
 - [x] 實作 Page CRUD API
-- [ ] 實作 board item CRUD API
-- [ ] 實作 connector CRUD API
-- [ ] 實作 Page viewport API
-- [ ] 實作 Page 全量載入 API
+- [x] 實作 board item CRUD API
+- [x] 實作 connector CRUD API
+- [x] 實作 Page viewport API
+- [x] 實作 Page 全量載入 API
 - [ ] 統一 response format 與錯誤格式
 
 ### 5. Frontend App Shell
