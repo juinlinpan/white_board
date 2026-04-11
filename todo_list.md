@@ -67,27 +67,27 @@
 
 ### 7. 白板通用能力
 
-- [ ] 建立白板畫布
-- [ ] 支援拖曳與選取
-- [ ] 支援 viewport 平移與縮放
+- [x] 建立白板畫布
+- [x] 支援拖曳與選取
+- [x] 支援 viewport 平移與縮放
 - [ ] 支援多選
 - [ ] 支援 resize
 - [ ] 支援 z-index 調整
 - [ ] 支援複製 / 貼上
-- [ ] 支援 Delete
+- [x] 支援 Delete
 - [ ] 支援 Undo / Redo
-- [ ] 支援自動儲存
+- [x] 支援自動儲存
 
 ### 8. 物件模型
 
-- [ ] 定義 item type 與 category 常數
-- [ ] 定義前後端共用 item model
-- [ ] 建立 toolbar 物件建立入口
-- [ ] 建立物件基本序列化 / 反序列化
+- [x] 定義 item type 與 category 常數
+- [x] 定義前後端共用 item model
+- [x] 建立 toolbar 物件建立入口
+- [x] 建立物件基本序列化 / 反序列化
 - [ ] 支援建立 `line`
 - [ ] 支援建立 `table`
-- [ ] 支援建立 `text_box`
-- [ ] 支援建立 `sticky_note`
+- [x] 支援建立 `text_box`
+- [x] 支援建立 `sticky_note`
 - [ ] 支援建立 `note_paper`
 - [ ] 支援建立 `frame`
 - [ ] 支援建立 `arrow`
@@ -104,10 +104,10 @@
 
 ### 10. `small_item`
 
-- [ ] 實作 `text_box`
-- [ ] 支援 `text_box` 內容編輯
-- [ ] 實作 `sticky_note`
-- [ ] 支援 `sticky_note` 顏色與文字樣式
+- [x] 實作 `text_box`
+- [x] 支援 `text_box` 內容編輯
+- [x] 實作 `sticky_note`
+- [x] 支援 `sticky_note` 顏色與文字樣式
 - [ ] 實作 `note_paper`
 - [ ] 支援 Markdown 儲存
 - [ ] 支援 `note_paper` 基本預覽

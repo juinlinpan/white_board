@@ -13,6 +13,7 @@ import {
   type Page,
   type Project,
 } from './api';
+import { Canvas } from './Canvas';
 
 type LoadState = 'loading' | 'ready' | 'error';
 type HealthState = 'loading' | 'ready' | 'error';
@@ -473,36 +474,7 @@ export function App() {
             </div>
           </section>
         ) : (
-          <>
-            <section className="board-canvas">
-              <div className="canvas-grid" />
-              <div className="canvas-copy">
-                <p className="eyebrow">Board Placeholder</p>
-                <h3>{selectedPage.name}</h3>
-                <p>
-                  這裡會接上白板物件、drag/resize、frame 與 connector。現在先保留 Page 容器與狀態資訊。
-                </p>
-              </div>
-            </section>
-
-            <section className="meta-grid">
-              <article className="meta-card">
-                <p className="meta-label">Project Updated</p>
-                <strong>{formatDate(selectedProject.updated_at)}</strong>
-                <span>目前選取的規劃主題</span>
-              </article>
-              <article className="meta-card">
-                <p className="meta-label">Page Updated</p>
-                <strong>{formatDate(selectedPage.updated_at)}</strong>
-                <span>之後會綁定 viewport 與自動儲存</span>
-              </article>
-              <article className="meta-card">
-                <p className="meta-label">Storage</p>
-                <strong>SQLite local-first</strong>
-                <span>資料已由 FastAPI 寫入本機資料庫</span>
-              </article>
-            </section>
-          </>
+          <Canvas key={selectedPage.id} page={selectedPage} />
         )}
       </section>
     </main>

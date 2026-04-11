@@ -133,4 +133,82 @@ export async function deletePage(id: string): Promise<void> {
   await requestVoid(`/pages/${id}`, { method: 'DELETE' });
 }
 
+// ──────────────────────────────────────────────
+// BoardItem types & API
+// ──────────────────────────────────────────────
+
+export type BoardItem = {
+  id: string;
+  page_id: string;
+  parent_item_id: string | null;
+  category: string;
+  type: string;
+  title: string | null;
+  content: string | null;
+  content_format: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z_index: number;
+  is_collapsed: boolean;
+  style_json: string | null;
+  data_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BoardItemPayload = Omit<BoardItem, 'id' | 'created_at' | 'updated_at'>;
+
+export type PageBoardData = {
+  page: Page;
+  board_items: BoardItem[];
+  connector_links: unknown[];
+};
+
+export async function getPageBoardData(
+  pageId: string,
+  signal?: AbortSignal,
+): Promise<PageBoardData> {
+  return requestJson<PageBoardData>(`/pages/${pageId}/board-data`, { signal });
+}
+
+// Backend: POST /board-items（page_id in body）
+export async function createBoardItem(payload: BoardItemPayload): Promise<BoardItem> {
+  return requestJson<BoardItem>('/board-items', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Backend: PATCH /board-items/{id}（full payload）
+export async function updateBoardItem(
+  id: string,
+  payload: BoardItemPayload,
+): Promise<BoardItem> {
+  return requestJson<BoardItem>(`/board-items/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteBoardItem(id: string): Promise<void> {
+  await requestVoid(`/board-items/${id}`, { method: 'DELETE' });
+}
+
+// ──────────────────────────────────────────────
+// Viewport sync
+// ──────────────────────────────────────────────
+
+export async function updatePageViewport(
+  pageId: string,
+  viewport: { viewport_x: number; viewport_y: number; zoom: number },
+): Promise<Page> {
+  return requestJson<Page>(`/pages/${pageId}/viewport`, {
+    method: 'PATCH',
+    body: JSON.stringify(viewport),
+  });
+}
+
 export { apiBaseUrl };
