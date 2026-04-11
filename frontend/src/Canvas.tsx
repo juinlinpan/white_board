@@ -849,6 +849,9 @@ export function Canvas({ page }: Props) {
       if (key === 'v') {
         setActiveTool('select');
       }
+      if (key === 'l') {
+        setActiveTool('line');
+      }
       if (key === 'x') {
         setActiveTool('text_box');
       }
@@ -1026,7 +1029,12 @@ export function Canvas({ page }: Props) {
       category,
       type: params.type,
       title: params.type === ITEM_TYPE.frame ? 'New Frame' : null,
-      content: params.type === ITEM_TYPE.note_paper ? '# Untitled note\n' : '',
+      content:
+        params.type === ITEM_TYPE.note_paper
+          ? '# Untitled note\n'
+          : params.type === ITEM_TYPE.line
+            ? null
+            : '',
       content_format: params.type === ITEM_TYPE.note_paper ? 'markdown' : null,
       x: params.x,
       y: params.y,
@@ -1585,7 +1593,7 @@ export function Canvas({ page }: Props) {
             {items.length === 0 ? (
               <div className="canvas-empty-hint">
                 <p>
-                  用工具列新增文字框、便利貼、筆記紙、frame
+                  用工具列新增線條、文字框、便利貼、筆記紙、frame
                   或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
                 </p>
               </div>

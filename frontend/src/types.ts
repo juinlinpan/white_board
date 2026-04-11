@@ -53,22 +53,22 @@ export const ITEM_DEFAULT_SIZE: Record<
   string,
   { width: number; height: number }
 > = {
+  [ITEM_TYPE.line]: { width: 240, height: 40 },
   [ITEM_TYPE.text_box]: { width: 220, height: 80 },
   [ITEM_TYPE.sticky_note]: { width: 160, height: 160 },
   [ITEM_TYPE.note_paper]: { width: 260, height: 220 },
   [ITEM_TYPE.frame]: { width: 420, height: 300 },
-  [ITEM_TYPE.line]: { width: 200, height: 4 },
   [ITEM_TYPE.table]: { width: 320, height: 200 },
   [ITEM_TYPE.arrow]: { width: 200, height: 4 },
 };
 
 export const ITEM_MIN_SIZE: Record<string, { width: number; height: number }> =
   {
+    [ITEM_TYPE.line]: { width: 80, height: 24 },
     [ITEM_TYPE.text_box]: { width: 160, height: 56 },
     [ITEM_TYPE.sticky_note]: { width: 120, height: 120 },
     [ITEM_TYPE.note_paper]: { width: 220, height: 160 },
     [ITEM_TYPE.frame]: { width: 280, height: 200 },
-    [ITEM_TYPE.line]: { width: 80, height: 4 },
     [ITEM_TYPE.table]: { width: 240, height: 140 },
     [ITEM_TYPE.arrow]: { width: 120, height: 4 },
   };
@@ -87,6 +87,7 @@ export type Viewport = {
 // ──────────────────────────────────────────────
 export type ActiveTool =
   | 'select'
+  | 'line'
   | 'text_box'
   | 'sticky_note'
   | 'note_paper'

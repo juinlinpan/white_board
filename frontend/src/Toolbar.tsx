@@ -31,6 +31,12 @@ const TOOLS: ToolDef[] = [
     shortcut: 'V',
   },
   {
+    id: 'line',
+    label: '線條',
+    icon: icon('M4 20 20 4'),
+    shortcut: 'L',
+  },
+  {
     id: 'text_box',
     label: '文字框',
     icon: icon('M4 7V4h16v3M9 20h6M12 4v16'),

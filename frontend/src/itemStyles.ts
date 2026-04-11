@@ -4,6 +4,7 @@ import { ITEM_TYPE } from './types';
 
 export type FontWeightValue = 'normal' | 'bold';
 export type FontStyleValue = 'normal' | 'italic';
+export type StrokeStyleValue = 'solid' | 'dashed' | 'dotted';
 
 export type BoardItemStyle = {
   backgroundColor?: string;
@@ -11,6 +12,9 @@ export type BoardItemStyle = {
   fontSize?: number;
   fontWeight?: FontWeightValue;
   fontStyle?: FontStyleValue;
+  strokeColor?: string;
+  strokeWidth?: number;
+  strokeStyle?: StrokeStyleValue;
 };
 
 export type ResolvedBoardItemStyle = {
@@ -19,6 +23,9 @@ export type ResolvedBoardItemStyle = {
   fontSize: number;
   fontWeight: FontWeightValue;
   fontStyle: FontStyleValue;
+  strokeColor: string;
+  strokeWidth: number;
+  strokeStyle: StrokeStyleValue;
 };
 
 const STICKY_COLORS = [
@@ -52,6 +59,20 @@ function sanitizeFontStyle(value: unknown): FontStyleValue | undefined {
   return value === 'italic' || value === 'normal' ? value : undefined;
 }
 
+function sanitizeStrokeWidth(value: unknown): number | undefined {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return undefined;
+  }
+
+  return Math.min(16, Math.max(1, Math.round(value)));
+}
+
+function sanitizeStrokeStyle(value: unknown): StrokeStyleValue | undefined {
+  return value === 'solid' || value === 'dashed' || value === 'dotted'
+    ? value
+    : undefined;
+}
+
 export function getStickyNoteColor(itemId: string): string {
   let hash = 0;
   for (let index = 0; index < itemId.length; index += 1) {
@@ -74,6 +95,9 @@ export function parseBoardItemStyle(styleJson: string | null): BoardItemStyle {
       fontSize: sanitizeFontSize(parsed.fontSize),
       fontWeight: sanitizeFontWeight(parsed.fontWeight),
       fontStyle: sanitizeFontStyle(parsed.fontStyle),
+      strokeColor: sanitizeColor(parsed.strokeColor),
+      strokeWidth: sanitizeStrokeWidth(parsed.strokeWidth),
+      strokeStyle: sanitizeStrokeStyle(parsed.strokeStyle),
     };
   } catch {
     return {};
@@ -87,6 +111,9 @@ export function serializeBoardItemStyle(style: BoardItemStyle): string | null {
     fontSize: sanitizeFontSize(style.fontSize),
     fontWeight: sanitizeFontWeight(style.fontWeight),
     fontStyle: sanitizeFontStyle(style.fontStyle),
+    strokeColor: sanitizeColor(style.strokeColor),
+    strokeWidth: sanitizeStrokeWidth(style.strokeWidth),
+    strokeStyle: sanitizeStrokeStyle(style.strokeStyle),
   };
 
   const entries = Object.entries(nextStyle).filter(([, value]) => value !== undefined);
@@ -119,6 +146,9 @@ export function resolveBoardItemStyle(item: BoardItem): ResolvedBoardItemStyle {
     fontSize: parsed.fontSize ?? 14,
     fontWeight: parsed.fontWeight ?? 'normal',
     fontStyle: parsed.fontStyle ?? 'normal',
+    strokeColor: parsed.strokeColor ?? '#475569',
+    strokeWidth: parsed.strokeWidth ?? 3,
+    strokeStyle: parsed.strokeStyle ?? 'solid',
   };
 }
 

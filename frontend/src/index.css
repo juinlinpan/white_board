@@ -711,6 +711,7 @@ button {
 }
 
 .inspector-grid input,
+.inspector-field select,
 .inspector-field input,
 .inspector-field textarea,
 .inspector-color-field input {
@@ -726,6 +727,7 @@ button {
 }
 
 .inspector-grid input:focus,
+.inspector-field select:focus,
 .inspector-field input:focus,
 .inspector-field textarea:focus,
 .inspector-color-field input:focus {
@@ -881,6 +883,25 @@ button {
   background: var(--accent);
   box-shadow: var(--shadow-md);
   cursor: nwse-resize;
+}
+
+.line-shape {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.line-shape-svg {
+  overflow: visible;
+  transform-origin: center;
+}
+
+.line-shape-stroke {
+  fill: none;
+  stroke-linecap: round;
 }
 
 .arrow-svg {

@@ -413,6 +413,86 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
         assert delete_item_response.status_code == 204
 
 
+def test_line_board_item_round_trips_rotation_and_style(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        project = response_data(client.post("/projects", json={"name": "Shapes"}))
+        page = response_data(
+            client.post(
+                f"/projects/{project['id']}/pages",
+                json={"name": "Line Board"},
+            )
+        )
+
+        create_line_response = client.post(
+            "/board-items",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "shape",
+                "type": "line",
+                "title": None,
+                "content": None,
+                "content_format": None,
+                "x": 48,
+                "y": 96,
+                "width": 240,
+                "height": 40,
+                "rotation": 15,
+                "z_index": 0,
+                "is_collapsed": False,
+                "style_json": '{"strokeColor":"#0f172a","strokeWidth":4}',
+                "data_json": None,
+            },
+        )
+        assert create_line_response.status_code == 201
+        line_item = response_data(create_line_response)
+        assert line_item["type"] == "line"
+        assert line_item["rotation"] == 15
+
+        update_line_response = client.patch(
+            f"/board-items/{line_item['id']}",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "shape",
+                "type": "line",
+                "title": None,
+                "content": None,
+                "content_format": None,
+                "x": 72,
+                "y": 112,
+                "width": 320,
+                "height": 48,
+                "rotation": -35,
+                "z_index": 1,
+                "is_collapsed": False,
+                "style_json": (
+                    '{"strokeColor":"#1d4ed8","strokeWidth":6,'
+                    '"strokeStyle":"dashed"}'
+                ),
+                "data_json": None,
+            },
+        )
+        assert update_line_response.status_code == 200
+        updated_line = response_data(update_line_response)
+        assert updated_line["rotation"] == -35
+        assert '"strokeStyle":"dashed"' in updated_line["style_json"]
+
+        board_data_response = client.get(f"/pages/{page['id']}/board-data")
+        assert board_data_response.status_code == 200
+        board_payload = response_data(board_data_response)
+        assert board_payload["connector_links"] == []
+
+        persisted_line = board_payload["board_items"][0]
+        assert persisted_line["id"] == line_item["id"]
+        assert persisted_line["rotation"] == -35
+        assert persisted_line["width"] == 320
+        assert persisted_line["height"] == 48
+        assert '"strokeColor":"#1d4ed8"' in persisted_line["style_json"]
+
+
 def test_validation_errors_use_consistent_error_shape(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 

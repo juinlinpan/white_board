@@ -47,6 +47,15 @@ function isTextContentItem(item: BoardItem): boolean {
   );
 }
 
+function normalizeRotation(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const normalized = ((Math.round(value) % 360) + 360) % 360;
+  return normalized > 180 ? normalized - 360 : normalized;
+}
+
 export function Inspector({
   item,
   connector,
@@ -70,9 +79,11 @@ export function Inspector({
 
   const selectedItem = item;
   const isArrow = selectedItem.type === ITEM_TYPE.arrow;
+  const isLine = selectedItem.type === ITEM_TYPE.line;
   const supportsContent = isTextContentItem(selectedItem);
   const supportsTitle = selectedItem.type === ITEM_TYPE.frame;
-  const supportsStyling = !isArrow;
+  const supportsTextStyling = !isArrow && !isLine;
+  const supportsLineStyling = isLine;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
   const hasCustomStyle =
     selectedItem.style_json !== null && selectedItem.style_json.trim().length > 0;
@@ -124,6 +135,24 @@ export function Inspector({
     }
 
     handleStyleChange({ fontSize: value });
+  }
+
+  function handleRotationChange(rawValue: string) {
+    const value = Number(rawValue);
+    if (Number.isNaN(value)) {
+      return;
+    }
+
+    onUpdate({ ...selectedItem, rotation: normalizeRotation(value) });
+  }
+
+  function handleStrokeWidthChange(rawValue: string) {
+    const value = Number(rawValue);
+    if (Number.isNaN(value)) {
+      return;
+    }
+
+    handleStyleChange({ strokeWidth: value });
   }
 
   return (
@@ -194,6 +223,18 @@ export function Inspector({
               />
             </label>
           </div>
+          {isLine ? (
+            <label className="inspector-field">
+              角度
+              <input
+                type="number"
+                min={-180}
+                max={180}
+                value={selectedItem.rotation}
+                onChange={(e) => handleRotationChange(e.target.value)}
+              />
+            </label>
+          ) : null}
         </section>
 
         <section className="inspector-section">
@@ -261,7 +302,7 @@ export function Inspector({
           </section>
         ) : null}
 
-        {supportsStyling ? (
+        {supportsTextStyling ? (
           <section className="inspector-section">
             <div className="inspector-title-row">
               <p className="meta-label">Style</p>
@@ -341,6 +382,62 @@ export function Inspector({
               </button>
             </div>
             <p className="inspector-meta">變更會即時套用到畫布並自動儲存。</p>
+          </section>
+        ) : null}
+
+        {supportsLineStyling ? (
+          <section className="inspector-section">
+            <div className="inspector-title-row">
+              <p className="meta-label">Line Style</p>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!hasCustomStyle}
+                onClick={() => onUpdate({ ...selectedItem, style_json: null })}
+              >
+                重設
+              </button>
+            </div>
+            <div className="inspector-color-grid">
+              <label className="inspector-color-field">
+                線條顏色
+                <input
+                  type="color"
+                  value={resolvedStyle.strokeColor}
+                  onChange={(e) =>
+                    handleStyleChange({ strokeColor: e.target.value })
+                  }
+                />
+              </label>
+              <label className="inspector-field">
+                粗細
+                <input
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={resolvedStyle.strokeWidth}
+                  onChange={(e) => handleStrokeWidthChange(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="inspector-field">
+              線條樣式
+              <select
+                value={resolvedStyle.strokeStyle}
+                onChange={(e) =>
+                  handleStyleChange({
+                    strokeStyle: e.target.value as BoardItemStyle['strokeStyle'],
+                  })
+                }
+              >
+                <option value="solid">實線</option>
+                <option value="dashed">虛線</option>
+                <option value="dotted">點線</option>
+              </select>
+            </label>
+            <p className="inspector-meta">
+              寬度控制線段長度，高度保留互動命中區，角度用來調整方向。
+            </p>
           </section>
         ) : null}
 

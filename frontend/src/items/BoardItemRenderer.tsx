@@ -1,5 +1,6 @@
 import { type BoardItem } from '../api';
 import { Frame, type FrameSummaryEntry } from './Frame';
+import { Line } from './Line';
 import { NotePaper } from './NotePaper';
 import { StickyNote } from './StickyNote';
 import { TextBox } from './TextBox';
@@ -53,6 +54,14 @@ export function BoardItemRenderer({
     ) : null;
 
   switch (item.type) {
+    case 'line':
+      return (
+        <div style={baseStyle} className={wrapperClass} onMouseDown={onMouseDown}>
+          <Line item={item} />
+          {resizeHandle}
+        </div>
+      );
+
     case 'text_box':
       return (
         <div
