@@ -294,17 +294,16 @@ export function App() {
     return (
       <main className="app-shell app-shell-single">
         <section className="hero-panel">
-          <span className={`status-indicator status-${healthState}`} />
           <div className="hero-copy">
-            <p className="eyebrow">Whiteboard Planner</p>
-            <h1>本機後端目前不可用</h1>
+            <span className={`status-indicator status-${healthState}`} />
+            <h3>後端連線失敗</h3>
             <p className="hero-text">{healthMessage}</p>
-            <p className="hero-meta">API base URL: {apiBaseUrl}</p>
+            <p className="hero-meta">API: {apiBaseUrl}</p>
             <button
               className="primary-button"
               onClick={() => void loadWorkspace()}
             >
-              重新嘗試
+              重試
             </button>
           </div>
         </section>
@@ -316,18 +315,16 @@ export function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <section className="sidebar-header">
-          <p className="eyebrow">Whiteboard Planner</p>
-          <h1>Local-first planning workspace</h1>
-          <p className="sidebar-copy">
-            先把 Project 與 Page 管理打通，白板畫布下一步再往物件互動延伸。
-          </p>
-          <button
-            className="primary-button"
-            disabled={isMutating}
-            onClick={() => void handleCreateProject()}
-          >
-            新增 Project
-          </button>
+          <div className="section-title-row">
+            <h1>Whiteboard</h1>
+            <button
+              className="primary-button"
+              disabled={isMutating}
+              onClick={() => void handleCreateProject()}
+            >
+              + Project
+            </button>
+          </div>
         </section>
 
         <section className="sidebar-section">
@@ -432,17 +429,13 @@ export function App() {
       <section className="workspace">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Workspace</p>
-            <h2>{selectedProject?.name ?? 'Select or create a project'}</h2>
-            <p className="workspace-copy">
-              {selectedPage !== null
-                ? `目前 Page：${selectedPage.name}`
-                : '左側管理 Project / Page，中間操作白板，右側 inspector 可調整選取物件。'}
-            </p>
+            <h2>{selectedProject?.name ?? 'Select a project'}</h2>
+            {selectedPage !== null ? (
+              <p className="workspace-copy">{selectedPage.name}</p>
+            ) : null}
           </div>
-          <div className={`status-pill status-${healthState}`}>
+          <div className="status-pill">
             <span className={`status-indicator status-${healthState}`} />
-            <span>{healthMessage}</span>
           </div>
         </header>
 
@@ -453,37 +446,32 @@ export function App() {
         {selectedProject === null ? (
           <section className="hero-panel">
             <div className="hero-copy">
-              <p className="eyebrow">Step 1</p>
-              <h3>先建立你的第一個 Project</h3>
+              <h3>建立你的第一個 Project</h3>
               <p className="hero-text">
-                這輪先完成 Project / Page 資料流與本機 SQLite
-                持久化，讓後面的白板互動有穩定基礎。
+                從左側新增 Project 開始規劃。
               </p>
               <button
                 className="primary-button"
                 disabled={isMutating}
                 onClick={() => void handleCreateProject()}
               >
-                建立第一個 Project
+                新增 Project
               </button>
             </div>
           </section>
         ) : selectedPage === null ? (
           <section className="hero-panel">
             <div className="hero-copy">
-              <p className="eyebrow">Step 2</p>
-              <h3>幫「{selectedProject.name}」新增一個 Page</h3>
+              <h3>新增 Page 到「{selectedProject.name}」</h3>
               <p className="hero-text">
-                Page
-                是白板的承載單位。建立後就能開始加入文字框、便利貼、筆記紙與
-                frame。
+                Page 是白板的承載單位，建立後即可開始規劃。
               </p>
               <button
                 className="primary-button"
                 disabled={isMutating}
                 onClick={() => void handleCreatePage()}
               >
-                新增第一個 Page
+                新增 Page
               </button>
             </div>
           </section>
