@@ -37,6 +37,20 @@ class PageViewportPayload(BaseModel):
     zoom: float = Field(gt=0)
 
 
+class OrderedIdsPayload(BaseModel):
+    ordered_ids: list[str] = Field(min_length=1)
+
+    @field_validator("ordered_ids")
+    @classmethod
+    def validate_ordered_ids(cls, value: list[str]) -> list[str]:
+        normalized = [item.strip() for item in value]
+        if any(item == "" for item in normalized):
+            raise ValueError("Ordered ids cannot contain blank values.")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Ordered ids must be unique.")
+        return normalized
+
+
 class Project(BaseModel):
     id: str
     name: str

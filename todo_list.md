@@ -58,12 +58,12 @@
 - [x] 新增 Project
 - [x] 重新命名 Project
 - [x] 刪除 Project
-- [ ] 調整 Project 排序
+- [x] 調整 Project 排序
 - [x] 新增 Page
 - [x] 重新命名 Page
 - [x] 刪除 Page
-- [ ] 複製 Page
-- [ ] 調整 Page 排序
+- [x] 複製 Page
+- [x] 調整 Page 排序
 - [x] 切換 Page
 
 ### 7. 白板通用能力

@@ -25,6 +25,7 @@ from app.schemas import (
     ErrorPayload,
     ErrorResponse,
     HealthResponse,
+    OrderedIdsPayload,
     Page,
     PageBoardDataResponse,
     PageCreatePayload,
@@ -217,6 +218,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         LOGGER.info("Deleted project %s", project_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.post("/projects/reorder", response_model=ProjectListResponse)
+    def reorder_projects(
+        payload: OrderedIdsPayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> ProjectListResponse:
+        projects = repository.reorder_projects(payload.ordered_ids)
+        LOGGER.info("Reordered %s projects", len(projects))
+        return ProjectListResponse(items=projects)
+
     @app.get("/projects/{project_id}/pages", response_model=PageListResponse)
     def list_pages(
         project_id: str,
@@ -263,6 +273,29 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         repository.delete_page(page_id)
         LOGGER.info("Deleted page %s", page_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.post(
+        "/pages/{page_id}/duplicate",
+        response_model=Page,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def duplicate_page(
+        page_id: str,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> Page:
+        page = repository.duplicate_page(page_id)
+        LOGGER.info("Duplicated page %s to %s", page_id, page.id)
+        return page
+
+    @app.post("/projects/{project_id}/pages/reorder", response_model=PageListResponse)
+    def reorder_pages(
+        project_id: str,
+        payload: OrderedIdsPayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> PageListResponse:
+        pages = repository.reorder_pages(project_id, payload.ordered_ids)
+        LOGGER.info("Reordered %s pages under project %s", len(pages), project_id)
+        return PageListResponse(items=pages)
 
     @app.patch("/pages/{page_id}/viewport", response_model=Page)
     def update_page_viewport(

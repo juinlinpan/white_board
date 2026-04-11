@@ -5,9 +5,12 @@ import {
   createProject,
   deletePage,
   deleteProject,
+  duplicatePage,
   getHealth,
   listPages,
   listProjects,
+  reorderPages,
+  reorderProjects,
   updatePage,
   updateProject,
   type Page,
@@ -58,6 +61,31 @@ function selectFallbackId<T extends { id: string }>(
   return items[0]?.id ?? null;
 }
 
+function buildReorderedIds<T extends { id: string }>(
+  items: T[],
+  selectedId: string,
+  offset: -1 | 1,
+): string[] | null {
+  const currentIndex = items.findIndex((item) => item.id === selectedId);
+  if (currentIndex === -1) {
+    return null;
+  }
+
+  const nextIndex = currentIndex + offset;
+  if (nextIndex < 0 || nextIndex >= items.length) {
+    return null;
+  }
+
+  const orderedIds = items.map((item) => item.id);
+  const [movedId] = orderedIds.splice(currentIndex, 1);
+  if (movedId === undefined) {
+    return null;
+  }
+
+  orderedIds.splice(nextIndex, 0, movedId);
+  return orderedIds;
+}
+
 export function App() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [healthState, setHealthState] = useState<HealthState>('loading');
@@ -80,6 +108,20 @@ export function App() {
   );
   const selectedPage = useMemo(
     () => pages.find((page) => page.id === selectedPageId) ?? null,
+    [pages, selectedPageId],
+  );
+  const selectedProjectIndex = useMemo(
+    () =>
+      selectedProjectId === null
+        ? -1
+        : projects.findIndex((project) => project.id === selectedProjectId),
+    [projects, selectedProjectId],
+  );
+  const selectedPageIndex = useMemo(
+    () =>
+      selectedPageId === null
+        ? -1
+        : pages.findIndex((page) => page.id === selectedPageId),
     [pages, selectedPageId],
   );
 
@@ -234,6 +276,22 @@ export function App() {
     });
   }
 
+  async function handleMoveProject(offset: -1 | 1): Promise<void> {
+    if (selectedProject === null) {
+      return;
+    }
+
+    const orderedIds = buildReorderedIds(projects, selectedProject.id, offset);
+    if (orderedIds === null) {
+      return;
+    }
+
+    await runMutation(async () => {
+      const nextProjects = await reorderProjects(orderedIds);
+      setProjects(nextProjects);
+    });
+  }
+
   async function handleCreatePage(): Promise<void> {
     if (selectedProject === null) {
       return;
@@ -287,6 +345,35 @@ export function App() {
       await deletePage(selectedPage.id);
       setPages(remainingPages);
       setSelectedPageId(remainingPages[0]?.id ?? null);
+    });
+  }
+
+  async function handleDuplicatePage(): Promise<void> {
+    if (selectedProject === null || selectedPage === null) {
+      return;
+    }
+
+    await runMutation(async () => {
+      const duplicatedPage = await duplicatePage(selectedPage.id);
+      const nextPages = await listPages(selectedProject.id);
+      setPages(nextPages);
+      setSelectedPageId(duplicatedPage.id);
+    });
+  }
+
+  async function handleMovePage(offset: -1 | 1): Promise<void> {
+    if (selectedProject === null || selectedPage === null) {
+      return;
+    }
+
+    const orderedIds = buildReorderedIds(pages, selectedPage.id, offset);
+    if (orderedIds === null) {
+      return;
+    }
+
+    await runMutation(async () => {
+      const nextPages = await reorderPages(selectedProject.id, orderedIds);
+      setPages(nextPages);
     });
   }
 
@@ -358,6 +445,29 @@ export function App() {
           <div className="action-row">
             <button
               className="ghost-button"
+              disabled={
+                selectedProject === null ||
+                isMutating ||
+                selectedProjectIndex <= 0
+              }
+              onClick={() => void handleMoveProject(-1)}
+            >
+              上移
+            </button>
+            <button
+              className="ghost-button"
+              disabled={
+                selectedProject === null ||
+                isMutating ||
+                selectedProjectIndex === -1 ||
+                selectedProjectIndex >= projects.length - 1
+              }
+              onClick={() => void handleMoveProject(1)}
+            >
+              下移
+            </button>
+            <button
+              className="ghost-button"
               disabled={selectedProject === null || isMutating}
               onClick={() => void handleRenameProject()}
             >
@@ -407,6 +517,34 @@ export function App() {
               onClick={() => void handleCreatePage()}
             >
               新增 Page
+            </button>
+            <button
+              className="ghost-button"
+              disabled={selectedPage === null || isMutating}
+              onClick={() => void handleDuplicatePage()}
+            >
+              複製
+            </button>
+            <button
+              className="ghost-button"
+              disabled={
+                selectedPage === null || isMutating || selectedPageIndex <= 0
+              }
+              onClick={() => void handleMovePage(-1)}
+            >
+              上移
+            </button>
+            <button
+              className="ghost-button"
+              disabled={
+                selectedPage === null ||
+                isMutating ||
+                selectedPageIndex === -1 ||
+                selectedPageIndex >= pages.length - 1
+              }
+              onClick={() => void handleMovePage(1)}
+            >
+              下移
             </button>
             <button
               className="ghost-button"

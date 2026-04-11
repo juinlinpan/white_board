@@ -114,6 +114,14 @@ export async function deleteProject(id: string): Promise<void> {
   await requestVoid(`/projects/${id}`, { method: 'DELETE' });
 }
 
+export async function reorderProjects(orderedIds: string[]): Promise<Project[]> {
+  const payload = await requestJson<ListResponse<Project>>('/projects/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ordered_ids: orderedIds }),
+  });
+  return payload.items;
+}
+
 export async function listPages(
   projectId: string,
   signal?: AbortSignal,
@@ -141,6 +149,26 @@ export async function updatePage(id: string, name: string): Promise<Page> {
 
 export async function deletePage(id: string): Promise<void> {
   await requestVoid(`/pages/${id}`, { method: 'DELETE' });
+}
+
+export async function duplicatePage(id: string): Promise<Page> {
+  return requestJson<Page>(`/pages/${id}/duplicate`, {
+    method: 'POST',
+  });
+}
+
+export async function reorderPages(
+  projectId: string,
+  orderedIds: string[],
+): Promise<Page[]> {
+  const payload = await requestJson<ListResponse<Page>>(
+    `/projects/${projectId}/pages/reorder`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ordered_ids: orderedIds }),
+    },
+  );
+  return payload.items;
 }
 
 // ──────────────────────────────────────────────
