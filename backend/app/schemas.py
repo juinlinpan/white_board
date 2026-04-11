@@ -31,6 +31,12 @@ class PageUpdatePayload(NamedPayload):
     pass
 
 
+class PageViewportPayload(BaseModel):
+    viewport_x: float
+    viewport_y: float
+    zoom: float = Field(gt=0)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -51,12 +57,79 @@ class Page(BaseModel):
     updated_at: str
 
 
+class BoardItemBase(BaseModel):
+    page_id: str
+    parent_item_id: str | None = None
+    category: str = Field(min_length=1, max_length=50)
+    type: str = Field(min_length=1, max_length=50)
+    title: str | None = None
+    content: str | None = None
+    content_format: str | None = None
+    x: float = 0
+    y: float = 0
+    width: float = 0
+    height: float = 0
+    rotation: float = 0
+    z_index: int = 0
+    is_collapsed: bool = False
+    style_json: str | None = None
+    data_json: str | None = None
+
+
+class BoardItemCreatePayload(BoardItemBase):
+    pass
+
+
+class BoardItemUpdatePayload(BoardItemBase):
+    pass
+
+
+class BoardItem(BoardItemBase):
+    id: str
+    created_at: str
+    updated_at: str
+
+
+class ConnectorLinkBase(BaseModel):
+    connector_item_id: str
+    from_item_id: str | None = None
+    to_item_id: str | None = None
+    from_anchor: str | None = None
+    to_anchor: str | None = None
+
+
+class ConnectorLinkCreatePayload(ConnectorLinkBase):
+    pass
+
+
+class ConnectorLinkUpdatePayload(ConnectorLinkBase):
+    pass
+
+
+class ConnectorLink(ConnectorLinkBase):
+    id: str
+
+
 class ProjectListResponse(BaseModel):
     items: list[Project]
 
 
 class PageListResponse(BaseModel):
     items: list[Page]
+
+
+class BoardItemListResponse(BaseModel):
+    items: list[BoardItem]
+
+
+class ConnectorLinkListResponse(BaseModel):
+    items: list[ConnectorLink]
+
+
+class PageBoardDataResponse(BaseModel):
+    page: Page
+    board_items: list[BoardItem]
+    connector_links: list[ConnectorLink]
 
 
 class HealthResponse(BaseModel):
