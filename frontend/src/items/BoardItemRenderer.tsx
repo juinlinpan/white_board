@@ -3,6 +3,7 @@ import { Frame, type FrameSummaryEntry } from './Frame';
 import { Line } from './Line';
 import { NotePaper } from './NotePaper';
 import { StickyNote } from './StickyNote';
+import { Table } from './Table';
 import { TextBox } from './TextBox';
 
 type Props = {
@@ -71,6 +72,24 @@ export function BoardItemRenderer({
           onDoubleClick={onDoubleClick}
         >
           <TextBox
+            item={item}
+            isEditing={isEditing}
+            onUpdate={onUpdate}
+            onEditEnd={onEditEnd}
+          />
+          {resizeHandle}
+        </div>
+      );
+
+    case 'table':
+      return (
+        <div
+          style={baseStyle}
+          className={wrapperClass}
+          onMouseDown={onMouseDown}
+          onDoubleClick={onDoubleClick}
+        >
+          <Table
             item={item}
             isEditing={isEditing}
             onUpdate={onUpdate}

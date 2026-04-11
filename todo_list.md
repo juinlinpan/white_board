@@ -86,7 +86,7 @@
 - [x] 建立 toolbar 物件建立入口
 - [x] 建立物件基本序列化 / 反序列化
 - [x] 支援建立 `line`
-- [ ] 支援建立 `table`
+- [x] 支援建立 `table`
 - [x] 支援建立 `text_box`
 - [x] 支援建立 `sticky_note`
 - [x] 支援建立 `note_paper`
@@ -98,10 +98,10 @@
 - [x] 實作 `line`
 - [x] 支援 `line` 長度 / 方向調整
 - [x] 支援 `line` 樣式設定
-- [ ] 實作 `table`
-- [ ] 支援列數 / 欄數調整
-- [ ] 支援儲存 table 內容
-- [ ] 支援 table 樣式設定
+- [x] 實作 `table`
+- [x] 支援列數 / 欄數調整
+- [x] 支援儲存 table 內容
+- [x] 支援 table 樣式設定
 
 ### 10. `small_item`
 

@@ -26,6 +26,7 @@ import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
 import { type FrameSummaryEntry } from './items/Frame';
+import { createTableData, serializeTableData } from './tableData';
 import {
   ITEM_CATEGORY,
   ITEM_CATEGORY_FOR_TYPE,
@@ -143,6 +144,7 @@ function isArrowConnectable(item: BoardItem): boolean {
 
 function isInlineEditable(item: BoardItem): boolean {
   return (
+    item.type === ITEM_TYPE.table ||
     item.type === ITEM_TYPE.text_box ||
     item.type === ITEM_TYPE.sticky_note ||
     item.type === ITEM_TYPE.note_paper
@@ -852,6 +854,9 @@ export function Canvas({ page }: Props) {
       if (key === 'l') {
         setActiveTool('line');
       }
+      if (key === 't') {
+        setActiveTool('table');
+      }
       if (key === 'x') {
         setActiveTool('text_box');
       }
@@ -1044,7 +1049,10 @@ export function Canvas({ page }: Props) {
       z_index: params.type === ITEM_TYPE.frame ? minZ - 1 : maxZ + 1,
       is_collapsed: false,
       style_json: null,
-      data_json: null,
+      data_json:
+        params.type === ITEM_TYPE.table
+          ? serializeTableData(createTableData())
+          : null,
     };
 
     try {
@@ -1593,8 +1601,8 @@ export function Canvas({ page }: Props) {
             {items.length === 0 ? (
               <div className="canvas-empty-hint">
                 <p>
-                  用工具列新增線條、文字框、便利貼、筆記紙、frame
-                  或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
+                  用工具列新增線條、表格、文字框、便利貼、筆記紙、
+                  frame 或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
                 </p>
               </div>
             ) : null}

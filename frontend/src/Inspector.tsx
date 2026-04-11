@@ -5,6 +5,14 @@ import {
   serializeBoardItemStyle,
   type BoardItemStyle,
 } from './itemStyles';
+import {
+  countFilledTableCells,
+  parseTableData,
+  resizeTableData,
+  serializeTableData,
+  TABLE_MAX_DIMENSION,
+  TABLE_MIN_DIMENSION,
+} from './tableData';
 import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 
 type Props = {
@@ -32,6 +40,12 @@ function clampDimension(
 }
 
 function summarizeContent(item: BoardItem): string {
+  if (item.type === ITEM_TYPE.table) {
+    const tableData = parseTableData(item.data_json);
+    const filledCells = countFilledTableCells(tableData);
+    return `${tableData.rows} x ${tableData.cols} 表格，${filledCells} 格有內容`;
+  }
+
   if (item.content === null || item.content.trim().length === 0) {
     return '尚未填寫內容';
   }
@@ -80,10 +94,12 @@ export function Inspector({
   const selectedItem = item;
   const isArrow = selectedItem.type === ITEM_TYPE.arrow;
   const isLine = selectedItem.type === ITEM_TYPE.line;
+  const isTable = selectedItem.type === ITEM_TYPE.table;
   const supportsContent = isTextContentItem(selectedItem);
   const supportsTitle = selectedItem.type === ITEM_TYPE.frame;
   const supportsTextStyling = !isArrow && !isLine;
   const supportsLineStyling = isLine;
+  const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
   const hasCustomStyle =
     selectedItem.style_json !== null && selectedItem.style_json.trim().length > 0;
@@ -153,6 +169,31 @@ export function Inspector({
     }
 
     handleStyleChange({ strokeWidth: value });
+  }
+
+  function handleTableDimensionChange(
+    field: 'rows' | 'cols',
+    rawValue: string,
+  ) {
+    if (!isTable || tableData === null) {
+      return;
+    }
+
+    const value = Number(rawValue);
+    if (Number.isNaN(value)) {
+      return;
+    }
+
+    const nextTableData = resizeTableData(
+      tableData,
+      field === 'rows' ? value : tableData.rows,
+      field === 'cols' ? value : tableData.cols,
+    );
+
+    onUpdate({
+      ...selectedItem,
+      data_json: serializeTableData(nextTableData),
+    });
   }
 
   return (
@@ -236,6 +277,41 @@ export function Inspector({
             </label>
           ) : null}
         </section>
+
+        {isTable && tableData !== null ? (
+          <section className="inspector-section">
+            <p className="meta-label">Table</p>
+            <div className="inspector-grid">
+              <label>
+                列數
+                <input
+                  type="number"
+                  min={TABLE_MIN_DIMENSION}
+                  max={TABLE_MAX_DIMENSION}
+                  value={tableData.rows}
+                  onChange={(e) =>
+                    handleTableDimensionChange('rows', e.target.value)
+                  }
+                />
+              </label>
+              <label>
+                欄數
+                <input
+                  type="number"
+                  min={TABLE_MIN_DIMENSION}
+                  max={TABLE_MAX_DIMENSION}
+                  value={tableData.cols}
+                  onChange={(e) =>
+                    handleTableDimensionChange('cols', e.target.value)
+                  }
+                />
+              </label>
+            </div>
+            <p className="inspector-meta">
+              直接雙擊表格即可編輯儲存格。縮小列欄時會保留左上角的內容。
+            </p>
+          </section>
+        ) : null}
 
         <section className="inspector-section">
           <p className="meta-label">Layer</p>

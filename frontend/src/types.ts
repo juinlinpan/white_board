@@ -88,6 +88,7 @@ export type Viewport = {
 export type ActiveTool =
   | 'select'
   | 'line'
+  | 'table'
   | 'text_box'
   | 'sticky_note'
   | 'note_paper'

@@ -935,6 +935,94 @@ button {
 }
 
 /* ══════════════════════════════════════════
+   Table item
+══════════════════════════════════════════ */
+
+.table-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.table-card.is-editing {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table-card-meta {
+  color: var(--muted);
+}
+
+.table-grid {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.table-cell-display,
+.table-cell-input {
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  font: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+}
+
+.table-cell-display {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+  word-break: break-word;
+}
+
+.table-cell-input {
+  width: 100%;
+  height: 100%;
+  outline: none;
+  border-top: none;
+  border-left: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: inherit;
+  user-select: text;
+}
+
+.table-cell-input:focus {
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+
+.table-cell-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════
    TextBox item
 ══════════════════════════════════════════ */
 

@@ -493,6 +493,94 @@ def test_line_board_item_round_trips_rotation_and_style(tmp_path: Path) -> None:
         assert '"strokeColor":"#1d4ed8"' in persisted_line["style_json"]
 
 
+def test_table_board_item_round_trips_data_and_style(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        project = response_data(client.post("/projects", json={"name": "Tables"}))
+        page = response_data(
+            client.post(
+                f"/projects/{project['id']}/pages",
+                json={"name": "Table Board"},
+            )
+        )
+
+        create_table_response = client.post(
+            "/board-items",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "shape",
+                "type": "table",
+                "title": None,
+                "content": "",
+                "content_format": None,
+                "x": 96,
+                "y": 144,
+                "width": 360,
+                "height": 220,
+                "rotation": 0,
+                "z_index": 0,
+                "is_collapsed": False,
+                "style_json": '{"backgroundColor":"#f8fafc","textColor":"#0f172a"}',
+                "data_json": (
+                    '{"rows":2,"cols":3,"cells":'
+                    '[["Owner","Task","Status"],["Amy","MVP","In Progress"]]}'
+                ),
+            },
+        )
+        assert create_table_response.status_code == 201
+        table_item = response_data(create_table_response)
+        assert table_item["type"] == "table"
+        assert '"rows":2' in table_item["data_json"]
+        assert '"Task"' in table_item["data_json"]
+
+        update_table_response = client.patch(
+            f"/board-items/{table_item['id']}",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "shape",
+                "type": "table",
+                "title": None,
+                "content": "",
+                "content_format": None,
+                "x": 120,
+                "y": 180,
+                "width": 420,
+                "height": 240,
+                "rotation": 0,
+                "z_index": 1,
+                "is_collapsed": False,
+                "style_json": (
+                    '{"backgroundColor":"#ecfeff","textColor":"#164e63","fontSize":15}'
+                ),
+                "data_json": (
+                    '{"rows":3,"cols":2,"cells":'
+                    '[["Workstream","Owner"],["API","Noah"],["UI","Mia"]]}'
+                ),
+            },
+        )
+        assert update_table_response.status_code == 200
+        updated_table = response_data(update_table_response)
+        assert '"rows":3' in updated_table["data_json"]
+        assert '"UI"' in updated_table["data_json"]
+        assert '"fontSize":15' in updated_table["style_json"]
+
+        board_data_response = client.get(f"/pages/{page['id']}/board-data")
+        assert board_data_response.status_code == 200
+        board_payload = response_data(board_data_response)
+        assert board_payload["connector_links"] == []
+
+        persisted_table = board_payload["board_items"][0]
+        assert persisted_table["id"] == table_item["id"]
+        assert persisted_table["width"] == 420
+        assert persisted_table["height"] == 240
+        assert '"Workstream"' in persisted_table["data_json"]
+        assert '"Owner"' in persisted_table["data_json"]
+        assert '"backgroundColor":"#ecfeff"' in persisted_table["style_json"]
+
+
 def test_validation_errors_use_consistent_error_shape(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 

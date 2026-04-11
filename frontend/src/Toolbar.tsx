@@ -37,6 +37,12 @@ const TOOLS: ToolDef[] = [
     shortcut: 'L',
   },
   {
+    id: 'table',
+    label: '表格',
+    icon: icon('M3 5h18M3 12h18M3 19h18M8 5v14M16 5v14M3 5h18v14H3z'),
+    shortcut: 'T',
+  },
+  {
     id: 'text_box',
     label: '文字框',
     icon: icon('M4 7V4h16v3M9 20h6M12 4v16'),
