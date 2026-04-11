@@ -150,6 +150,11 @@ class PageBoardData(BaseModel):
     connector_links: list[ConnectorLink]
 
 
+class PageBoardStatePayload(BaseModel):
+    board_items: list[BoardItem]
+    connector_links: list[ConnectorLink]
+
+
 class HealthResponse(BaseModel):
     service: str
     status: str

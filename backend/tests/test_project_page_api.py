@@ -413,6 +413,154 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
         assert delete_item_response.status_code == 204
 
 
+def test_replace_page_board_state_restores_snapshot(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        project = response_data(client.post("/projects", json={"name": "History"}))
+        page = response_data(
+            client.post(
+                f"/projects/{project['id']}/pages",
+                json={"name": "Undo Board"},
+            )
+        )
+
+        frame = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": None,
+                    "category": "large_item",
+                    "type": "frame",
+                    "title": "Review Frame",
+                    "content": None,
+                    "content_format": None,
+                    "x": 120,
+                    "y": 80,
+                    "width": 360,
+                    "height": 240,
+                    "rotation": 0,
+                    "z_index": 0,
+                    "is_collapsed": False,
+                    "style_json": None,
+                    "data_json": None,
+                },
+            )
+        )
+        note = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": frame["id"],
+                    "category": "small_item",
+                    "type": "sticky_note",
+                    "title": None,
+                    "content": "Initial note",
+                    "content_format": "plain_text",
+                    "x": 160,
+                    "y": 132,
+                    "width": 160,
+                    "height": 160,
+                    "rotation": 0,
+                    "z_index": 1,
+                    "is_collapsed": False,
+                    "style_json": '{"backgroundColor":"#fef08a"}',
+                    "data_json": None,
+                },
+            )
+        )
+        arrow_item = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": None,
+                    "category": "connector",
+                    "type": "arrow",
+                    "title": None,
+                    "content": None,
+                    "content_format": None,
+                    "x": 0,
+                    "y": 0,
+                    "width": 200,
+                    "height": 60,
+                    "rotation": 0,
+                    "z_index": 2,
+                    "is_collapsed": False,
+                    "style_json": None,
+                    "data_json": '{"kind":"straight"}',
+                },
+            )
+        )
+        connector = response_data(
+            client.post(
+                "/connectors",
+                json={
+                    "connector_item_id": arrow_item["id"],
+                    "from_item_id": note["id"],
+                    "to_item_id": frame["id"],
+                    "from_anchor": "right",
+                    "to_anchor": "left",
+                },
+            )
+        )
+
+        original_snapshot = response_data(client.get(f"/pages/{page['id']}/board-data"))
+
+        stray_note = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": None,
+                    "category": "small_item",
+                    "type": "text_box",
+                    "title": None,
+                    "content": "Temporary item",
+                    "content_format": "plain_text",
+                    "x": 520,
+                    "y": 120,
+                    "width": 220,
+                    "height": 80,
+                    "rotation": 0,
+                    "z_index": 3,
+                    "is_collapsed": False,
+                    "style_json": None,
+                    "data_json": None,
+                },
+            )
+        )
+        delete_response = client.delete(f"/board-items/{note['id']}")
+        assert delete_response.status_code == 204
+
+        replace_response = client.put(
+            f"/pages/{page['id']}/board-state",
+            json={
+                "board_items": original_snapshot["board_items"],
+                "connector_links": original_snapshot["connector_links"],
+            },
+        )
+        assert replace_response.status_code == 200
+        replaced_payload = response_data(replace_response)
+
+        assert {item["id"] for item in replaced_payload["board_items"]} == {
+            frame["id"],
+            note["id"],
+            arrow_item["id"],
+        }
+        assert all(item["id"] != stray_note["id"] for item in replaced_payload["board_items"])
+        assert replaced_payload["connector_links"] == [connector]
+
+        restored_note = next(
+            item for item in replaced_payload["board_items"] if item["id"] == note["id"]
+        )
+        assert restored_note["parent_item_id"] == frame["id"]
+        assert restored_note["content"] == "Initial note"
+        assert restored_note["style_json"] == '{"backgroundColor":"#fef08a"}'
+
+
 def test_line_board_item_round_trips_rotation_and_style(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 

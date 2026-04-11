@@ -26,6 +26,7 @@ from app.schemas import (
     OrderedIdsPayload,
     Page,
     PageBoardData,
+    PageBoardStatePayload,
     PageCreatePayload,
     PageUpdatePayload,
     PageViewportPayload,
@@ -319,6 +320,25 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
     ) -> SuccessResponse[PageBoardData]:
         return SuccessResponse(data=repository.get_page_board_data(page_id))
+
+    @app.put("/pages/{page_id}/board-state", response_model=SuccessResponse[PageBoardData])
+    def replace_page_board_state(
+        page_id: str,
+        payload: PageBoardStatePayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> SuccessResponse[PageBoardData]:
+        board_data = repository.replace_page_board_state(
+            page_id,
+            payload.board_items,
+            payload.connector_links,
+        )
+        LOGGER.info(
+            "Replaced board state for page %s with %s items and %s connectors",
+            page_id,
+            len(payload.board_items),
+            len(payload.connector_links),
+        )
+        return SuccessResponse(data=board_data)
 
     @app.get(
         "/pages/{page_id}/board-items",

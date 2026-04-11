@@ -83,6 +83,11 @@ type Props = {
   onToolChange: (tool: ActiveTool) => void;
   snapEnabled: boolean;
   onToggleSnap: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  historyBusy: boolean;
 };
 
 export function Toolbar({
@@ -90,6 +95,11 @@ export function Toolbar({
   onToolChange,
   snapEnabled,
   onToggleSnap,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  historyBusy,
 }: Props) {
   return (
     <div className="toolbar">
@@ -112,7 +122,29 @@ export function Toolbar({
 
       <button
         type="button"
-        className={`tool-button tool-button-utility ${
+        className="tool-button tool-button-utility"
+        title="Undo (Ctrl/Cmd + Z)"
+        disabled={!canUndo || historyBusy}
+        onClick={onUndo}
+      >
+        <span className="tool-icon">{icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}</span>
+        <span className="tool-label">Undo</span>
+      </button>
+
+      <button
+        type="button"
+        className="tool-button"
+        title="Redo (Ctrl/Cmd + Shift + Z)"
+        disabled={!canRedo || historyBusy}
+        onClick={onRedo}
+      >
+        <span className="tool-icon">{icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}</span>
+        <span className="tool-label">Redo</span>
+      </button>
+
+      <button
+        type="button"
+        className={`tool-button ${
           snapEnabled ? 'is-active' : ''
         }`}
         title={`Snap ${snapEnabled ? '開啟' : '關閉'}（拖曳時按住 Alt 可暫時停用）`}

@@ -14,6 +14,7 @@ import {
   createConnector,
   deleteBoardItem,
   getPageBoardData,
+  replacePageBoardState,
   updateBoardItem,
   updateConnector,
   updatePageViewport,
@@ -44,6 +45,7 @@ const ITEM_SAVE_DELAY = 500;
 const CONNECTOR_ITEM_PADDING = 20;
 const SNAP_TOLERANCE = 10;
 const PASTE_OFFSET_STEP = 32;
+const MAX_HISTORY_ENTRIES = 50;
 
 type Anchor = 'top' | 'right' | 'bottom' | 'left';
 type Point = {
@@ -58,6 +60,7 @@ type DragState = {
   startItemX: number;
   startItemY: number;
   childPositions: Array<{ id: string; x: number; y: number }>;
+  snapshot: BoardSnapshot;
 };
 
 type ResizeState = {
@@ -66,6 +69,7 @@ type ResizeState = {
   startMouseY: number;
   startWidth: number;
   startHeight: number;
+  snapshot: BoardSnapshot;
 };
 
 type PanState = {
@@ -89,6 +93,15 @@ type ClipboardSnapshot = {
 };
 
 type LayerAction = 'bringToFront' | 'sendToBack';
+type BoardSnapshot = {
+  items: BoardItem[];
+  connectors: ConnectorLink[];
+  selectedId: string | null;
+};
+
+type EditSessionState = {
+  itemId: string;
+};
 
 type Props = {
   page: Page;
@@ -128,6 +141,42 @@ function toConnectorPayload(connector: ConnectorLink): ConnectorLinkPayload {
     from_anchor: connector.from_anchor,
     to_anchor: connector.to_anchor,
   };
+}
+
+function cloneBoardItem(item: BoardItem): BoardItem {
+  return { ...item };
+}
+
+function cloneConnectorLink(connector: ConnectorLink): ConnectorLink {
+  return { ...connector };
+}
+
+function cloneBoardSnapshot(snapshot: BoardSnapshot): BoardSnapshot {
+  return {
+    items: snapshot.items.map(cloneBoardItem),
+    connectors: snapshot.connectors.map(cloneConnectorLink),
+    selectedId: snapshot.selectedId,
+  };
+}
+
+function normalizeBoardSnapshot(snapshot: BoardSnapshot): {
+  items: BoardItem[];
+  connectors: ConnectorLink[];
+} {
+  return {
+    items: [...snapshot.items].sort((a, b) => a.id.localeCompare(b.id)),
+    connectors: [...snapshot.connectors].sort((a, b) => a.id.localeCompare(b.id)),
+  };
+}
+
+function areBoardSnapshotsEqual(
+  left: BoardSnapshot,
+  right: BoardSnapshot,
+): boolean {
+  return (
+    JSON.stringify(normalizeBoardSnapshot(left)) ===
+    JSON.stringify(normalizeBoardSnapshot(right))
+  );
 }
 
 function isFrame(item: BoardItem): boolean {
@@ -443,10 +492,14 @@ export function Canvas({ page }: Props) {
   const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [arrowDraft, setArrowDraft] = useState<ArrowDraftState | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
   const connectorsRef = useRef<ConnectorLink[]>(connectors);
+  const selectedIdRef = useRef<string | null>(selectedId);
   const clipboardRef = useRef<ClipboardSnapshot | null>(null);
   const pasteCountRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
@@ -456,12 +509,16 @@ export function Canvas({ page }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const vpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoStackRef = useRef<BoardSnapshot[]>([]);
+  const redoStackRef = useRef<BoardSnapshot[]>([]);
+  const editSessionRef = useRef<EditSessionState | null>(null);
 
   useLayoutEffect(() => {
     viewportRef.current = viewport;
     itemsRef.current = items;
     connectorsRef.current = connectors;
-  });
+    selectedIdRef.current = selectedId;
+  }, [connectors, items, selectedId, viewport]);
 
   const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
     setItems((current) => {
@@ -485,6 +542,174 @@ export function Canvas({ page }: Props) {
       return nextConnectors;
     });
   }, []);
+
+  const syncHistoryState = useCallback(() => {
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(redoStackRef.current.length > 0);
+  }, []);
+
+  const captureBoardSnapshot = useCallback((): BoardSnapshot => {
+    return {
+      items: itemsRef.current.map(cloneBoardItem),
+      connectors: connectorsRef.current.map(cloneConnectorLink),
+      selectedId: selectedIdRef.current,
+    };
+  }, []);
+
+  const resetHistory = useCallback(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    editSessionRef.current = null;
+    syncHistoryState();
+  }, [syncHistoryState]);
+
+  const pushUndoSnapshot = useCallback(
+    (snapshot: BoardSnapshot) => {
+      const normalizedSnapshot = cloneBoardSnapshot(snapshot);
+      const previousSnapshot =
+        undoStackRef.current[undoStackRef.current.length - 1] ?? null;
+      if (
+        previousSnapshot !== null &&
+        areBoardSnapshotsEqual(previousSnapshot, normalizedSnapshot)
+      ) {
+        return;
+      }
+
+      undoStackRef.current.push(normalizedSnapshot);
+      if (undoStackRef.current.length > MAX_HISTORY_ENTRIES) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
+      syncHistoryState();
+    },
+    [syncHistoryState],
+  );
+
+  const recordHistoryCheckpoint = useCallback(
+    (snapshot: BoardSnapshot) => {
+      if (areBoardSnapshotsEqual(snapshot, captureBoardSnapshot())) {
+        return;
+      }
+
+      pushUndoSnapshot(snapshot);
+    },
+    [captureBoardSnapshot, pushUndoSnapshot],
+  );
+
+  const clearPendingItemSave = useCallback(() => {
+    if (itemSaveTimer.current !== null) {
+      clearTimeout(itemSaveTimer.current);
+      itemSaveTimer.current = null;
+    }
+    editSessionRef.current = null;
+  }, []);
+
+  const restoreBoardSnapshot = useCallback(
+    async (snapshot: BoardSnapshot): Promise<boolean> => {
+      clearPendingItemSave();
+      setIsHistorySyncing(true);
+
+      try {
+        const restored = await replacePageBoardState(page.id, {
+          board_items: snapshot.items,
+          connector_links: snapshot.connectors,
+        });
+        setItemsAndSync(restored.board_items);
+        setConnectorsAndSync(restored.connector_links);
+        setSelectedId(
+          snapshot.selectedId !== null &&
+            restored.board_items.some((item) => item.id === snapshot.selectedId)
+            ? snapshot.selectedId
+            : null,
+        );
+        setEditingId(null);
+        setArrowDraft(null);
+        setSnapGuides([]);
+        return true;
+      } catch (err) {
+        console.error('[Canvas] Failed to restore board snapshot', err);
+        return false;
+      } finally {
+        setIsHistorySyncing(false);
+        syncHistoryState();
+      }
+    },
+    [
+      clearPendingItemSave,
+      page.id,
+      setConnectorsAndSync,
+      setItemsAndSync,
+      syncHistoryState,
+    ],
+  );
+
+  const handleUndo = useCallback(async () => {
+    if (
+      isHistorySyncing ||
+      undoStackRef.current.length === 0 ||
+      dragRef.current !== null ||
+      resizeRef.current !== null ||
+      panRef.current !== null
+    ) {
+      return;
+    }
+
+    const previousSnapshot = undoStackRef.current.pop();
+    if (previousSnapshot === undefined) {
+      syncHistoryState();
+      return;
+    }
+
+    const currentSnapshot = captureBoardSnapshot();
+    redoStackRef.current.push(currentSnapshot);
+    syncHistoryState();
+
+    const restored = await restoreBoardSnapshot(previousSnapshot);
+    if (!restored) {
+      redoStackRef.current.pop();
+      undoStackRef.current.push(previousSnapshot);
+      syncHistoryState();
+    }
+  }, [
+    captureBoardSnapshot,
+    isHistorySyncing,
+    restoreBoardSnapshot,
+    syncHistoryState,
+  ]);
+
+  const handleRedo = useCallback(async () => {
+    if (
+      isHistorySyncing ||
+      redoStackRef.current.length === 0 ||
+      dragRef.current !== null ||
+      resizeRef.current !== null ||
+      panRef.current !== null
+    ) {
+      return;
+    }
+
+    const nextSnapshot = redoStackRef.current.pop();
+    if (nextSnapshot === undefined) {
+      syncHistoryState();
+      return;
+    }
+
+    const currentSnapshot = captureBoardSnapshot();
+    undoStackRef.current.push(currentSnapshot);
+    syncHistoryState();
+
+    const restored = await restoreBoardSnapshot(nextSnapshot);
+    if (!restored) {
+      undoStackRef.current.pop();
+      redoStackRef.current.push(nextSnapshot);
+      syncHistoryState();
+    }
+  }, [
+    captureBoardSnapshot,
+    isHistorySyncing,
+    restoreBoardSnapshot,
+    syncHistoryState,
+  ]);
 
   const getSnapTargetRects = useCallback((ignoredIds: string[]) => {
     const ignoredIdSet = new Set(ignoredIds);
@@ -554,6 +779,10 @@ export function Canvas({ page }: Props) {
           y: data.page.viewport_y,
           zoom: data.page.zoom,
         });
+        setSelectedId(null);
+        setEditingId(null);
+        setArrowDraft(null);
+        resetHistory();
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
@@ -565,7 +794,13 @@ export function Canvas({ page }: Props) {
 
     void load();
     return () => controller.abort();
-  }, [page.id, setConnectorsAndSync, setItemsAndSync, setViewportAndSync]);
+  }, [
+    page.id,
+    resetHistory,
+    setConnectorsAndSync,
+    setItemsAndSync,
+    setViewportAndSync,
+  ]);
 
   useEffect(
     () => () => {
@@ -616,6 +851,7 @@ export function Canvas({ page }: Props) {
       if (!target) {
         return;
       }
+      const snapshotBeforeDelete = captureBoardSnapshot();
 
       const relatedConnectors = connectorsRef.current.filter(
         (connector) =>
@@ -654,6 +890,7 @@ export function Canvas({ page }: Props) {
       if (arrowDraft !== null && relatedItemIds.has(arrowDraft.fromItemId)) {
         setArrowDraft(null);
       }
+      pushUndoSnapshot(snapshotBeforeDelete);
 
       try {
         await deleteBoardItem(itemId);
@@ -661,7 +898,15 @@ export function Canvas({ page }: Props) {
         console.error('[Canvas] Failed to delete item', err);
       }
     },
-    [arrowDraft, editingId, selectedId, setConnectorsAndSync, setItemsAndSync],
+    [
+      arrowDraft,
+      captureBoardSnapshot,
+      editingId,
+      pushUndoSnapshot,
+      selectedId,
+      setConnectorsAndSync,
+      setItemsAndSync,
+    ],
   );
 
   const persistItems = useCallback((nextItems: BoardItem[]) => {
@@ -684,6 +929,7 @@ export function Canvas({ page }: Props) {
       }
 
       const currentItems = itemsRef.current;
+      const snapshotBeforeLayerChange = captureBoardSnapshot();
       const nextItems = reorderItemsForLayer(currentItems, targetId, action);
       const currentById = new Map(currentItems.map((item) => [item.id, item]));
       const changedItems = nextItems.filter((item) => {
@@ -695,10 +941,17 @@ export function Canvas({ page }: Props) {
         return;
       }
 
+      pushUndoSnapshot(snapshotBeforeLayerChange);
       setItemsAndSync(nextItems);
       persistItems(changedItems);
     },
-    [persistItems, selectedId, setItemsAndSync],
+    [
+      captureBoardSnapshot,
+      persistItems,
+      pushUndoSnapshot,
+      selectedId,
+      setItemsAndSync,
+    ],
   );
 
   const handleCopySelection = useCallback(() => {
@@ -736,6 +989,7 @@ export function Canvas({ page }: Props) {
     if (clipboard === null || clipboard.items.length === 0) {
       return;
     }
+    const snapshotBeforePaste = captureBoardSnapshot();
 
     const nextPasteCount = pasteCountRef.current + 1;
     const offset = PASTE_OFFSET_STEP * nextPasteCount;
@@ -777,6 +1031,7 @@ export function Canvas({ page }: Props) {
       return;
     }
 
+    pushUndoSnapshot(snapshotBeforePaste);
     setItemsAndSync((current) => [...current, ...createdItems]);
     pasteCountRef.current = nextPasteCount;
 
@@ -792,7 +1047,7 @@ export function Canvas({ page }: Props) {
         ? pastedRoot.id
         : null,
     );
-  }, [page.id, setItemsAndSync]);
+  }, [captureBoardSnapshot, page.id, pushUndoSnapshot, setItemsAndSync]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -816,6 +1071,17 @@ export function Canvas({ page }: Props) {
         return;
       }
 
+      if (isModifierDown && normalizedKey === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          void handleRedo();
+          return;
+        }
+
+        void handleUndo();
+        return;
+      }
+
       if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         selectedId !== null
@@ -834,7 +1100,14 @@ export function Canvas({ page }: Props) {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleCopySelection, handleDeleteItem, handlePasteSelection, selectedId]);
+  }, [
+    handleCopySelection,
+    handleDeleteItem,
+    handlePasteSelection,
+    handleRedo,
+    handleUndo,
+    selectedId,
+  ]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -946,8 +1219,10 @@ export function Canvas({ page }: Props) {
     if (!frame || frame.type !== ITEM_TYPE.frame) {
       return;
     }
+    const snapshotBeforeToggle = captureBoardSnapshot();
 
     const updatedFrame = { ...frame, is_collapsed: !frame.is_collapsed };
+    pushUndoSnapshot(snapshotBeforeToggle);
     setItemsAndSync((current) =>
       current.map((item) => (item.id === frameId ? updatedFrame : item)),
     );
@@ -1021,6 +1296,7 @@ export function Canvas({ page }: Props) {
     width: number;
     height: number;
   }) {
+    const snapshotBeforeCreate = captureBoardSnapshot();
     const category =
       ITEM_CATEGORY_FOR_TYPE[params.type] ?? ITEM_CATEGORY.small_item;
     const zIndexes = itemsRef.current.map((item) => item.z_index);
@@ -1057,6 +1333,7 @@ export function Canvas({ page }: Props) {
 
     try {
       const created = await createBoardItem(payload);
+      pushUndoSnapshot(snapshotBeforeCreate);
       setItemsAndSync((current) => [...current, created]);
       setSelectedId(created.id);
       setEditingId(isInlineEditable(created) ? created.id : null);
@@ -1131,6 +1408,7 @@ export function Canvas({ page }: Props) {
       setArrowDraft(null);
       return;
     }
+    const snapshotBeforeArrow = captureBoardSnapshot();
 
     const fromItem = itemsRef.current.find((item) => item.id === fromItemId);
     const toItem = itemsRef.current.find((item) => item.id === toItemId);
@@ -1185,6 +1463,7 @@ export function Canvas({ page }: Props) {
         to_anchor: anchors.to_anchor,
       });
 
+      pushUndoSnapshot(snapshotBeforeArrow);
       setItemsAndSync((current) => [...current, createdArrow as BoardItem]);
       setConnectorsAndSync((current) => [...current, connector]);
       setSelectedId(createdArrow.id);
@@ -1249,6 +1528,7 @@ export function Canvas({ page }: Props) {
             y: child.y,
           }))
         : [],
+      snapshot: captureBoardSnapshot(),
     };
   }
 
@@ -1282,6 +1562,7 @@ export function Canvas({ page }: Props) {
       startMouseY: e.clientY,
       startWidth: item.width,
       startHeight: item.height,
+      snapshot: captureBoardSnapshot(),
     };
   }
 
@@ -1426,6 +1707,7 @@ export function Canvas({ page }: Props) {
         persistItems([item]);
         syncConnectorAnchorsForItems([item.id]);
       }
+      recordHistoryCheckpoint(resize.snapshot);
     }
 
     const drag = dragRef.current;
@@ -1464,6 +1746,7 @@ export function Canvas({ page }: Props) {
           syncConnectorAnchorsForItems([draggedItem.id]);
         }
       }
+      recordHistoryCheckpoint(drag.snapshot);
     }
 
     if (panRef.current) {
@@ -1474,6 +1757,11 @@ export function Canvas({ page }: Props) {
 
   const handleItemUpdate = useCallback(
     (updated: BoardItem) => {
+      if (editSessionRef.current?.itemId !== updated.id) {
+        pushUndoSnapshot(captureBoardSnapshot());
+        editSessionRef.current = { itemId: updated.id };
+      }
+
       setItemsAndSync((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
@@ -1486,12 +1774,18 @@ export function Canvas({ page }: Props) {
         void updateBoardItem(updated.id, toPayload(updated)).catch((err) => {
           console.error('[Canvas] Failed to update item', err);
         });
+        if (editSessionRef.current?.itemId === updated.id) {
+          editSessionRef.current = null;
+        }
       }, ITEM_SAVE_DELAY);
     },
-    [setItemsAndSync],
+    [captureBoardSnapshot, pushUndoSnapshot, setItemsAndSync],
   );
 
-  const handleEditEnd = useCallback(() => setEditingId(null), []);
+  const handleEditEnd = useCallback(() => {
+    editSessionRef.current = null;
+    setEditingId(null);
+  }, []);
 
   function handleItemDoubleClick(item: BoardItem) {
     setSelectedId(item.id);
@@ -1521,6 +1815,11 @@ export function Canvas({ page }: Props) {
         onToolChange={setActiveTool}
         snapEnabled={snapEnabled}
         onToggleSnap={() => setSnapEnabled((current) => !current)}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={() => void handleUndo()}
+        onRedo={() => void handleRedo()}
+        historyBusy={isHistorySyncing}
       />
       <div className="canvas-content">
         <div className="canvas-stage">

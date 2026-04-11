@@ -207,11 +207,26 @@ export type PageBoardData = {
   connector_links: ConnectorLink[];
 };
 
+export type PageBoardStatePayload = Pick<
+  PageBoardData,
+  'board_items' | 'connector_links'
+>;
+
 export async function getPageBoardData(
   pageId: string,
   signal?: AbortSignal,
 ): Promise<PageBoardData> {
   return requestJson<PageBoardData>(`/pages/${pageId}/board-data`, { signal });
+}
+
+export async function replacePageBoardState(
+  pageId: string,
+  payload: PageBoardStatePayload,
+): Promise<PageBoardData> {
+  return requestJson<PageBoardData>(`/pages/${pageId}/board-state`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
 }
 
 // Backend: POST /board-items（page_id in body）

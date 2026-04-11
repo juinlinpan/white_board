@@ -21,7 +21,7 @@
 - [x] 設定 SQLite 路徑為 `<backend_root>/data/whiteboard.db`
 - [x] 設定 log 路徑為 `<backend_root>/logs/`
 - [x] 啟動時自動建立缺少的資料夾
-- [ ] 補上路徑初始化與錯誤處理
+- [x] 補上路徑初始化與錯誤處理
 
 ### 3. SQLite Schema
 
@@ -41,6 +41,7 @@
 - [x] 實作 connector CRUD API
 - [x] 實作 Page viewport API
 - [x] 實作 Page 全量載入 API
+- [x] 實作 Page board state replace API（供 Undo / Redo 還原）
 - [x] 統一 success response format
 - [x] 統一 error format
 
@@ -76,7 +77,7 @@
 - [x] 支援 z-index 調整
 - [x] 支援複製 / 貼上
 - [x] 支援 Delete
-- [ ] 支援 Undo / Redo
+- [x] 支援 Undo / Redo
 - [x] 支援自動儲存
 
 ### 8. 物件模型
@@ -168,8 +169,8 @@
 - [x] `Delete` 刪除
 - [x] `Ctrl/Cmd + C` 複製
 - [x] `Ctrl/Cmd + V` 貼上
-- [ ] `Ctrl/Cmd + Z` Undo
-- [ ] `Ctrl/Cmd + Shift + Z` Redo
+- [x] `Ctrl/Cmd + Z` Undo
+- [x] `Ctrl/Cmd + Shift + Z` Redo
 - [x] `Space + Drag` 平移畫布
 
 ### 17. 本機啟動與部署流程

@@ -821,6 +821,16 @@ button {
   color: var(--ink);
 }
 
+.tool-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tool-button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 .tool-button.is-active {
   background: var(--accent-soft);
   color: var(--accent);

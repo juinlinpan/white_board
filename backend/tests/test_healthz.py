@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.db import StorageInitializationError, initialize_storage
 from app.main import create_app
 from app.settings import build_settings
 
@@ -24,3 +26,15 @@ def test_healthz(tmp_path: Path) -> None:
     assert settings.sqlite_path.is_file()
     assert settings.app_log_path.is_file()
     assert settings.backend_log_path.is_file()
+
+
+def test_initialize_storage_rejects_file_backend_root(tmp_path: Path) -> None:
+    backend_root = tmp_path / "backend-root.txt"
+    backend_root.write_text("not-a-directory", encoding="utf-8")
+
+    settings = build_settings(backend_root)
+
+    with pytest.raises(StorageInitializationError, match="Backend root") as exc_info:
+        initialize_storage(settings)
+
+    assert str(backend_root) in str(exc_info.value)

@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -29,6 +30,10 @@ from app.settings import AppSettings
 
 LOGGER = logging.getLogger("whiteboard.app")
 CONNECTABLE_ITEM_TYPES = {"text_box", "sticky_note", "note_paper", "frame"}
+
+
+class StorageInitializationError(RuntimeError):
+    pass
 
 SCHEMA_STATEMENTS = (
     """
@@ -105,18 +110,64 @@ SCHEMA_STATEMENTS = (
 
 
 def initialize_storage(settings: AppSettings) -> None:
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    settings.logs_dir.mkdir(parents=True, exist_ok=True)
-    settings.app_log_path.touch(exist_ok=True)
-    settings.backend_log_path.touch(exist_ok=True)
+    _ensure_directory(settings.backend_root, "Backend root")
+    _ensure_writable_directory(settings.backend_root, "Backend root")
+    _ensure_directory(settings.data_dir, "Data directory")
+    _ensure_writable_directory(settings.data_dir, "Data directory")
+    _ensure_directory(settings.logs_dir, "Logs directory")
+    _ensure_writable_directory(settings.logs_dir, "Logs directory")
+    _ensure_writable_file(settings.sqlite_path, "SQLite database")
+    _ensure_writable_file(settings.app_log_path, "App log")
+    _ensure_writable_file(settings.backend_log_path, "Backend log")
 
-    with sqlite3.connect(settings.sqlite_path) as connection:
-        connection.execute("PRAGMA foreign_keys = ON")
-        for statement in SCHEMA_STATEMENTS:
-            connection.execute(statement)
-        connection.commit()
+    try:
+        with sqlite3.connect(settings.sqlite_path) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            for statement in SCHEMA_STATEMENTS:
+                connection.execute(statement)
+            connection.commit()
+    except sqlite3.Error as exc:
+        raise StorageInitializationError(
+            f"Failed to initialize SQLite at '{settings.sqlite_path}': {exc}"
+        ) from exc
 
     LOGGER.info("Storage initialized at %s", settings.sqlite_path)
+
+
+def _ensure_directory(path: Path, label: str) -> None:
+    if path.exists() and not path.is_dir():
+        raise StorageInitializationError(f"{label} '{path}' must be a directory.")
+
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise StorageInitializationError(
+            f"Failed to create {label.lower()} '{path}': {exc}"
+        ) from exc
+
+
+def _ensure_writable_directory(path: Path, label: str) -> None:
+    probe_path = path / f".whiteboard-write-test-{uuid4().hex}"
+    try:
+        probe_path.write_text("", encoding="utf-8")
+    except OSError as exc:
+        raise StorageInitializationError(
+            f"{label} '{path}' is not writable: {exc}"
+        ) from exc
+    finally:
+        if probe_path.exists():
+            probe_path.unlink(missing_ok=True)
+
+
+def _ensure_writable_file(path: Path, label: str) -> None:
+    try:
+        path.touch(exist_ok=True)
+        with path.open("a", encoding="utf-8"):
+            pass
+    except OSError as exc:
+        raise StorageInitializationError(
+            f"{label} '{path}' is not writable: {exc}"
+        ) from exc
 
 
 class WhiteboardRepository:
@@ -1074,6 +1125,30 @@ class WhiteboardRepository:
                     detail=f"Connector '{connector_id}' was not found.",
                 )
 
+    def replace_page_board_state(
+        self,
+        page_id: str,
+        board_items: list[BoardItem],
+        connector_links: list[ConnectorLink],
+    ) -> PageBoardData:
+        self.get_page(page_id)
+        item_by_id = self._validate_board_state_payload(
+            page_id=page_id,
+            board_items=board_items,
+            connector_links=connector_links,
+        )
+
+        with self._connect() as connection:
+            connection.execute("DELETE FROM board_items WHERE page_id = ?", (page_id,))
+            self._insert_board_state_items(connection, board_items)
+            self._insert_board_state_connectors(
+                connection,
+                connector_links,
+                item_by_id=item_by_id,
+            )
+
+        return self.get_page_board_data(page_id)
+
     def get_page_board_data(self, page_id: str) -> PageBoardData:
         page = self.get_page(page_id)
         return PageBoardData(
@@ -1111,6 +1186,196 @@ class WhiteboardRepository:
 
     def _connector_from_row(self, row: sqlite3.Row) -> ConnectorLink:
         return ConnectorLink.model_validate(dict(row))
+
+    def _validate_board_state_payload(
+        self,
+        *,
+        page_id: str,
+        board_items: list[BoardItem],
+        connector_links: list[ConnectorLink],
+    ) -> dict[str, BoardItem]:
+        item_ids = [item.id for item in board_items]
+        if len(set(item_ids)) != len(item_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Board state contains duplicate board item ids.",
+            )
+
+        connector_ids = [connector.id for connector in connector_links]
+        if len(set(connector_ids)) != len(connector_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Board state contains duplicate connector ids.",
+            )
+
+        item_by_id = {item.id: item for item in board_items}
+        for item in board_items:
+            if item.page_id != page_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Board state items must belong to the target page.",
+                )
+
+            if item.parent_item_id is not None and item.parent_item_id not in item_by_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Board state item parent references must exist in the payload.",
+                )
+
+        for connector in connector_links:
+            connector_item = item_by_id.get(connector.connector_item_id)
+            if connector_item is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Board state connector item references must exist in the payload.",
+                )
+
+            self._validate_connector_targets(
+                connector_item=connector_item,
+                from_item=item_by_id.get(connector.from_item_id)
+                if connector.from_item_id is not None
+                else None,
+                to_item=item_by_id.get(connector.to_item_id)
+                if connector.to_item_id is not None
+                else None,
+            )
+
+            for role, item_id in (
+                ("from", connector.from_item_id),
+                ("to", connector.to_item_id),
+            ):
+                if item_id is None:
+                    continue
+                if item_id not in item_by_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Board state connector {role} item references must exist "
+                            "in the payload."
+                        ),
+                    )
+
+        return item_by_id
+
+    def _insert_board_state_items(
+        self,
+        connection: sqlite3.Connection,
+        board_items: list[BoardItem],
+    ) -> None:
+        pending_items = {item.id: item for item in board_items}
+        inserted_ids: set[str] = set()
+
+        while pending_items:
+            inserted_this_round = False
+
+            for item_id, item in list(pending_items.items()):
+                if item.parent_item_id is not None and item.parent_item_id not in inserted_ids:
+                    continue
+
+                connection.execute(
+                    """
+                    INSERT INTO board_items (
+                        id,
+                        page_id,
+                        parent_item_id,
+                        category,
+                        type,
+                        title,
+                        content,
+                        content_format,
+                        x,
+                        y,
+                        width,
+                        height,
+                        rotation,
+                        z_index,
+                        is_collapsed,
+                        style_json,
+                        data_json,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item.id,
+                        item.page_id,
+                        item.parent_item_id,
+                        item.category,
+                        item.type,
+                        item.title,
+                        item.content,
+                        item.content_format,
+                        item.x,
+                        item.y,
+                        item.width,
+                        item.height,
+                        item.rotation,
+                        item.z_index,
+                        int(item.is_collapsed),
+                        item.style_json,
+                        item.data_json,
+                        item.created_at,
+                        item.updated_at,
+                    ),
+                )
+                inserted_ids.add(item_id)
+                del pending_items[item_id]
+                inserted_this_round = True
+
+            if inserted_this_round:
+                continue
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Board state contains invalid or cyclic parent references.",
+            )
+
+    def _insert_board_state_connectors(
+        self,
+        connection: sqlite3.Connection,
+        connector_links: list[ConnectorLink],
+        *,
+        item_by_id: dict[str, BoardItem],
+    ) -> None:
+        for connector in connector_links:
+            connector_item = item_by_id[connector.connector_item_id]
+            from_item = (
+                item_by_id[connector.from_item_id]
+                if connector.from_item_id is not None
+                else None
+            )
+            to_item = (
+                item_by_id[connector.to_item_id]
+                if connector.to_item_id is not None
+                else None
+            )
+            self._validate_connector_targets(
+                connector_item=connector_item,
+                from_item=from_item,
+                to_item=to_item,
+            )
+            connection.execute(
+                """
+                INSERT INTO connector_links (
+                    id,
+                    connector_item_id,
+                    from_item_id,
+                    to_item_id,
+                    from_anchor,
+                    to_anchor
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    connector.id,
+                    connector.connector_item_id,
+                    connector.from_item_id,
+                    connector.to_item_id,
+                    connector.from_anchor,
+                    connector.to_anchor,
+                ),
+            )
 
     def _validate_reorder_ids(
         self,
@@ -1195,20 +1460,39 @@ class WhiteboardRepository:
         payload: ConnectorLinkCreatePayload | ConnectorLinkUpdatePayload,
     ) -> None:
         connector_item = self.get_board_item(payload.connector_item_id)
+        from_item = (
+            self.get_board_item(payload.from_item_id)
+            if payload.from_item_id is not None
+            else None
+        )
+        to_item = (
+            self.get_board_item(payload.to_item_id)
+            if payload.to_item_id is not None
+            else None
+        )
+        self._validate_connector_targets(
+            connector_item=connector_item,
+            from_item=from_item,
+            to_item=to_item,
+        )
+
+    def _validate_connector_targets(
+        self,
+        *,
+        connector_item: BoardItem,
+        from_item: BoardItem | None,
+        to_item: BoardItem | None,
+    ) -> None:
         if connector_item.type != "arrow" or connector_item.category != "connector":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Connector item must be an arrow board item.",
             )
 
-        for role, item_id in (
-            ("from", payload.from_item_id),
-            ("to", payload.to_item_id),
-        ):
-            if item_id is None:
+        for role, target_item in (("from", from_item), ("to", to_item)):
+            if target_item is None:
                 continue
 
-            target_item = self.get_board_item(item_id)
             if target_item.page_id != connector_item.page_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

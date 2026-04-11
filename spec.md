@@ -309,6 +309,7 @@ Backend：
 - Project / Page CRUD
 - board item CRUD
 - connector CRUD
+- Page board state replace API（供 Undo / Redo 還原使用）
 - SQLite 存取
 - 健康檢查與基本設定
 
@@ -319,6 +320,7 @@ Backend：
 ### 10.1 Backend Root
 
 開發期預設為 `backend/`。
+啟動時必須驗證 backend root 可寫入；若 `data/`、`logs/` 或必要檔案無法建立，應明確回報初始化錯誤。
 
 ### 10.2 SQLite 路徑
 
