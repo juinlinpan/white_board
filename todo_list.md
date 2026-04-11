@@ -183,22 +183,22 @@
 
 ### 18. 驗收測試
 
-- [ ] 驗收 Project / Page CRUD
-- [ ] 驗收物件建立 / 編輯 / 刪除
-- [ ] 驗收 frame 展開 / 縮回
-- [ ] 驗收縮回摘要規則
-- [ ] 驗收 arrow 連線更新
-- [ ] 驗收 snap 對齊
-- [ ] 驗收 Undo / Redo
-- [ ] 驗收本機持久化
-- [ ] 對照 `spec.md` 驗收條件逐項確認
+- [x] 驗收 Project / Page CRUD
+- [x] 驗收物件建立 / 編輯 / 刪除
+- [x] 驗收 frame 展開 / 縮回
+- [x] 驗收縮回摘要規則
+- [x] 驗收 arrow 連線更新
+- [x] 驗收 snap 對齊
+- [x] 驗收 Undo / Redo
+- [x] 驗收本機持久化
+- [x] 對照 `spec.md` 驗收條件逐項確認
 
 ## 延後項目
 
 ### 19. 進階內容功能
 
-- [ ] Markdown rich preview
-- [ ] Undo / Redo 歷史優化
+- [x] Markdown rich preview
+- [x] Undo / Redo 歷史優化
 
 ## 建議實作順序
 

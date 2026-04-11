@@ -844,3 +844,140 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
         connectors_response = client.get(f"/pages/{page['id']}/connectors")
         assert connectors_response.status_code == 200
         assert response_data(connectors_response) == []
+
+
+def test_board_data_persists_across_app_restart(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+
+    with TestClient(create_app(settings)) as client:
+        project = response_data(client.post("/projects", json={"name": "Persistence"}))
+        page = response_data(
+            client.post(
+                f"/projects/{project['id']}/pages",
+                json={"name": "Saved Board"},
+            )
+        )
+
+        viewport_response = client.patch(
+            f"/pages/{page['id']}/viewport",
+            json={"viewport_x": 180, "viewport_y": 96, "zoom": 1.4},
+        )
+        assert viewport_response.status_code == 200
+
+        frame = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": None,
+                    "category": "large_item",
+                    "type": "frame",
+                    "title": "Persisted Frame",
+                    "content": None,
+                    "content_format": None,
+                    "x": 64,
+                    "y": 48,
+                    "width": 360,
+                    "height": 240,
+                    "rotation": 0,
+                    "z_index": 0,
+                    "is_collapsed": True,
+                    "style_json": '{"backgroundColor":"#eff6ff"}',
+                    "data_json": None,
+                },
+            )
+        )
+        note = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": frame["id"],
+                    "category": "small_item",
+                    "type": "note_paper",
+                    "title": None,
+                    "content": "# Persisted heading\n\nKeep this note.",
+                    "content_format": "markdown",
+                    "x": 96,
+                    "y": 132,
+                    "width": 240,
+                    "height": 180,
+                    "rotation": 0,
+                    "z_index": 1,
+                    "is_collapsed": False,
+                    "style_json": None,
+                    "data_json": None,
+                },
+            )
+        )
+        arrow_item = response_data(
+            client.post(
+                "/board-items",
+                json={
+                    "page_id": page["id"],
+                    "parent_item_id": None,
+                    "category": "connector",
+                    "type": "arrow",
+                    "title": None,
+                    "content": None,
+                    "content_format": None,
+                    "x": 0,
+                    "y": 0,
+                    "width": 220,
+                    "height": 80,
+                    "rotation": 0,
+                    "z_index": 2,
+                    "is_collapsed": False,
+                    "style_json": None,
+                    "data_json": '{"kind":"straight"}',
+                },
+            )
+        )
+        connector = response_data(
+            client.post(
+                "/connectors",
+                json={
+                    "connector_item_id": arrow_item["id"],
+                    "from_item_id": note["id"],
+                    "to_item_id": frame["id"],
+                    "from_anchor": "right",
+                    "to_anchor": "left",
+                },
+            )
+        )
+
+    with TestClient(create_app(settings)) as restarted_client:
+        projects_response = restarted_client.get("/projects")
+        assert projects_response.status_code == 200
+        assert [item["id"] for item in response_data(projects_response)] == [project["id"]]
+
+        pages_response = restarted_client.get(f"/projects/{project['id']}/pages")
+        assert pages_response.status_code == 200
+        reloaded_page = response_data(pages_response)[0]
+        assert reloaded_page["id"] == page["id"]
+        assert reloaded_page["viewport_x"] == 180
+        assert reloaded_page["viewport_y"] == 96
+        assert reloaded_page["zoom"] == 1.4
+
+        board_data_response = restarted_client.get(f"/pages/{page['id']}/board-data")
+        assert board_data_response.status_code == 200
+        board_data = response_data(board_data_response)
+
+        assert {item["id"] for item in board_data["board_items"]} == {
+            frame["id"],
+            note["id"],
+            arrow_item["id"],
+        }
+        assert board_data["connector_links"] == [connector]
+
+        persisted_frame = next(
+            item for item in board_data["board_items"] if item["id"] == frame["id"]
+        )
+        persisted_note = next(
+            item for item in board_data["board_items"] if item["id"] == note["id"]
+        )
+
+        assert persisted_frame["is_collapsed"] is True
+        assert persisted_frame["style_json"] == '{"backgroundColor":"#eff6ff"}'
+        assert persisted_note["parent_item_id"] == frame["id"]
+        assert persisted_note["content"] == "# Persisted heading\n\nKeep this note."

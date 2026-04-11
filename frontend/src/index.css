@@ -1147,12 +1147,81 @@ button {
 
 .note-paper-body {
   margin: 0;
-  white-space: pre-wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   word-break: break-word;
-  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
   font-size: 0.8rem;
   line-height: 1.55;
   color: var(--muted);
+}
+
+.note-paper-body > * {
+  margin: 0;
+}
+
+.markdown-heading {
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.markdown-heading-1 {
+  font-size: 1rem;
+}
+
+.markdown-heading-2 {
+  font-size: 0.9rem;
+}
+
+.markdown-heading-3,
+.markdown-heading-4,
+.markdown-heading-5,
+.markdown-heading-6 {
+  font-size: 0.82rem;
+}
+
+.markdown-paragraph {
+  color: var(--muted);
+}
+
+.markdown-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--muted);
+}
+
+.markdown-list li + li {
+  margin-top: 3px;
+}
+
+.markdown-quote {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--ink);
+}
+
+.markdown-code-block {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  overflow: auto;
+}
+
+.markdown-inline-code {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--ink);
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.76rem;
 }
 
 .note-paper-editor {

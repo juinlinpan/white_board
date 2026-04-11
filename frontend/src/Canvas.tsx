@@ -21,12 +21,29 @@ import {
   type BoardItemPayload,
   type Page,
 } from './api';
+import {
+  areBoardSnapshotsEqual,
+  cloneBoardSnapshot,
+  type BoardHistoryEntry,
+  type BoardSnapshot,
+  prepareRedoHistory,
+  prepareUndoHistory,
+  pushUndoHistory,
+} from './boardHistory';
+import {
+  getAnchorPoint,
+  getAutoAnchors,
+  getConnectorPoints,
+  getFrameChildren,
+  isHiddenByCollapsedFrame,
+  isSmallItem,
+  summarizeFrameChild,
+} from './canvasHelpers';
 import { Inspector } from './Inspector';
 import { snapMoveRect, snapResizeRect, type SnapGuide } from './snap';
 import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
-import { type FrameSummaryEntry } from './items/Frame';
 import { createTableData, serializeTableData } from './tableData';
 import {
   ITEM_CATEGORY,
@@ -49,12 +66,6 @@ const MAX_HISTORY_ENTRIES = 50;
 const FRAME_LAYOUT_PADDING_X = 20;
 const FRAME_LAYOUT_PADDING_TOP = 72;
 const FRAME_LAYOUT_GAP = 16;
-
-type Anchor = 'top' | 'right' | 'bottom' | 'left';
-type Point = {
-  x: number;
-  y: number;
-};
 
 type DragState = {
   itemId: string;
@@ -97,11 +108,6 @@ type ClipboardSnapshot = {
 };
 
 type LayerAction = 'bringToFront' | 'sendToBack';
-type BoardSnapshot = {
-  items: BoardItem[];
-  connectors: ConnectorLink[];
-  selectedIds: string[];
-};
 
 type EditSessionState = {
   itemId: string;
@@ -147,50 +153,8 @@ function toConnectorPayload(connector: ConnectorLink): ConnectorLinkPayload {
   };
 }
 
-function cloneBoardItem(item: BoardItem): BoardItem {
-  return { ...item };
-}
-
-function cloneConnectorLink(connector: ConnectorLink): ConnectorLink {
-  return { ...connector };
-}
-
-function cloneBoardSnapshot(snapshot: BoardSnapshot): BoardSnapshot {
-  return {
-    items: snapshot.items.map(cloneBoardItem),
-    connectors: snapshot.connectors.map(cloneConnectorLink),
-    selectedIds: [...snapshot.selectedIds],
-  };
-}
-
-function normalizeBoardSnapshot(snapshot: BoardSnapshot): {
-  items: BoardItem[];
-  connectors: ConnectorLink[];
-  selectedIds: string[];
-} {
-  return {
-    items: [...snapshot.items].sort((a, b) => a.id.localeCompare(b.id)),
-    connectors: [...snapshot.connectors].sort((a, b) => a.id.localeCompare(b.id)),
-    selectedIds: [...snapshot.selectedIds].sort((a, b) => a.localeCompare(b)),
-  };
-}
-
-function areBoardSnapshotsEqual(
-  left: BoardSnapshot,
-  right: BoardSnapshot,
-): boolean {
-  return (
-    JSON.stringify(normalizeBoardSnapshot(left)) ===
-    JSON.stringify(normalizeBoardSnapshot(right))
-  );
-}
-
 function isFrame(item: BoardItem): boolean {
   return item.type === ITEM_TYPE.frame;
-}
-
-function isSmallItem(item: BoardItem): boolean {
-  return item.category === ITEM_CATEGORY.small_item;
 }
 
 function isArrowConnectable(item: BoardItem): boolean {
@@ -206,76 +170,6 @@ function isInlineEditable(item: BoardItem): boolean {
   );
 }
 
-function getFirstNonEmptyLine(content: string | null): string | null {
-  if (content === null) {
-    return null;
-  }
-
-  for (const line of content.split(/\r?\n/)) {
-    const normalized = line.trim();
-    if (normalized.length > 0) {
-      return normalized;
-    }
-  }
-
-  return null;
-}
-
-function getMarkdownH1(content: string | null): string | null {
-  if (content === null) {
-    return null;
-  }
-
-  for (const line of content.split(/\r?\n/)) {
-    const match = line.match(/^#\s+(.+)$/);
-    if (match?.[1]) {
-      return match[1].trim();
-    }
-  }
-
-  return null;
-}
-
-function ellipsize(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(0, maxLength).trimEnd()}…`;
-}
-
-function summarizeFrameChild(item: BoardItem): FrameSummaryEntry {
-  const text = item.content?.trim() ?? '';
-
-  if (item.type === ITEM_TYPE.text_box) {
-    return {
-      id: item.id,
-      type: item.type,
-      title: '文字框',
-      body: text.length > 0 ? text : '尚未輸入文字',
-    };
-  }
-
-  if (item.type === ITEM_TYPE.sticky_note) {
-    return {
-      id: item.id,
-      type: item.type,
-      title: '便利貼',
-      body: text.length > 0 ? ellipsize(text, 80) : '尚未輸入內容',
-    };
-  }
-
-  const h1 = getMarkdownH1(text);
-  const fallback = getFirstNonEmptyLine(text);
-
-  return {
-    id: item.id,
-    type: item.type,
-    title: h1 ?? fallback ?? 'Untitled note',
-    body: h1 !== null ? 'Markdown H1 摘要' : '未找到 H1，改用第一行內容',
-  };
-}
-
 function clampItemSize(
   type: string,
   width: number,
@@ -286,12 +180,6 @@ function clampItemSize(
     width: Math.max(minSize?.width ?? 60, width),
     height: Math.max(minSize?.height ?? 40, height),
   };
-}
-
-function getFrameChildren(items: BoardItem[], frameId: string): BoardItem[] {
-  return items
-    .filter((item) => item.parent_item_id === frameId)
-    .sort((a, b) => a.y - b.y || a.x - b.x || a.z_index - b.z_index);
 }
 
 function getDescendantItems(items: BoardItem[], rootId: string): BoardItem[] {
@@ -577,20 +465,6 @@ function isPointInsideFrame(x: number, y: number, frame: BoardItem): boolean {
   );
 }
 
-function isHiddenByCollapsedFrame(
-  item: BoardItem,
-  items: BoardItem[],
-): boolean {
-  if (item.parent_item_id === null) {
-    return false;
-  }
-
-  const parent = items.find(
-    (candidate) => candidate.id === item.parent_item_id,
-  );
-  return parent?.type === ITEM_TYPE.frame && parent.is_collapsed;
-}
-
 function findContainingFrame(
   item: BoardItem,
   items: BoardItem[],
@@ -616,82 +490,6 @@ function findContainingFrame(
     });
 
   return candidates[0] ?? null;
-}
-
-function getItemCenter(item: BoardItem): Point {
-  return {
-    x: item.x + item.width / 2,
-    y: item.y + item.height / 2,
-  };
-}
-
-function getAutoAnchors(
-  fromItem: BoardItem,
-  toItem: BoardItem,
-): { from_anchor: Anchor; to_anchor: Anchor } {
-  const fromCenter = getItemCenter(fromItem);
-  const toCenter = getItemCenter(toItem);
-  const dx = toCenter.x - fromCenter.x;
-  const dy = toCenter.y - fromCenter.y;
-
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0
-      ? { from_anchor: 'right', to_anchor: 'left' }
-      : { from_anchor: 'left', to_anchor: 'right' };
-  }
-
-  return dy >= 0
-    ? { from_anchor: 'bottom', to_anchor: 'top' }
-    : { from_anchor: 'top', to_anchor: 'bottom' };
-}
-
-function getAnchorPoint(item: BoardItem, anchor: Anchor | null): Point {
-  switch (anchor) {
-    case 'top':
-      return { x: item.x + item.width / 2, y: item.y };
-    case 'right':
-      return { x: item.x + item.width, y: item.y + item.height / 2 };
-    case 'bottom':
-      return { x: item.x + item.width / 2, y: item.y + item.height };
-    case 'left':
-      return { x: item.x, y: item.y + item.height / 2 };
-    default:
-      return getItemCenter(item);
-  }
-}
-
-function getConnectorPoints(
-  connector: ConnectorLink,
-  items: BoardItem[],
-): { fromPoint: Point; toPoint: Point } | null {
-  if (connector.from_item_id === null || connector.to_item_id === null) {
-    return null;
-  }
-
-  const fromItem = items.find((item) => item.id === connector.from_item_id);
-  const toItem = items.find((item) => item.id === connector.to_item_id);
-  if (!fromItem || !toItem) {
-    return null;
-  }
-
-  if (
-    isHiddenByCollapsedFrame(fromItem, items) ||
-    isHiddenByCollapsedFrame(toItem, items)
-  ) {
-    return null;
-  }
-
-  const autoAnchors = getAutoAnchors(fromItem, toItem);
-  return {
-    fromPoint: getAnchorPoint(
-      fromItem,
-      (connector.from_anchor as Anchor | null) ?? autoAnchors.from_anchor,
-    ),
-    toPoint: getAnchorPoint(
-      toItem,
-      (connector.to_anchor as Anchor | null) ?? autoAnchors.to_anchor,
-    ),
-  };
 }
 
 export function Canvas({ page }: Props) {
@@ -726,8 +524,8 @@ export function Canvas({ page }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const vpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const undoStackRef = useRef<BoardSnapshot[]>([]);
-  const redoStackRef = useRef<BoardSnapshot[]>([]);
+  const undoStackRef = useRef<BoardHistoryEntry[]>([]);
+  const redoStackRef = useRef<BoardHistoryEntry[]>([]);
   const editSessionRef = useRef<EditSessionState | null>(null);
 
   useLayoutEffect(() => {
@@ -780,11 +578,11 @@ export function Canvas({ page }: Props) {
   }, []);
 
   const captureBoardSnapshot = useCallback((): BoardSnapshot => {
-    return {
-      items: itemsRef.current.map(cloneBoardItem),
-      connectors: connectorsRef.current.map(cloneConnectorLink),
-      selectedIds: [...selectedIdsRef.current],
-    };
+    return cloneBoardSnapshot({
+      items: itemsRef.current,
+      connectors: connectorsRef.current,
+      selectedIds: selectedIdsRef.current,
+    });
   }, []);
 
   const resetHistory = useCallback(() => {
@@ -796,20 +594,16 @@ export function Canvas({ page }: Props) {
 
   const pushUndoSnapshot = useCallback(
     (snapshot: BoardSnapshot) => {
-      const normalizedSnapshot = cloneBoardSnapshot(snapshot);
-      const previousSnapshot =
-        undoStackRef.current[undoStackRef.current.length - 1] ?? null;
-      if (
-        previousSnapshot !== null &&
-        areBoardSnapshotsEqual(previousSnapshot, normalizedSnapshot)
-      ) {
+      const nextHistory = pushUndoHistory(
+        undoStackRef.current,
+        snapshot,
+        MAX_HISTORY_ENTRIES,
+      );
+      if (!nextHistory.added) {
         return;
       }
 
-      undoStackRef.current.push(normalizedSnapshot);
-      if (undoStackRef.current.length > MAX_HISTORY_ENTRIES) {
-        undoStackRef.current.shift();
-      }
+      undoStackRef.current = nextHistory.undoStack;
       redoStackRef.current = [];
       syncHistoryState();
     },
@@ -885,20 +679,27 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    const previousSnapshot = undoStackRef.current.pop();
-    if (previousSnapshot === undefined) {
+    const previousUndoStack = undoStackRef.current;
+    const previousRedoStack = redoStackRef.current;
+    const transition = prepareUndoHistory(
+      previousUndoStack,
+      previousRedoStack,
+      captureBoardSnapshot(),
+      MAX_HISTORY_ENTRIES,
+    );
+    if (transition.targetSnapshot === null) {
       syncHistoryState();
       return;
     }
 
-    const currentSnapshot = captureBoardSnapshot();
-    redoStackRef.current.push(currentSnapshot);
+    undoStackRef.current = transition.undoStack;
+    redoStackRef.current = transition.redoStack;
     syncHistoryState();
 
-    const restored = await restoreBoardSnapshot(previousSnapshot);
+    const restored = await restoreBoardSnapshot(transition.targetSnapshot);
     if (!restored) {
-      redoStackRef.current.pop();
-      undoStackRef.current.push(previousSnapshot);
+      undoStackRef.current = previousUndoStack;
+      redoStackRef.current = previousRedoStack;
       syncHistoryState();
     }
   }, [
@@ -919,20 +720,27 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    const nextSnapshot = redoStackRef.current.pop();
-    if (nextSnapshot === undefined) {
+    const previousUndoStack = undoStackRef.current;
+    const previousRedoStack = redoStackRef.current;
+    const transition = prepareRedoHistory(
+      previousUndoStack,
+      previousRedoStack,
+      captureBoardSnapshot(),
+      MAX_HISTORY_ENTRIES,
+    );
+    if (transition.targetSnapshot === null) {
       syncHistoryState();
       return;
     }
 
-    const currentSnapshot = captureBoardSnapshot();
-    undoStackRef.current.push(currentSnapshot);
+    undoStackRef.current = transition.undoStack;
+    redoStackRef.current = transition.redoStack;
     syncHistoryState();
 
-    const restored = await restoreBoardSnapshot(nextSnapshot);
+    const restored = await restoreBoardSnapshot(transition.targetSnapshot);
     if (!restored) {
-      undoStackRef.current.pop();
-      redoStackRef.current.push(nextSnapshot);
+      undoStackRef.current = previousUndoStack;
+      redoStackRef.current = previousRedoStack;
       syncHistoryState();
     }
   }, [

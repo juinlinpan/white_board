@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { type BoardItem } from '../api';
+import { getMarkdownH1 } from '../canvasHelpers';
 import {
   getBoardItemTypographyStyle,
   resolveBoardItemStyle,
 } from '../itemStyles';
+import { MarkdownPreview } from '../markdownPreview';
 
 type Props = {
   item: BoardItem;
@@ -12,40 +14,21 @@ type Props = {
   onEditEnd: () => void;
 };
 
-function getMarkdownTitle(content: string | null): string | null {
+function hasPreviewBody(content: string | null): boolean {
   if (content === null) {
-    return null;
+    return false;
   }
 
-  for (const line of content.split(/\r?\n/)) {
-    const match = line.match(/^#\s+(.+)$/);
-    if (match?.[1]) {
-      return match[1].trim();
-    }
-  }
-
-  return null;
-}
-
-function getPreviewBody(content: string | null): string {
-  if (content === null) {
-    return '';
-  }
-
-  const body = content
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .slice(0, 6)
-    .join('\n')
-    .trim();
-
-  return body;
+  return content.split(/\r?\n/).some((line) => {
+    const trimmed = line.trim();
+    return trimmed.length > 0 && !/^#\s+/.test(trimmed);
+  });
 }
 
 export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const title = getMarkdownTitle(item.content);
-  const previewBody = getPreviewBody(item.content);
+  const title = getMarkdownH1(item.content);
+  const previewable = hasPreviewBody(item.content);
   const resolvedStyle = resolveBoardItemStyle(item);
   const typographyStyle = getBoardItemTypographyStyle(item);
   const cardStyle = {
@@ -90,10 +73,12 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
         <span className="markdown-badge">Markdown</span>
         <strong>{title ?? 'Untitled note'}</strong>
       </div>
-      {previewBody.length > 0 ? (
-        <pre className="note-paper-body" style={typographyStyle}>
-          {previewBody}
-        </pre>
+      {previewable ? (
+        <MarkdownPreview
+          content={item.content}
+          omitFirstHeading={true}
+          className="note-paper-body"
+        />
       ) : (
         <span className="item-placeholder">雙擊開始撰寫 Markdown 筆記</span>
       )}

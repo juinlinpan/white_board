@@ -16,7 +16,7 @@
     "smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke.ps1",
     "backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup.ps1",
     "typecheck": "npm run typecheck --workspace frontend && cd backend && uv run python -m mypy app",
-    "check": "npm run lint && npm run typecheck && npm run build && cd backend && uv run pytest"
+    "check": "npm run lint && npm run typecheck && npm run test --workspace frontend && npm run build && cd backend && uv run pytest"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
