@@ -23,6 +23,16 @@ export const ITEM_TYPE = {
 
 export type ItemType = (typeof ITEM_TYPE)[keyof typeof ITEM_TYPE];
 
+export const ITEM_TYPE_LABEL: Record<ItemType, string> = {
+  [ITEM_TYPE.line]: '線條',
+  [ITEM_TYPE.table]: '表格',
+  [ITEM_TYPE.text_box]: '文字框',
+  [ITEM_TYPE.sticky_note]: '便利貼',
+  [ITEM_TYPE.note_paper]: '筆記紙',
+  [ITEM_TYPE.frame]: '框架',
+  [ITEM_TYPE.arrow]: '箭頭',
+};
+
 // ──────────────────────────────────────────────
 // Category mapping（每個 type 歸屬的 category）
 // ──────────────────────────────────────────────
@@ -39,7 +49,10 @@ export const ITEM_CATEGORY_FOR_TYPE: Record<string, string> = {
 // ──────────────────────────────────────────────
 // Default sizes for each item type
 // ──────────────────────────────────────────────
-export const ITEM_DEFAULT_SIZE: Record<string, { width: number; height: number }> = {
+export const ITEM_DEFAULT_SIZE: Record<
+  string,
+  { width: number; height: number }
+> = {
   [ITEM_TYPE.text_box]: { width: 220, height: 80 },
   [ITEM_TYPE.sticky_note]: { width: 160, height: 160 },
   [ITEM_TYPE.note_paper]: { width: 260, height: 220 },
@@ -48,6 +61,17 @@ export const ITEM_DEFAULT_SIZE: Record<string, { width: number; height: number }
   [ITEM_TYPE.table]: { width: 320, height: 200 },
   [ITEM_TYPE.arrow]: { width: 200, height: 4 },
 };
+
+export const ITEM_MIN_SIZE: Record<string, { width: number; height: number }> =
+  {
+    [ITEM_TYPE.text_box]: { width: 160, height: 56 },
+    [ITEM_TYPE.sticky_note]: { width: 120, height: 120 },
+    [ITEM_TYPE.note_paper]: { width: 220, height: 160 },
+    [ITEM_TYPE.frame]: { width: 280, height: 200 },
+    [ITEM_TYPE.line]: { width: 80, height: 4 },
+    [ITEM_TYPE.table]: { width: 240, height: 140 },
+    [ITEM_TYPE.arrow]: { width: 120, height: 4 },
+  };
 
 // ──────────────────────────────────────────────
 // Viewport
@@ -61,4 +85,9 @@ export type Viewport = {
 // ──────────────────────────────────────────────
 // Active tool
 // ──────────────────────────────────────────────
-export type ActiveTool = 'select' | 'text_box' | 'sticky_note' | 'note_paper';
+export type ActiveTool =
+  | 'select'
+  | 'text_box'
+  | 'sticky_note'
+  | 'note_paper'
+  | 'frame';

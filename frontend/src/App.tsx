@@ -98,7 +98,9 @@ export function App() {
       setHealthState('ready');
       setHealthMessage(`${health.service} is ${health.status}`);
       setProjects(nextProjects);
-      setSelectedProjectId((current) => selectFallbackId(nextProjects, current));
+      setSelectedProjectId((current) =>
+        selectFallbackId(nextProjects, current),
+      );
       setLoadState('ready');
     } catch (error) {
       if (isAbortError(error)) {
@@ -106,7 +108,9 @@ export function App() {
       }
 
       setHealthState('error');
-      setHealthMessage(`Backend health check failed: ${getErrorMessage(error)}`);
+      setHealthMessage(
+        `Backend health check failed: ${getErrorMessage(error)}`,
+      );
       setErrorMessage(getErrorMessage(error));
       setProjects([]);
       setPages([]);
@@ -260,7 +264,9 @@ export function App() {
     await runMutation(async () => {
       const updatedPage = await updatePage(selectedPage.id, name);
       setPages((current) =>
-        current.map((page) => (page.id === updatedPage.id ? updatedPage : page)),
+        current.map((page) =>
+          page.id === updatedPage.id ? updatedPage : page,
+        ),
       );
     });
   }
@@ -294,7 +300,10 @@ export function App() {
             <h1>本機後端目前不可用</h1>
             <p className="hero-text">{healthMessage}</p>
             <p className="hero-meta">API base URL: {apiBaseUrl}</p>
-            <button className="primary-button" onClick={() => void loadWorkspace()}>
+            <button
+              className="primary-button"
+              onClick={() => void loadWorkspace()}
+            >
               重新嘗試
             </button>
           </div>
@@ -327,7 +336,9 @@ export function App() {
             <span className="count-badge">{projects.length}</span>
           </div>
           {projects.length === 0 ? (
-            <p className="empty-copy">目前還沒有 Project，先建立一個規劃空間。</p>
+            <p className="empty-copy">
+              目前還沒有 Project，先建立一個規劃空間。
+            </p>
           ) : (
             <div className="list-stack">
               {projects.map((project) => (
@@ -426,7 +437,7 @@ export function App() {
             <p className="workspace-copy">
               {selectedPage !== null
                 ? `目前 Page：${selectedPage.name}`
-                : '這一區會接上白板畫布與物件工具列。'}
+                : '左側管理 Project / Page，中間操作白板，右側 inspector 可調整選取物件。'}
             </p>
           </div>
           <div className={`status-pill status-${healthState}`}>
@@ -445,7 +456,8 @@ export function App() {
               <p className="eyebrow">Step 1</p>
               <h3>先建立你的第一個 Project</h3>
               <p className="hero-text">
-                這輪先完成 Project / Page 資料流與本機 SQLite 持久化，讓後面的白板互動有穩定基礎。
+                這輪先完成 Project / Page 資料流與本機 SQLite
+                持久化，讓後面的白板互動有穩定基礎。
               </p>
               <button
                 className="primary-button"
@@ -462,7 +474,9 @@ export function App() {
               <p className="eyebrow">Step 2</p>
               <h3>幫「{selectedProject.name}」新增一個 Page</h3>
               <p className="hero-text">
-                Page 是白板的承載單位。現在可先建立、切換、重新命名與刪除，後續再接上 item canvas。
+                Page
+                是白板的承載單位。建立後就能開始加入文字框、便利貼、筆記紙與
+                frame。
               </p>
               <button
                 className="primary-button"

@@ -1,23 +1,33 @@
 import { type BoardItem } from '../api';
+import { Frame, type FrameSummaryEntry } from './Frame';
+import { NotePaper } from './NotePaper';
 import { StickyNote } from './StickyNote';
 import { TextBox } from './TextBox';
 
 type Props = {
   item: BoardItem;
+  childSummaries: FrameSummaryEntry[];
+  childCount: number;
   isSelected: boolean;
   isEditing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
+  onResizeMouseDown: (e: React.MouseEvent) => void;
+  onToggleCollapse: () => void;
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
 };
 
 export function BoardItemRenderer({
   item,
+  childSummaries,
+  childCount,
   isSelected,
   isEditing,
   onMouseDown,
   onDoubleClick,
+  onResizeMouseDown,
+  onToggleCollapse,
   onUpdate,
   onEditEnd,
 }: Props) {
@@ -32,6 +42,15 @@ export function BoardItemRenderer({
   };
 
   const wrapperClass = `board-item ${isSelected ? 'is-selected' : ''}`;
+  const resizeHandle =
+    isSelected && !isEditing ? (
+      <button
+        type="button"
+        className="board-item-resize-handle"
+        onMouseDown={onResizeMouseDown}
+        aria-label="Resize item"
+      />
+    ) : null;
 
   switch (item.type) {
     case 'text_box':
@@ -48,6 +67,7 @@ export function BoardItemRenderer({
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}
           />
+          {resizeHandle}
         </div>
       );
 
@@ -65,6 +85,43 @@ export function BoardItemRenderer({
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}
           />
+          {resizeHandle}
+        </div>
+      );
+
+    case 'note_paper':
+      return (
+        <div
+          style={baseStyle}
+          className={wrapperClass}
+          onMouseDown={onMouseDown}
+          onDoubleClick={onDoubleClick}
+        >
+          <NotePaper
+            item={item}
+            isEditing={isEditing}
+            onUpdate={onUpdate}
+            onEditEnd={onEditEnd}
+          />
+          {resizeHandle}
+        </div>
+      );
+
+    case 'frame':
+      return (
+        <div
+          style={baseStyle}
+          className={wrapperClass}
+          onMouseDown={onMouseDown}
+          onDoubleClick={onDoubleClick}
+        >
+          <Frame
+            item={item}
+            childCount={childCount}
+            childSummaries={childSummaries}
+            onToggleCollapse={onToggleCollapse}
+          />
+          {resizeHandle}
         </div>
       );
 
@@ -86,6 +143,7 @@ export function BoardItemRenderer({
           onMouseDown={onMouseDown}
         >
           {item.type}
+          {resizeHandle}
         </div>
       );
   }

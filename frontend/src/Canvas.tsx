@@ -1,39 +1,55 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  type BoardItem,
   createBoardItem,
   deleteBoardItem,
   getPageBoardData,
   updateBoardItem,
   updatePageViewport,
-  type BoardItem,
   type BoardItemPayload,
   type Page,
 } from './api';
-import { BoardItemRenderer } from './items/BoardItemRenderer';
+import { Inspector } from './Inspector';
 import { Toolbar } from './Toolbar';
+import { BoardItemRenderer } from './items/BoardItemRenderer';
+import { type FrameSummaryEntry } from './items/Frame';
 import {
+  ITEM_CATEGORY,
   ITEM_CATEGORY_FOR_TYPE,
   ITEM_DEFAULT_SIZE,
+  ITEM_MIN_SIZE,
+  ITEM_TYPE,
   type ActiveTool,
   type Viewport,
 } from './types';
 
-// ──────────────────────────────────────────────
-// Constants
-// ──────────────────────────────────────────────
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
-const VIEWPORT_SAVE_DELAY = 600; // ms
+const VIEWPORT_SAVE_DELAY = 600;
+const ITEM_SAVE_DELAY = 500;
 
-// ──────────────────────────────────────────────
-// Drag / pan state (stored in refs to avoid re-renders)
-// ──────────────────────────────────────────────
 type DragState = {
   itemId: string;
   startMouseX: number;
   startMouseY: number;
   startItemX: number;
   startItemY: number;
+  childPositions: Array<{ id: string; x: number; y: number }>;
+};
+
+type ResizeState = {
+  itemId: string;
+  startMouseX: number;
+  startMouseY: number;
+  startWidth: number;
+  startHeight: number;
 };
 
 type PanState = {
@@ -43,9 +59,12 @@ type PanState = {
   startVpY: number;
 };
 
-// ──────────────────────────────────────────────
-// Helper: convert full BoardItem to update payload
-// ──────────────────────────────────────────────
+type Props = {
+  page: Page;
+};
+
+type ItemsUpdater = BoardItem[] | ((current: BoardItem[]) => BoardItem[]);
+
 function toPayload(item: BoardItem): BoardItemPayload {
   return {
     page_id: item.page_id,
@@ -67,16 +86,160 @@ function toPayload(item: BoardItem): BoardItemPayload {
   };
 }
 
-// ──────────────────────────────────────────────
-// Props
-// ──────────────────────────────────────────────
-type Props = {
-  page: Page;
-};
+function isFrame(item: BoardItem): boolean {
+  return item.type === ITEM_TYPE.frame;
+}
 
-// ──────────────────────────────────────────────
-// Canvas
-// ──────────────────────────────────────────────
+function isSmallItem(item: BoardItem): boolean {
+  return item.category === ITEM_CATEGORY.small_item;
+}
+
+function isInlineEditable(item: BoardItem): boolean {
+  return (
+    item.type === ITEM_TYPE.text_box ||
+    item.type === ITEM_TYPE.sticky_note ||
+    item.type === ITEM_TYPE.note_paper
+  );
+}
+
+function getFirstNonEmptyLine(content: string | null): string | null {
+  if (content === null) {
+    return null;
+  }
+
+  for (const line of content.split(/\r?\n/)) {
+    const normalized = line.trim();
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function getMarkdownH1(content: string | null): string | null {
+  if (content === null) {
+    return null;
+  }
+
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.match(/^#\s+(.+)$/);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function ellipsize(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
+function summarizeFrameChild(item: BoardItem): FrameSummaryEntry {
+  const text = item.content?.trim() ?? '';
+
+  if (item.type === ITEM_TYPE.text_box) {
+    return {
+      id: item.id,
+      type: item.type,
+      title: '文字框',
+      body: text.length > 0 ? text : '尚未輸入文字',
+    };
+  }
+
+  if (item.type === ITEM_TYPE.sticky_note) {
+    return {
+      id: item.id,
+      type: item.type,
+      title: '便利貼',
+      body: text.length > 0 ? ellipsize(text, 80) : '尚未輸入內容',
+    };
+  }
+
+  const h1 = getMarkdownH1(text);
+  const fallback = getFirstNonEmptyLine(text);
+
+  return {
+    id: item.id,
+    type: item.type,
+    title: h1 ?? fallback ?? 'Untitled note',
+    body: h1 !== null ? 'Markdown H1 摘要' : '未找到 H1，改用第一行內容',
+  };
+}
+
+function clampItemSize(
+  type: string,
+  width: number,
+  height: number,
+): { width: number; height: number } {
+  const minSize = ITEM_MIN_SIZE[type];
+  return {
+    width: Math.max(minSize?.width ?? 60, width),
+    height: Math.max(minSize?.height ?? 40, height),
+  };
+}
+
+function getFrameChildren(items: BoardItem[], frameId: string): BoardItem[] {
+  return items
+    .filter((item) => item.parent_item_id === frameId)
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.z_index - b.z_index);
+}
+
+function isPointInsideFrame(x: number, y: number, frame: BoardItem): boolean {
+  return (
+    x >= frame.x &&
+    x <= frame.x + frame.width &&
+    y >= frame.y &&
+    y <= frame.y + frame.height
+  );
+}
+
+function isHiddenByCollapsedFrame(
+  item: BoardItem,
+  items: BoardItem[],
+): boolean {
+  if (item.parent_item_id === null) {
+    return false;
+  }
+
+  const parent = items.find(
+    (candidate) => candidate.id === item.parent_item_id,
+  );
+  return parent?.type === ITEM_TYPE.frame && parent.is_collapsed;
+}
+
+function findContainingFrame(
+  item: BoardItem,
+  items: BoardItem[],
+): BoardItem | null {
+  const centerX = item.x + item.width / 2;
+  const centerY = item.y + item.height / 2;
+
+  const candidates = items
+    .filter(
+      (candidate) =>
+        candidate.type === ITEM_TYPE.frame &&
+        candidate.id !== item.id &&
+        isPointInsideFrame(centerX, centerY, candidate),
+    )
+    .sort((a, b) => {
+      const areaA = a.width * a.height;
+      const areaB = b.width * b.height;
+      if (areaA !== areaB) {
+        return areaA - areaB;
+      }
+
+      return b.z_index - a.z_index;
+    });
+
+  return candidates[0] ?? null;
+}
+
 export function Canvas({ page }: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
@@ -89,59 +252,111 @@ export function Canvas({ page }: Props) {
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
   const [isSpaceDown, setIsSpaceDown] = useState(false);
 
-  // Refs for mouse-event handlers (avoid stale closures in event callbacks)
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
   const dragRef = useRef<DragState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
   const panRef = useRef<PanState | null>(null);
   const isSpaceRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const vpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep refs in sync with latest state (must run in layout effect, not render)
   useLayoutEffect(() => {
     viewportRef.current = viewport;
     itemsRef.current = items;
   });
 
-  // ── Load board data when page changes ──
-  // Note: Canvas is keyed by page.id in App, so component remounts on page switch.
-  // State (items, selection, viewport) is already fresh on each mount.
+  const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
+    setItems((current) => {
+      const nextItems =
+        typeof updater === 'function' ? updater(current) : updater;
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }, []);
+
+  const setViewportAndSync = useCallback((nextViewport: Viewport) => {
+    viewportRef.current = nextViewport;
+    setViewport(nextViewport);
+  }, []);
+
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedId) ?? null,
+    [items, selectedId],
+  );
+
+  const selectedChildCount = useMemo(() => {
+    if (selectedItem?.type !== ITEM_TYPE.frame) {
+      return 0;
+    }
+
+    return getFrameChildren(items, selectedItem.id).length;
+  }, [items, selectedItem]);
+
+  const visibleItems = useMemo(
+    () =>
+      [...items]
+        .filter((item) => !isHiddenByCollapsedFrame(item, items))
+        .sort(
+          (a, b) =>
+            a.z_index - b.z_index || a.created_at.localeCompare(b.created_at),
+        ),
+    [items],
+  );
+
   useEffect(() => {
     const controller = new AbortController();
 
     async function load() {
       try {
         const data = await getPageBoardData(page.id, controller.signal);
-        setItems(data.board_items);
-        setViewport({
+        setItemsAndSync(data.board_items);
+        setViewportAndSync({
           x: data.page.viewport_x,
           y: data.page.viewport_y,
           zoom: data.page.zoom,
         });
       } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
         console.error('[Canvas] Failed to load board data', err);
       }
     }
 
     void load();
     return () => controller.abort();
-  }, [page.id]);
+  }, [page.id, setItemsAndSync, setViewportAndSync]);
 
-  // ── Space-bar: toggle pan mode ──
+  useEffect(
+    () => () => {
+      if (vpSaveTimer.current !== null) {
+        clearTimeout(vpSaveTimer.current);
+      }
+      if (itemSaveTimer.current !== null) {
+        clearTimeout(itemSaveTimer.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === ' ' && !isSpaceRef.current) {
-        // Only go into pan mode if no input is focused
-        const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        const tag =
+          (document.activeElement as HTMLElement | null)?.tagName ?? '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          return;
+        }
+
         e.preventDefault();
         isSpaceRef.current = true;
         setIsSpaceDown(true);
       }
     }
+
     function onKeyUp(e: KeyboardEvent) {
       if (e.key === ' ') {
         isSpaceRef.current = false;
@@ -149,6 +364,7 @@ export function Canvas({ page }: Props) {
         panRef.current = null;
       }
     }
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => {
@@ -157,47 +373,99 @@ export function Canvas({ page }: Props) {
     };
   }, []);
 
-  // ── Delete / Escape keys ──
+  const handleDeleteItem = useCallback(
+    async (itemId: string) => {
+      const target = itemsRef.current.find((item) => item.id === itemId);
+      if (!target) {
+        return;
+      }
+
+      setItemsAndSync((current) =>
+        current
+          .filter((item) => item.id !== itemId)
+          .map((item) =>
+            item.parent_item_id === itemId
+              ? { ...item, parent_item_id: null }
+              : item,
+          ),
+      );
+
+      if (selectedId === itemId) {
+        setSelectedId(null);
+      }
+      if (editingId === itemId) {
+        setEditingId(null);
+      }
+
+      try {
+        await deleteBoardItem(itemId);
+      } catch (err) {
+        console.error('[Canvas] Failed to delete item', err);
+      }
+    },
+    [editingId, selectedId, setItemsAndSync],
+  );
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
-        const id = selectedId;
-        setItems((curr) => curr.filter((item) => item.id !== id));
-        setSelectedId(null);
-        void deleteBoardItem(id);
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        return;
       }
+
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        selectedId !== null
+      ) {
+        void handleDeleteItem(selectedId);
+      }
+
       if (e.key === 'Escape') {
         setSelectedId(null);
         setEditingId(null);
         setActiveTool('select');
       }
     }
+
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedId]);
+  }, [handleDeleteItem, selectedId]);
 
-  // ── Keyboard shortcut: switch tool ──
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        return;
+      }
+
       const key = e.key.toLowerCase();
-      if (key === 'v') setActiveTool('select');
-      if (key === 'x') setActiveTool('text_box');
-      if (key === 's') setActiveTool('sticky_note');
-      if (key === 'n') setActiveTool('note_paper');
+      if (key === 'v') {
+        setActiveTool('select');
+      }
+      if (key === 'x') {
+        setActiveTool('text_box');
+      }
+      if (key === 's') {
+        setActiveTool('sticky_note');
+      }
+      if (key === 'n') {
+        setActiveTool('note_paper');
+      }
+      if (key === 'f') {
+        setActiveTool('frame');
+      }
     }
+
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // ── Screen → world coordinate conversion ──
   function screenToWorld(screenX: number, screenY: number) {
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
+    if (!rect) {
+      return { x: 0, y: 0 };
+    }
+
     const vp = viewportRef.current;
     return {
       x: (screenX - rect.left - vp.x) / vp.zoom,
@@ -205,42 +473,80 @@ export function Canvas({ page }: Props) {
     };
   }
 
-  // ── Debounced viewport save ──
-  function scheduleViewportSave(vp: Viewport) {
-    if (vpSaveTimer.current !== null) clearTimeout(vpSaveTimer.current);
+  function scheduleViewportSave(nextViewport: Viewport) {
+    if (vpSaveTimer.current !== null) {
+      clearTimeout(vpSaveTimer.current);
+    }
+
     vpSaveTimer.current = setTimeout(() => {
       void updatePageViewport(page.id, {
-        viewport_x: vp.x,
-        viewport_y: vp.y,
-        zoom: vp.zoom,
+        viewport_x: nextViewport.x,
+        viewport_y: nextViewport.y,
+        zoom: nextViewport.zoom,
       });
     }, VIEWPORT_SAVE_DELAY);
   }
 
-  // ── Wheel: zoom centred on cursor ──
+  function persistItems(nextItems: BoardItem[]) {
+    if (nextItems.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      nextItems.map((item) => updateBoardItem(item.id, toPayload(item))),
+    ).catch((err) => {
+      console.error('[Canvas] Failed to persist items', err);
+    });
+  }
+
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
 
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     const delta = -e.deltaY * 0.001;
     const vp = viewportRef.current;
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * (1 + delta)));
+    const newZoom = Math.min(
+      MAX_ZOOM,
+      Math.max(MIN_ZOOM, vp.zoom * (1 + delta)),
+    );
     const scale = newZoom / vp.zoom;
-    const newVp: Viewport = {
+    const nextViewport: Viewport = {
       x: mouseX - scale * (mouseX - vp.x),
       y: mouseY - scale * (mouseY - vp.y),
       zoom: newZoom,
     };
-    setViewport(newVp);
-    scheduleViewportSave(newVp);
+
+    setViewportAndSync(nextViewport);
+    scheduleViewportSave(nextViewport);
   }
 
-  // ── Canvas mousedown: pan or create item ──
+  function handleToggleFrameCollapse(frameId: string) {
+    const frame = itemsRef.current.find((item) => item.id === frameId);
+    if (!frame || frame.type !== ITEM_TYPE.frame) {
+      return;
+    }
+
+    const updatedFrame = { ...frame, is_collapsed: !frame.is_collapsed };
+    setItemsAndSync((current) =>
+      current.map((item) => (item.id === frameId ? updatedFrame : item)),
+    );
+
+    if (updatedFrame.is_collapsed && selectedItem?.parent_item_id === frameId) {
+      setSelectedId(frameId);
+      setEditingId(null);
+    }
+
+    void updateBoardItem(frameId, toPayload(updatedFrame)).catch((err) => {
+      console.error('[Canvas] Failed to toggle frame collapse', err);
+    });
+  }
+
   function handleCanvasMouseDown(e: React.MouseEvent) {
-    // Middle mouse → pan
     if (e.button === 1) {
       e.preventDefault();
       panRef.current = {
@@ -251,9 +557,11 @@ export function Canvas({ page }: Props) {
       };
       return;
     }
-    if (e.button !== 0) return;
 
-    // Space + left mouse → pan
+    if (e.button !== 0) {
+      return;
+    }
+
     if (isSpaceRef.current) {
       panRef.current = {
         startMouseX: e.clientX,
@@ -264,7 +572,6 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    // Active tool → create new item at click position
     if (activeTool !== 'select') {
       const worldPos = screenToWorld(e.clientX, e.clientY);
       const size = ITEM_DEFAULT_SIZE[activeTool] ?? { width: 200, height: 100 };
@@ -278,12 +585,10 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    // Select tool, click on background → deselect
     setSelectedId(null);
     setEditingId(null);
   }
 
-  // ── Create item ──
   async function handleCreateItem(params: {
     type: string;
     x: number;
@@ -291,23 +596,27 @@ export function Canvas({ page }: Props) {
     width: number;
     height: number;
   }) {
-    const category = ITEM_CATEGORY_FOR_TYPE[params.type] ?? 'small_item';
-    const maxZ = itemsRef.current.reduce((m, it) => Math.max(m, it.z_index), 0);
+    const category =
+      ITEM_CATEGORY_FOR_TYPE[params.type] ?? ITEM_CATEGORY.small_item;
+    const zIndexes = itemsRef.current.map((item) => item.z_index);
+    const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
+    const minZ = zIndexes.length > 0 ? Math.min(...zIndexes) : 0;
+    const size = clampItemSize(params.type, params.width, params.height);
 
     const payload: BoardItemPayload = {
       page_id: page.id,
       parent_item_id: null,
       category,
       type: params.type,
-      title: null,
-      content: '',
-      content_format: null,
+      title: params.type === ITEM_TYPE.frame ? 'New Frame' : null,
+      content: params.type === ITEM_TYPE.note_paper ? '# Untitled note\n' : '',
+      content_format: params.type === ITEM_TYPE.note_paper ? 'markdown' : null,
       x: params.x,
       y: params.y,
-      width: params.width,
-      height: params.height,
+      width: size.width,
+      height: size.height,
       rotation: 0,
-      z_index: maxZ + 1,
+      z_index: params.type === ITEM_TYPE.frame ? minZ - 1 : maxZ + 1,
       is_collapsed: false,
       style_json: null,
       data_json: null,
@@ -315,66 +624,176 @@ export function Canvas({ page }: Props) {
 
     try {
       const created = await createBoardItem(payload);
-      setItems((curr) => [...curr, created]);
+      setItemsAndSync((current) => [...current, created]);
       setSelectedId(created.id);
+      setEditingId(isInlineEditable(created) ? created.id : null);
     } catch (err) {
       console.error('[Canvas] Failed to create item', err);
     }
   }
 
-  // ── Item mousedown: start dragging ──
   function handleItemMouseDown(e: React.MouseEvent, itemId: string) {
-    if (activeTool !== 'select') return;
+    if (activeTool !== 'select') {
+      return;
+    }
+
     e.stopPropagation();
-    const item = itemsRef.current.find((it) => it.id === itemId);
-    if (!item) return;
+    const item = itemsRef.current.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return;
+    }
 
     setSelectedId(itemId);
+    setEditingId(null);
     dragRef.current = {
       itemId,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
       startItemX: item.x,
       startItemY: item.y,
+      childPositions: isFrame(item)
+        ? getFrameChildren(itemsRef.current, itemId).map((child) => ({
+            id: child.id,
+            x: child.x,
+            y: child.y,
+          }))
+        : [],
     };
   }
 
-  // ── Mouse move: drag item or pan canvas ──
+  function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
+    e.stopPropagation();
+    const item = itemsRef.current.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return;
+    }
+
+    setSelectedId(itemId);
+    setEditingId(null);
+    resizeRef.current = {
+      itemId,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startWidth: item.width,
+      startHeight: item.height,
+    };
+  }
+
   function handleMouseMove(e: React.MouseEvent) {
+    const resize = resizeRef.current;
+    if (resize) {
+      const vp = viewportRef.current;
+      const dx = (e.clientX - resize.startMouseX) / vp.zoom;
+      const dy = (e.clientY - resize.startMouseY) / vp.zoom;
+      setItemsAndSync((current) =>
+        current.map((item) => {
+          if (item.id !== resize.itemId) {
+            return item;
+          }
+
+          const nextSize = clampItemSize(
+            item.type,
+            resize.startWidth + dx,
+            resize.startHeight + dy,
+          );
+          return {
+            ...item,
+            width: nextSize.width,
+            height: nextSize.height,
+          };
+        }),
+      );
+      return;
+    }
+
     const drag = dragRef.current;
     if (drag) {
       const vp = viewportRef.current;
       const dx = (e.clientX - drag.startMouseX) / vp.zoom;
       const dy = (e.clientY - drag.startMouseY) / vp.zoom;
-      setItems((curr) =>
-        curr.map((it) =>
-          it.id === drag.itemId
-            ? { ...it, x: drag.startItemX + dx, y: drag.startItemY + dy }
-            : it,
-        ),
+      const childStartMap = new Map(
+        drag.childPositions.map((child) => [child.id, child] as const),
+      );
+
+      setItemsAndSync((current) =>
+        current.map((item) => {
+          if (item.id === drag.itemId) {
+            return {
+              ...item,
+              x: drag.startItemX + dx,
+              y: drag.startItemY + dy,
+            };
+          }
+
+          const childStart = childStartMap.get(item.id);
+          if (childStart) {
+            return {
+              ...item,
+              x: childStart.x + dx,
+              y: childStart.y + dy,
+            };
+          }
+
+          return item;
+        }),
       );
       return;
     }
 
     const pan = panRef.current;
     if (pan) {
-      const newVp: Viewport = {
+      const nextViewport: Viewport = {
         ...viewportRef.current,
         x: pan.startVpX + (e.clientX - pan.startMouseX),
         y: pan.startVpY + (e.clientY - pan.startMouseY),
       };
-      setViewport(newVp);
+      setViewportAndSync(nextViewport);
     }
   }
 
-  // ── Mouse up: commit drag or pan ──
   function handleMouseUp() {
+    const resize = resizeRef.current;
+    if (resize) {
+      resizeRef.current = null;
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === resize.itemId,
+      );
+      if (item) {
+        persistItems([item]);
+      }
+    }
+
     const drag = dragRef.current;
     if (drag) {
       dragRef.current = null;
-      const item = itemsRef.current.find((it) => it.id === drag.itemId);
-      if (item) {
-        void updateBoardItem(item.id, toPayload(item));
+      const draggedItem = itemsRef.current.find(
+        (item) => item.id === drag.itemId,
+      );
+      if (draggedItem) {
+        if (isSmallItem(draggedItem)) {
+          const nextParent = findContainingFrame(draggedItem, itemsRef.current);
+          const updatedItem =
+            nextParent?.id !== draggedItem.parent_item_id
+              ? { ...draggedItem, parent_item_id: nextParent?.id ?? null }
+              : draggedItem;
+
+          if (updatedItem !== draggedItem) {
+            setItemsAndSync((current) =>
+              current.map((item) =>
+                item.id === updatedItem.id ? updatedItem : item,
+              ),
+            );
+          }
+
+          persistItems([updatedItem]);
+        } else if (isFrame(draggedItem)) {
+          persistItems([
+            draggedItem,
+            ...getFrameChildren(itemsRef.current, draggedItem.id),
+          ]);
+        } else {
+          persistItems([draggedItem]);
+        }
       }
     }
 
@@ -384,20 +803,39 @@ export function Canvas({ page }: Props) {
     }
   }
 
-  // ── Item content update (from inline editing) ──
-  // Debounced to avoid hammering the API on every keystroke
-  const handleItemUpdate = useCallback((updated: BoardItem) => {
-    setItems((curr) => curr.map((it) => (it.id === updated.id ? updated : it)));
+  const handleItemUpdate = useCallback(
+    (updated: BoardItem) => {
+      setItemsAndSync((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
 
-    if (textSaveTimer.current !== null) clearTimeout(textSaveTimer.current);
-    textSaveTimer.current = setTimeout(() => {
-      void updateBoardItem(updated.id, toPayload(updated));
-    }, 500);
-  }, []);
+      if (itemSaveTimer.current !== null) {
+        clearTimeout(itemSaveTimer.current);
+      }
+
+      itemSaveTimer.current = setTimeout(() => {
+        void updateBoardItem(updated.id, toPayload(updated)).catch((err) => {
+          console.error('[Canvas] Failed to update item', err);
+        });
+      }, ITEM_SAVE_DELAY);
+    },
+    [setItemsAndSync],
+  );
 
   const handleEditEnd = useCallback(() => setEditingId(null), []);
 
-  // ── Cursor class ──
+  function handleItemDoubleClick(item: BoardItem) {
+    setSelectedId(item.id);
+    if (isFrame(item)) {
+      handleToggleFrameCollapse(item.id);
+      return;
+    }
+
+    if (isInlineEditable(item)) {
+      setEditingId(item.id);
+    }
+  }
+
   const cursorClass =
     activeTool !== 'select'
       ? 'cursor-crosshair'
@@ -410,51 +848,76 @@ export function Canvas({ page }: Props) {
   return (
     <div className="canvas-root">
       <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
-      <div
-        ref={containerRef}
-        className={`canvas-container ${cursorClass}`}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-      >
-        {/* Dot-grid background */}
-        <div className="canvas-dot-grid" />
+      <div className="canvas-content">
+        <div className="canvas-stage">
+          <div
+            ref={containerRef}
+            className={`canvas-container ${cursorClass}`}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+          >
+            <div className="canvas-dot-grid" />
 
-        {/* World layer – all items live here */}
-        <div
-          className="canvas-world"
-          style={{ transform: worldTransform, transformOrigin: '0 0' }}
-        >
-          {items.map((item) => (
-            <BoardItemRenderer
-              key={item.id}
-              item={item}
-              isSelected={item.id === selectedId}
-              isEditing={item.id === editingId}
-              onMouseDown={(e) => handleItemMouseDown(e, item.id)}
-              onDoubleClick={() => {
-                setSelectedId(item.id);
-                setEditingId(item.id);
-              }}
-              onUpdate={handleItemUpdate}
-              onEditEnd={handleEditEnd}
-            />
-          ))}
-        </div>
+            <div
+              className="canvas-world"
+              style={{ transform: worldTransform, transformOrigin: '0 0' }}
+            >
+              {visibleItems.map((item) => {
+                const childItems = isFrame(item)
+                  ? getFrameChildren(items, item.id)
+                  : [];
+                return (
+                  <BoardItemRenderer
+                    key={item.id}
+                    item={item}
+                    childCount={childItems.length}
+                    childSummaries={childItems.map(summarizeFrameChild)}
+                    isSelected={item.id === selectedId}
+                    isEditing={item.id === editingId}
+                    onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+                    onDoubleClick={() => handleItemDoubleClick(item)}
+                    onResizeMouseDown={(e) => handleResizeMouseDown(e, item.id)}
+                    onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
+                    onUpdate={handleItemUpdate}
+                    onEditEnd={handleEditEnd}
+                  />
+                );
+              })}
+            </div>
 
-        {/* Empty state hint */}
-        {items.length === 0 && (
-          <div className="canvas-empty-hint">
-            <p>選擇工具後點擊畫布新增物件，或滾輪縮放、空白鍵拖曳平移</p>
+            {items.length === 0 ? (
+              <div className="canvas-empty-hint">
+                <p>
+                  用工具列新增文字框、便利貼、筆記紙或
+                  frame，滑鼠滾輪縮放，按住空白鍵拖曳平移。
+                </p>
+              </div>
+            ) : null}
+
+            <div className="canvas-status-badge">
+              {Math.round(viewport.zoom * 100)}%
+            </div>
           </div>
-        )}
-
-        {/* Viewport info badge */}
-        <div className="canvas-status-badge">
-          {Math.round(viewport.zoom * 100)}%
         </div>
+
+        <Inspector
+          item={selectedItem}
+          childCount={selectedChildCount}
+          onUpdate={handleItemUpdate}
+          onDelete={() => {
+            if (selectedItem !== null) {
+              void handleDeleteItem(selectedItem.id);
+            }
+          }}
+          onToggleCollapse={() => {
+            if (selectedItem?.type === ITEM_TYPE.frame) {
+              handleToggleFrameCollapse(selectedItem.id);
+            }
+          }}
+        />
       </div>
     </div>
   );

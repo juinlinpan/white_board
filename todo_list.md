@@ -48,7 +48,7 @@
 - [x] 建立整體 app layout
 - [x] 實作左側 Project / Page 導覽
 - [x] 實作中央白板區域
-- [ ] 實作基本工具列與側欄
+- [x] 實作基本工具列與側欄
 - [x] 串接 backend API
 - [x] 處理初次載入、空狀態與錯誤狀態
 
@@ -71,7 +71,7 @@
 - [x] 支援拖曳與選取
 - [x] 支援 viewport 平移與縮放
 - [ ] 支援多選
-- [ ] 支援 resize
+- [x] 支援 resize
 - [ ] 支援 z-index 調整
 - [ ] 支援複製 / 貼上
 - [x] 支援 Delete
@@ -88,8 +88,8 @@
 - [ ] 支援建立 `table`
 - [x] 支援建立 `text_box`
 - [x] 支援建立 `sticky_note`
-- [ ] 支援建立 `note_paper`
-- [ ] 支援建立 `frame`
+- [x] 支援建立 `note_paper`
+- [x] 支援建立 `frame`
 - [ ] 支援建立 `arrow`
 
 ### 9. `shape`
@@ -108,28 +108,28 @@
 - [x] 支援 `text_box` 內容編輯
 - [x] 實作 `sticky_note`
 - [x] 支援 `sticky_note` 顏色與文字樣式
-- [ ] 實作 `note_paper`
-- [ ] 支援 Markdown 儲存
-- [ ] 支援 `note_paper` 基本預覽
+- [x] 實作 `note_paper`
+- [x] 支援 Markdown 儲存
+- [x] 支援 `note_paper` 基本預覽
 
 ### 11. `frame`
 
-- [ ] 實作 `frame`
-- [ ] 支援 `frame` 移動
-- [ ] 支援 `frame` resize
-- [ ] 支援 `frame` 展開 / 縮回
-- [ ] 支援把 `small_item` 放入 `frame`
-- [ ] 支援把 `small_item` 從 `frame` 移出
+- [x] 實作 `frame`
+- [x] 支援 `frame` 移動
+- [x] 支援 `frame` resize
+- [x] 支援 `frame` 展開 / 縮回
+- [x] 支援把 `small_item` 放入 `frame`
+- [x] 支援把 `small_item` 從 `frame` 移出
 - [ ] 支援 frame 內物件版面更新
-- [ ] 支援縮回摘要資料計算
+- [x] 支援縮回摘要資料計算
 
 ### 12. 縮回摘要規則
 
-- [ ] `text_box` 縮回時顯示完整文字
-- [ ] `sticky_note` 縮回時顯示部分文字
-- [ ] `note_paper` 縮回時只顯示第一個 Markdown H1
-- [ ] 若沒有 H1，定義 fallback 顯示規則
-- [ ] 定義 frame 縮回摘要的樣式與排序
+- [x] `text_box` 縮回時顯示完整文字
+- [x] `sticky_note` 縮回時顯示部分文字
+- [x] `note_paper` 縮回時只顯示第一個 Markdown H1
+- [x] 若沒有 H1，定義 fallback 顯示規則
+- [x] 定義 frame 縮回摘要的樣式與排序
 
 ### 13. `arrow`
 
@@ -153,23 +153,23 @@
 
 ### 15. 右側編輯面板
 
-- [ ] 根據選取物件顯示不同內容
-- [ ] 顯示位置資訊
-- [ ] 顯示尺寸資訊
+- [x] 根據選取物件顯示不同內容
+- [x] 顯示位置資訊
+- [x] 顯示尺寸資訊
 - [ ] 顯示樣式欄位
 - [ ] 顯示文字或內容設定
 - [ ] 支援顏色調整
 - [ ] 支援基本字體樣式
-- [ ] 顯示目前物件型別
+- [x] 顯示目前物件型別
 
 ### 16. 快捷鍵
 
-- [ ] `Delete` 刪除
+- [x] `Delete` 刪除
 - [ ] `Ctrl/Cmd + C` 複製
 - [ ] `Ctrl/Cmd + V` 貼上
 - [ ] `Ctrl/Cmd + Z` Undo
 - [ ] `Ctrl/Cmd + Shift + Z` Redo
-- [ ] `Space + Drag` 平移畫布
+- [x] `Space + Drag` 平移畫布
 
 ### 17. 本機啟動與部署流程
 
