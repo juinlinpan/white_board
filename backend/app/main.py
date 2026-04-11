@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db import WhiteboardRepository, initialize_storage
+from app.frontend import configure_frontend
 from app.schemas import (
     BoardItem,
     BoardItemCreatePayload,
@@ -444,6 +445,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         LOGGER.info("Deleted connector %s", connector_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    configure_frontend(app, resolved_settings)
     return app
 
 
