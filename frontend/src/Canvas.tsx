@@ -21,6 +21,7 @@ import {
   type Page,
 } from './api';
 import { Inspector } from './Inspector';
+import { snapMoveRect, snapResizeRect, type SnapGuide } from './snap';
 import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
@@ -40,6 +41,8 @@ const MAX_ZOOM = 5;
 const VIEWPORT_SAVE_DELAY = 600;
 const ITEM_SAVE_DELAY = 500;
 const CONNECTOR_ITEM_PADDING = 20;
+const SNAP_TOLERANCE = 10;
+const PASTE_OFFSET_STEP = 32;
 
 type Anchor = 'top' | 'right' | 'bottom' | 'left';
 type Point = {
@@ -74,6 +77,17 @@ type PanState = {
 type ArrowDraftState = {
   fromItemId: string;
 };
+
+type ClipboardEntry = {
+  sourceId: string;
+  payload: BoardItemPayload;
+};
+
+type ClipboardSnapshot = {
+  items: ClipboardEntry[];
+};
+
+type LayerAction = 'bringToFront' | 'sendToBack';
 
 type Props = {
   page: Page;
@@ -223,6 +237,69 @@ function getFrameChildren(items: BoardItem[], frameId: string): BoardItem[] {
     .sort((a, b) => a.y - b.y || a.x - b.x || a.z_index - b.z_index);
 }
 
+function getDescendantItems(items: BoardItem[], rootId: string): BoardItem[] {
+  const descendants: BoardItem[] = [];
+  const pendingParentIds = [rootId];
+
+  while (pendingParentIds.length > 0) {
+    const parentId = pendingParentIds.shift();
+    if (parentId === undefined) {
+      continue;
+    }
+
+    const children = getFrameChildren(items, parentId);
+    descendants.push(...children);
+    pendingParentIds.push(...children.map((child) => child.id));
+  }
+
+  return descendants;
+}
+
+function getLayerBlockIds(items: BoardItem[], itemId: string): string[] {
+  const item = items.find((candidate) => candidate.id === itemId);
+  if (!item) {
+    return [];
+  }
+
+  if (!isFrame(item)) {
+    return [item.id];
+  }
+
+  return [
+    item.id,
+    ...getDescendantItems(items, item.id).map((child) => child.id),
+  ];
+}
+
+function sortItemsByLayer(items: BoardItem[]): BoardItem[] {
+  return [...items].sort(
+    (a, b) => a.z_index - b.z_index || a.created_at.localeCompare(b.created_at),
+  );
+}
+
+function reorderItemsForLayer(
+  items: BoardItem[],
+  selectedId: string,
+  action: LayerAction,
+): BoardItem[] {
+  const ordered = sortItemsByLayer(items);
+  const movingIds = new Set(getLayerBlockIds(ordered, selectedId));
+  if (movingIds.size === 0) {
+    return ordered;
+  }
+
+  const movingItems = ordered.filter((item) => movingIds.has(item.id));
+  const stationaryItems = ordered.filter((item) => !movingIds.has(item.id));
+  const nextOrder =
+    action === 'bringToFront'
+      ? [...stationaryItems, ...movingItems]
+      : [...movingItems, ...stationaryItems];
+
+  return nextOrder.map((item, index) =>
+    item.z_index === index ? item : { ...item, z_index: index },
+  );
+}
+
 function isPointInsideFrame(x: number, y: number, frame: BoardItem): boolean {
   return (
     x >= frame.x &&
@@ -360,12 +437,16 @@ export function Canvas({ page }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [arrowDraft, setArrowDraft] = useState<ArrowDraftState | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
   const connectorsRef = useRef<ConnectorLink[]>(connectors);
+  const clipboardRef = useRef<ClipboardSnapshot | null>(null);
+  const pasteCountRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
   const resizeRef = useRef<ResizeState | null>(null);
   const panRef = useRef<PanState | null>(null);
@@ -403,14 +484,32 @@ export function Canvas({ page }: Props) {
     });
   }, []);
 
+  const getSnapTargetRects = useCallback((ignoredIds: string[]) => {
+    const ignoredIdSet = new Set(ignoredIds);
+    return itemsRef.current
+      .filter(
+        (item) =>
+          !ignoredIdSet.has(item.id) &&
+          item.type !== ITEM_TYPE.arrow &&
+          !isHiddenByCollapsedFrame(item, itemsRef.current),
+      )
+      .map((item) => ({
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+      }));
+  }, []);
+
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
   );
   const selectedConnector = useMemo(
     () =>
-      connectors.find((connector) => connector.connector_item_id === selectedId) ??
-      null,
+      connectors.find(
+        (connector) => connector.connector_item_id === selectedId,
+      ) ?? null,
     [connectors, selectedId],
   );
   const connectorByItemId = useMemo(
@@ -534,7 +633,8 @@ export function Canvas({ page }: Props) {
         current
           .filter((item) => !relatedItemIds.has(item.id))
           .map((item) =>
-            item.parent_item_id !== null && relatedItemIds.has(item.parent_item_id)
+            item.parent_item_id !== null &&
+            relatedItemIds.has(item.parent_item_id)
               ? { ...item, parent_item_id: null }
               : item,
           ),
@@ -562,6 +662,136 @@ export function Canvas({ page }: Props) {
     [arrowDraft, editingId, selectedId, setConnectorsAndSync, setItemsAndSync],
   );
 
+  const persistItems = useCallback((nextItems: BoardItem[]) => {
+    if (nextItems.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      nextItems.map((item) => updateBoardItem(item.id, toPayload(item))),
+    ).catch((err) => {
+      console.error('[Canvas] Failed to persist items', err);
+    });
+  }, []);
+
+  const handleLayerChange = useCallback(
+    (action: LayerAction) => {
+      const targetId = selectedId;
+      if (targetId === null) {
+        return;
+      }
+
+      const currentItems = itemsRef.current;
+      const nextItems = reorderItemsForLayer(currentItems, targetId, action);
+      const currentById = new Map(currentItems.map((item) => [item.id, item]));
+      const changedItems = nextItems.filter((item) => {
+        const currentItem = currentById.get(item.id);
+        return currentItem?.z_index !== item.z_index;
+      });
+
+      if (changedItems.length === 0) {
+        return;
+      }
+
+      setItemsAndSync(nextItems);
+      persistItems(changedItems);
+    },
+    [persistItems, selectedId, setItemsAndSync],
+  );
+
+  const handleCopySelection = useCallback(() => {
+    if (selectedId === null) {
+      return;
+    }
+
+    const selectedItem = itemsRef.current.find(
+      (item) => item.id === selectedId,
+    );
+    if (!selectedItem || selectedItem.type === ITEM_TYPE.arrow) {
+      return;
+    }
+
+    const itemsToCopy = isFrame(selectedItem)
+      ? [
+          selectedItem,
+          ...sortItemsByLayer(
+            getDescendantItems(itemsRef.current, selectedItem.id),
+          ),
+        ]
+      : [selectedItem];
+
+    clipboardRef.current = {
+      items: itemsToCopy.map((item) => ({
+        sourceId: item.id,
+        payload: toPayload(item),
+      })),
+    };
+    pasteCountRef.current = 0;
+  }, [selectedId]);
+
+  const handlePasteSelection = useCallback(async () => {
+    const clipboard = clipboardRef.current;
+    if (clipboard === null || clipboard.items.length === 0) {
+      return;
+    }
+
+    const nextPasteCount = pasteCountRef.current + 1;
+    const offset = PASTE_OFFSET_STEP * nextPasteCount;
+    const existingItemIds = new Set(itemsRef.current.map((item) => item.id));
+    const createdItems: BoardItem[] = [];
+    const createdIdBySourceId = new Map<string, string>();
+    const rootSourceId = clipboard.items[0]?.sourceId ?? null;
+    const zBase =
+      itemsRef.current.length === 0
+        ? 0
+        : Math.max(...itemsRef.current.map((item) => item.z_index)) + 1;
+
+    try {
+      for (const [index, entry] of clipboard.items.entries()) {
+        const sourceParentId = entry.payload.parent_item_id;
+        const nextParentId =
+          sourceParentId !== null && createdIdBySourceId.has(sourceParentId)
+            ? (createdIdBySourceId.get(sourceParentId) ?? null)
+            : sourceParentId !== null && existingItemIds.has(sourceParentId)
+              ? sourceParentId
+              : null;
+
+        const createdItem = await createBoardItem({
+          ...entry.payload,
+          page_id: page.id,
+          parent_item_id: nextParentId,
+          x: entry.payload.x + offset,
+          y: entry.payload.y + offset,
+          z_index: zBase + index,
+        });
+        createdItems.push(createdItem);
+        createdIdBySourceId.set(entry.sourceId, createdItem.id);
+      }
+    } catch (err) {
+      console.error('[Canvas] Failed to paste item', err);
+    }
+
+    if (createdItems.length === 0) {
+      return;
+    }
+
+    setItemsAndSync((current) => [...current, ...createdItems]);
+    pasteCountRef.current = nextPasteCount;
+
+    const pastedRootId =
+      rootSourceId !== null
+        ? (createdIdBySourceId.get(rootSourceId) ?? createdItems[0]?.id ?? null)
+        : (createdItems[0]?.id ?? null);
+    setSelectedId(pastedRootId);
+    const pastedRoot =
+      createdItems.find((item) => item.id === pastedRootId) ?? null;
+    setEditingId(
+      pastedRoot !== null && isInlineEditable(pastedRoot)
+        ? pastedRoot.id
+        : null,
+    );
+  }, [page.id, setItemsAndSync]);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
@@ -569,10 +799,26 @@ export function Canvas({ page }: Props) {
         return;
       }
 
+      const isModifierDown = e.ctrlKey || e.metaKey;
+      const normalizedKey = e.key.toLowerCase();
+
+      if (isModifierDown && !e.shiftKey && normalizedKey === 'c') {
+        e.preventDefault();
+        handleCopySelection();
+        return;
+      }
+
+      if (isModifierDown && !e.shiftKey && normalizedKey === 'v') {
+        e.preventDefault();
+        void handlePasteSelection();
+        return;
+      }
+
       if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         selectedId !== null
       ) {
+        e.preventDefault();
         void handleDeleteItem(selectedId);
       }
 
@@ -586,12 +832,16 @@ export function Canvas({ page }: Props) {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleDeleteItem, selectedId]);
+  }, [handleCopySelection, handleDeleteItem, handlePasteSelection, selectedId]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey) {
         return;
       }
 
@@ -624,6 +874,10 @@ export function Canvas({ page }: Props) {
     if (activeTool !== 'arrow' && arrowDraft !== null) {
       setArrowDraft(null);
     }
+
+    if (activeTool !== 'select') {
+      setSnapGuides([]);
+    }
   }, [activeTool, arrowDraft]);
 
   function screenToWorld(screenX: number, screenY: number) {
@@ -651,18 +905,6 @@ export function Canvas({ page }: Props) {
         zoom: nextViewport.zoom,
       });
     }, VIEWPORT_SAVE_DELAY);
-  }
-
-  function persistItems(nextItems: BoardItem[]) {
-    if (nextItems.length === 0) {
-      return;
-    }
-
-    void Promise.all(
-      nextItems.map((item) => updateBoardItem(item.id, toPayload(item))),
-    ).catch((err) => {
-      console.error('[Canvas] Failed to persist items', err);
-    });
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -713,6 +955,8 @@ export function Canvas({ page }: Props) {
   }
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
+    setSnapGuides([]);
+
     if (e.button === 1) {
       e.preventDefault();
       panRef.current = {
@@ -874,7 +1118,12 @@ export function Canvas({ page }: Props) {
 
     const fromItem = itemsRef.current.find((item) => item.id === fromItemId);
     const toItem = itemsRef.current.find((item) => item.id === toItemId);
-    if (!fromItem || !toItem || !isArrowConnectable(fromItem) || !isArrowConnectable(toItem)) {
+    if (
+      !fromItem ||
+      !toItem ||
+      !isArrowConnectable(fromItem) ||
+      !isArrowConnectable(toItem)
+    ) {
       setArrowDraft(null);
       return;
     }
@@ -928,7 +1177,10 @@ export function Canvas({ page }: Props) {
     } catch (err) {
       if (createdArrow !== null) {
         void deleteBoardItem(createdArrow.id).catch((cleanupError) => {
-          console.error('[Canvas] Failed to cleanup incomplete arrow', cleanupError);
+          console.error(
+            '[Canvas] Failed to cleanup incomplete arrow',
+            cleanupError,
+          );
         });
       }
       console.error('[Canvas] Failed to create arrow', err);
@@ -944,6 +1196,7 @@ export function Canvas({ page }: Props) {
     }
 
     e.stopPropagation();
+    setSnapGuides([]);
 
     if (activeTool === 'arrow') {
       if (!isArrowConnectable(item)) {
@@ -999,6 +1252,7 @@ export function Canvas({ page }: Props) {
 
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
+    setSnapGuides([]);
     const item = itemsRef.current.find((candidate) => candidate.id === itemId);
     if (!item) {
       return;
@@ -1016,22 +1270,46 @@ export function Canvas({ page }: Props) {
   }
 
   function handleMouseMove(e: React.MouseEvent) {
+    const shouldUseSnap = snapEnabled && !e.altKey;
     const resize = resizeRef.current;
     if (resize) {
       const vp = viewportRef.current;
       const dx = (e.clientX - resize.startMouseX) / vp.zoom;
       const dy = (e.clientY - resize.startMouseY) / vp.zoom;
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === resize.itemId,
+      );
+      if (!item) {
+        setSnapGuides([]);
+        return;
+      }
+
+      const rawRect = {
+        x: item.x,
+        y: item.y,
+        width: resize.startWidth + dx,
+        height: resize.startHeight + dy,
+      };
+      const snapResult = shouldUseSnap
+        ? snapResizeRect(
+            rawRect,
+            getSnapTargetRects([resize.itemId]),
+            SNAP_TOLERANCE,
+          )
+        : { width: rawRect.width, height: rawRect.height, guides: [] };
+      const nextSize = clampItemSize(
+        item.type,
+        snapResult.width,
+        snapResult.height,
+      );
+      setSnapGuides(snapResult.guides);
+
       setItemsAndSync((current) =>
         current.map((item) => {
           if (item.id !== resize.itemId) {
             return item;
           }
 
-          const nextSize = clampItemSize(
-            item.type,
-            resize.startWidth + dx,
-            resize.startHeight + dy,
-          );
           return {
             ...item,
             width: nextSize.width,
@@ -1047,17 +1325,45 @@ export function Canvas({ page }: Props) {
       const vp = viewportRef.current;
       const dx = (e.clientX - drag.startMouseX) / vp.zoom;
       const dy = (e.clientY - drag.startMouseY) / vp.zoom;
+      const draggedItem = itemsRef.current.find(
+        (item) => item.id === drag.itemId,
+      );
+      if (!draggedItem) {
+        setSnapGuides([]);
+        return;
+      }
+
+      const rawX = drag.startItemX + dx;
+      const rawY = drag.startItemY + dy;
+      const snapResult = shouldUseSnap
+        ? snapMoveRect(
+            {
+              x: rawX,
+              y: rawY,
+              width: draggedItem.width,
+              height: draggedItem.height,
+            },
+            getSnapTargetRects([
+              drag.itemId,
+              ...drag.childPositions.map((child) => child.id),
+            ]),
+            SNAP_TOLERANCE,
+          )
+        : { x: rawX, y: rawY, guides: [] };
+      const offsetX = snapResult.x - drag.startItemX;
+      const offsetY = snapResult.y - drag.startItemY;
       const childStartMap = new Map(
         drag.childPositions.map((child) => [child.id, child] as const),
       );
+      setSnapGuides(snapResult.guides);
 
       setItemsAndSync((current) =>
         current.map((item) => {
           if (item.id === drag.itemId) {
             return {
               ...item,
-              x: drag.startItemX + dx,
-              y: drag.startItemY + dy,
+              x: snapResult.x,
+              y: snapResult.y,
             };
           }
 
@@ -1065,8 +1371,8 @@ export function Canvas({ page }: Props) {
           if (childStart) {
             return {
               ...item,
-              x: childStart.x + dx,
-              y: childStart.y + dy,
+              x: childStart.x + offsetX,
+              y: childStart.y + offsetY,
             };
           }
 
@@ -1078,16 +1384,22 @@ export function Canvas({ page }: Props) {
 
     const pan = panRef.current;
     if (pan) {
+      setSnapGuides([]);
       const nextViewport: Viewport = {
         ...viewportRef.current,
         x: pan.startVpX + (e.clientX - pan.startMouseX),
         y: pan.startVpY + (e.clientY - pan.startMouseY),
       };
       setViewportAndSync(nextViewport);
+      return;
     }
+
+    setSnapGuides([]);
   }
 
   function handleMouseUp() {
+    setSnapGuides([]);
+
     const resize = resizeRef.current;
     if (resize) {
       resizeRef.current = null;
@@ -1188,7 +1500,12 @@ export function Canvas({ page }: Props) {
 
   return (
     <div className="canvas-root">
-      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
+      <Toolbar
+        activeTool={activeTool}
+        onToolChange={setActiveTool}
+        snapEnabled={snapEnabled}
+        onToggleSnap={() => setSnapEnabled((current) => !current)}
+      />
       <div className="canvas-content">
         <div className="canvas-stage">
           <div
@@ -1201,6 +1518,18 @@ export function Canvas({ page }: Props) {
             onWheel={handleWheel}
           >
             <div className="canvas-dot-grid" />
+
+            {snapGuides.map((guide, index) => (
+              <div
+                key={`${guide.axis}-${guide.position}-${index}`}
+                className={`canvas-snap-guide canvas-snap-guide-${guide.axis}`}
+                style={
+                  guide.axis === 'x'
+                    ? { left: viewport.x + guide.position * viewport.zoom }
+                    : { top: viewport.y + guide.position * viewport.zoom }
+                }
+              />
+            ))}
 
             <div
               className="canvas-world"
@@ -1256,18 +1585,30 @@ export function Canvas({ page }: Props) {
             {items.length === 0 ? (
               <div className="canvas-empty-hint">
                 <p>
-                  用工具列新增文字框、便利貼、筆記紙、frame 或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
+                  用工具列新增文字框、便利貼、筆記紙、frame
+                  或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
                 </p>
               </div>
             ) : null}
 
-            {activeTool === 'arrow' ? (
-              <div className="canvas-guide-badge">
-                {arrowDraft === null
-                  ? '箭頭工具：先點選起點物件'
-                  : '箭頭工具：再點選終點物件完成連線'}
+            <div className="canvas-corner-stack">
+              {activeTool === 'arrow' ? (
+                <div className="canvas-guide-badge">
+                  {arrowDraft === null
+                    ? '箭頭工具：先點選起點物件'
+                    : '箭頭工具：再點選終點物件完成連線'}
+                </div>
+              ) : null}
+              <div
+                className={`canvas-guide-badge ${
+                  snapEnabled ? '' : 'canvas-guide-badge-muted'
+                }`}
+              >
+                {snapEnabled
+                  ? `Snap 開啟 · ${SNAP_TOLERANCE}px · Alt 暫停`
+                  : 'Snap 關閉'}
               </div>
-            ) : null}
+            </div>
 
             <div className="canvas-status-badge">
               {Math.round(viewport.zoom * 100)}%
@@ -1290,6 +1631,8 @@ export function Canvas({ page }: Props) {
               handleToggleFrameCollapse(selectedItem.id);
             }
           }}
+          onBringToFront={() => handleLayerChange('bringToFront')}
+          onSendToBack={() => handleLayerChange('sendToBack')}
         />
       </div>
     </div>

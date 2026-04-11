@@ -73,8 +73,8 @@
 - [x] 支援 viewport 平移與縮放
 - [ ] 支援多選
 - [x] 支援 resize
-- [ ] 支援 z-index 調整
-- [ ] 支援複製 / 貼上
+- [x] 支援 z-index 調整
+- [x] 支援複製 / 貼上
 - [x] 支援 Delete
 - [ ] 支援 Undo / Redo
 - [x] 支援自動儲存
@@ -144,13 +144,13 @@
 
 ### 14. Snap / 對齊
 
-- [ ] 實作基礎 snap 規則
-- [ ] 實作對齊輔助線
-- [ ] 實作對齊到其他白板物件
-- [ ] 實作對齊到 frame 邊界
-- [ ] 定義 snap 容忍距離
-- [ ] 支援可調整的 snap 設定
-- [ ] 支援暫時停用 snap
+- [x] 實作基礎 snap 規則
+- [x] 實作對齊輔助線
+- [x] 實作對齊到其他白板物件
+- [x] 實作對齊到 frame 邊界
+- [x] 定義 snap 容忍距離
+- [x] 支援可調整的 snap 設定
+- [x] 支援暫時停用 snap
 
 ### 15. 右側編輯面板
 
@@ -166,8 +166,8 @@
 ### 16. 快捷鍵
 
 - [x] `Delete` 刪除
-- [ ] `Ctrl/Cmd + C` 複製
-- [ ] `Ctrl/Cmd + V` 貼上
+- [x] `Ctrl/Cmd + C` 複製
+- [x] `Ctrl/Cmd + V` 貼上
 - [ ] `Ctrl/Cmd + Z` Undo
 - [ ] `Ctrl/Cmd + Shift + Z` Redo
 - [x] `Space + Drag` 平移畫布

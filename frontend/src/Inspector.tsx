@@ -8,6 +8,8 @@ type Props = {
   onUpdate: (item: BoardItem) => void;
   onDelete: () => void;
   onToggleCollapse: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
 };
 
 function clampDimension(
@@ -38,14 +40,15 @@ export function Inspector({
   onUpdate,
   onDelete,
   onToggleCollapse,
+  onBringToFront,
+  onSendToBack,
 }: Props) {
   if (item === null) {
     return (
       <aside className="canvas-inspector">
         <div className="inspector-empty">
           <p className="eyebrow">Inspector</p>
-          <h3>尚未選取物件</h3>
-          <p>選取畫布上的物件後，這裡會顯示位置、尺寸與型別資訊。</p>
+          <p>選取物件以檢視屬性</p>
         </div>
       </aside>
     );
@@ -142,6 +145,26 @@ export function Inspector({
                 onChange={(e) => handleNumberChange('height', e.target.value)}
               />
             </label>
+          </div>
+        </section>
+
+        <section className="inspector-section">
+          <p className="meta-label">Layer</p>
+          <div className="inspector-action-grid">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={onBringToFront}
+            >
+              置頂
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={onSendToBack}
+            >
+              置底
+            </button>
           </div>
         </section>
 
