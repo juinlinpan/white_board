@@ -1,8 +1,9 @@
-import { type BoardItem } from './api';
+import { type BoardItem, type ConnectorLink } from './api';
 import { ITEM_MIN_SIZE, ITEM_TYPE_LABEL } from './types';
 
 type Props = {
   item: BoardItem | null;
+  connector: ConnectorLink | null;
   childCount: number;
   onUpdate: (item: BoardItem) => void;
   onDelete: () => void;
@@ -32,6 +33,7 @@ function summarizeContent(item: BoardItem): string {
 
 export function Inspector({
   item,
+  connector,
   childCount,
   onUpdate,
   onDelete,
@@ -50,6 +52,7 @@ export function Inspector({
   }
 
   const selectedItem = item;
+  const isArrow = selectedItem.type === 'arrow';
 
   function handleNumberChange(
     field: 'x' | 'y' | 'width' | 'height',
@@ -83,7 +86,11 @@ export function Inspector({
                 selectedItem.type as keyof typeof ITEM_TYPE_LABEL
               ] ?? selectedItem.type}
             </h3>
-            <p className="inspector-meta">{summarizeContent(selectedItem)}</p>
+            <p className="inspector-meta">
+              {isArrow
+                ? '位置與尺寸會隨連線目標自動計算'
+                : summarizeContent(selectedItem)}
+            </p>
           </div>
           <button className="ghost-button danger-button" onClick={onDelete}>
             刪除
@@ -98,6 +105,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.x)}
+                disabled={isArrow}
                 onChange={(e) => handleNumberChange('x', e.target.value)}
               />
             </label>
@@ -106,6 +114,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.y)}
+                disabled={isArrow}
                 onChange={(e) => handleNumberChange('y', e.target.value)}
               />
             </label>
@@ -120,6 +129,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.width)}
+                disabled={isArrow}
                 onChange={(e) => handleNumberChange('width', e.target.value)}
               />
             </label>
@@ -128,11 +138,24 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.height)}
+                disabled={isArrow}
                 onChange={(e) => handleNumberChange('height', e.target.value)}
               />
             </label>
           </div>
         </section>
+
+        {isArrow ? (
+          <section className="inspector-section">
+            <p className="meta-label">Connector</p>
+            <div className="inspector-list">
+              <p>起點 ID：{connector?.from_item_id ?? '未設定'}</p>
+              <p>終點 ID：{connector?.to_item_id ?? '未設定'}</p>
+              <p>起點錨點：{connector?.from_anchor ?? 'auto'}</p>
+              <p>終點錨點：{connector?.to_anchor ?? 'auto'}</p>
+            </div>
+          </section>
+        ) : null}
 
         {selectedItem.type === 'frame' ? (
           <section className="inspector-section">

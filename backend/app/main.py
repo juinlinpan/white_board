@@ -6,7 +6,10 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db import WhiteboardRepository, initialize_storage
 from app.schemas import (
@@ -18,6 +21,9 @@ from app.schemas import (
     ConnectorLinkCreatePayload,
     ConnectorLinkListResponse,
     ConnectorLinkUpdatePayload,
+    ErrorDetail,
+    ErrorPayload,
+    ErrorResponse,
     HealthResponse,
     Page,
     PageBoardDataResponse,
@@ -64,6 +70,27 @@ def get_repository(request: Request) -> WhiteboardRepository:
     return WhiteboardRepository(settings)
 
 
+def build_error_response(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    details: list[ErrorDetail] | None = None,
+) -> JSONResponse:
+    payload = ErrorResponse(
+        error=ErrorPayload(code=code, message=message, details=details),
+    )
+    return JSONResponse(status_code=status_code, content=payload.model_dump())
+
+
+def get_error_code(status_code: int) -> str:
+    return {
+        status.HTTP_400_BAD_REQUEST: "bad_request",
+        status.HTTP_404_NOT_FOUND: "not_found",
+        status.HTTP_422_UNPROCESSABLE_CONTENT: "validation_error",
+    }.get(status_code, "request_error")
+
+
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
 
@@ -83,6 +110,67 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_exception(
+        request: Request,
+        exc: StarletteHTTPException,
+    ) -> JSONResponse:
+        message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+        LOGGER.warning(
+            "HTTP error %s on %s %s: %s",
+            exc.status_code,
+            request.method,
+            request.url.path,
+            message,
+        )
+        return build_error_response(
+            status_code=exc.status_code,
+            code=get_error_code(exc.status_code),
+            message=message,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_validation_error(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        LOGGER.warning(
+            "Validation error on %s %s",
+            request.method,
+            request.url.path,
+        )
+        details = [
+            ErrorDetail(
+                loc=[str(part) if isinstance(part, str) else part for part in error["loc"]],
+                msg=error["msg"],
+                type=error["type"],
+            )
+            for error in exc.errors()
+        ]
+        return build_error_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="validation_error",
+            message="Request validation failed.",
+            details=details,
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(
+        request: Request,
+        exc: Exception,
+    ) -> JSONResponse:
+        LOGGER.exception(
+            "Unhandled error on %s %s",
+            request.method,
+            request.url.path,
+            exc_info=exc,
+        )
+        return build_error_response(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="internal_error",
+            message="Internal server error.",
+        )
 
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> HealthResponse:

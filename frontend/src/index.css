@@ -522,6 +522,19 @@ button {
   pointer-events: none;
 }
 
+.canvas-guide-badge {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(13, 110, 116, 0.12);
+  border: 1px solid rgba(13, 110, 116, 0.18);
+  color: var(--accent);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
 /* ══════════════════════════════════════════
    Inspector
 ══════════════════════════════════════════ */
@@ -583,6 +596,14 @@ button {
   color: var(--muted);
 }
 
+.inspector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .inspector-grid input,
 .inspector-field input {
   width: 100%;
@@ -592,6 +613,13 @@ button {
   background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
   font: inherit;
+}
+
+.inspector-grid input:disabled,
+.inspector-field input:disabled {
+  color: rgba(102, 93, 81, 0.75);
+  background: rgba(236, 230, 220, 0.6);
+  cursor: not-allowed;
 }
 
 /* ══════════════════════════════════════════
@@ -674,6 +702,37 @@ button {
   background: var(--accent);
   box-shadow: 0 3px 10px rgba(13, 110, 116, 0.3);
   cursor: nwse-resize;
+}
+
+.arrow-svg {
+  overflow: visible;
+}
+
+.arrow-line {
+  stroke: rgba(27, 23, 18, 0.76);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.08));
+}
+
+.arrow-head-shape {
+  fill: rgba(27, 23, 18, 0.76);
+}
+
+.arrow-connector.is-selected .arrow-line {
+  stroke: var(--accent);
+  stroke-width: 3.5px;
+}
+
+.arrow-connector.is-selected .arrow-head-shape {
+  fill: var(--accent);
+}
+
+.arrow-hit-line {
+  stroke: transparent;
+  stroke-width: 18px;
+  cursor: pointer;
+  pointer-events: stroke;
 }
 
 /* ══════════════════════════════════════════

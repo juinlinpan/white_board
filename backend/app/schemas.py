@@ -110,6 +110,22 @@ class ConnectorLink(ConnectorLinkBase):
     id: str
 
 
+class ErrorDetail(BaseModel):
+    loc: list[str | int]
+    msg: str
+    type: str
+
+
+class ErrorPayload(BaseModel):
+    code: str
+    message: str
+    details: list[ErrorDetail] | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorPayload
+
+
 class ProjectListResponse(BaseModel):
     items: list[Project]
 

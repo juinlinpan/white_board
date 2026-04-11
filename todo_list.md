@@ -41,7 +41,8 @@
 - [x] 實作 connector CRUD API
 - [x] 實作 Page viewport API
 - [x] 實作 Page 全量載入 API
-- [ ] 統一 response format 與錯誤格式
+- [ ] 統一 success response format
+- [x] 統一 error format
 
 ### 5. Frontend App Shell
 
@@ -90,7 +91,7 @@
 - [x] 支援建立 `sticky_note`
 - [x] 支援建立 `note_paper`
 - [x] 支援建立 `frame`
-- [ ] 支援建立 `arrow`
+- [x] 支援建立 `arrow`
 
 ### 9. `shape`
 
@@ -133,13 +134,13 @@
 
 ### 13. `arrow`
 
-- [ ] 實作 `arrow`
-- [ ] 支援 `arrow` 兩端 endpoint
-- [ ] 支援 endpoint 連到 `small_item`
-- [ ] 支援 endpoint 連到 `frame`
-- [ ] 目標移動時更新連線
-- [ ] 目標刪除時清理 connector
-- [ ] 支援 endpoint 與目標錨點同步
+- [x] 實作 `arrow`
+- [x] 支援 `arrow` 兩端 endpoint
+- [x] 支援 endpoint 連到 `small_item`
+- [x] 支援 endpoint 連到 `frame`
+- [x] 目標移動時更新連線
+- [x] 目標刪除時清理 connector
+- [x] 支援 endpoint 與目標錨點同步
 
 ### 14. Snap / 對齊
 

@@ -90,4 +90,5 @@ export type ActiveTool =
   | 'text_box'
   | 'sticky_note'
   | 'note_paper'
-  | 'frame';
+  | 'frame'
+  | 'arrow';

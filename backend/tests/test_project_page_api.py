@@ -108,6 +108,13 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
 
         missing_pages_response = client.get(f"/projects/{project['id']}/pages")
         assert missing_pages_response.status_code == 404
+        assert missing_pages_response.json() == {
+            "error": {
+                "code": "not_found",
+                "message": f"Project '{project['id']}' was not found.",
+                "details": None,
+            }
+        }
 
 
 def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
@@ -216,3 +223,116 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
 
         delete_item_response = client.delete(f"/board-items/{text_box['id']}")
         assert delete_item_response.status_code == 204
+
+
+def test_validation_errors_use_consistent_error_shape(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        response = client.post("/projects", json={"name": "   "})
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["message"] == "Request validation failed."
+    assert payload["error"]["details"][0]["loc"] == ["body", "name"]
+
+
+def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+
+    with client:
+        project = client.post("/projects", json={"name": "Execution"}).json()
+        page = client.post(
+            f"/projects/{project['id']}/pages",
+            json={"name": "Main Board"},
+        ).json()
+
+        from_item = client.post(
+            "/board-items",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "small_item",
+                "type": "text_box",
+                "title": None,
+                "content": "Source",
+                "content_format": "plain_text",
+                "x": 0,
+                "y": 0,
+                "width": 200,
+                "height": 80,
+                "rotation": 0,
+                "z_index": 1,
+                "is_collapsed": False,
+                "style_json": None,
+                "data_json": None,
+            },
+        ).json()
+        to_item = client.post(
+            "/board-items",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "large_item",
+                "type": "frame",
+                "title": "Frame",
+                "content": None,
+                "content_format": None,
+                "x": 280,
+                "y": 0,
+                "width": 320,
+                "height": 220,
+                "rotation": 0,
+                "z_index": 2,
+                "is_collapsed": False,
+                "style_json": None,
+                "data_json": None,
+            },
+        ).json()
+        arrow_item = client.post(
+            "/board-items",
+            json={
+                "page_id": page["id"],
+                "parent_item_id": None,
+                "category": "connector",
+                "type": "arrow",
+                "title": None,
+                "content": None,
+                "content_format": None,
+                "x": 0,
+                "y": 0,
+                "width": 150,
+                "height": 30,
+                "rotation": 0,
+                "z_index": 3,
+                "is_collapsed": False,
+                "style_json": None,
+                "data_json": '{"kind":"straight"}',
+            },
+        ).json()
+
+        connector_response = client.post(
+            "/connectors",
+            json={
+                "connector_item_id": arrow_item["id"],
+                "from_item_id": from_item["id"],
+                "to_item_id": to_item["id"],
+                "from_anchor": "right",
+                "to_anchor": "left",
+            },
+        )
+        assert connector_response.status_code == 201
+
+        delete_response = client.delete(f"/board-items/{from_item['id']}")
+        assert delete_response.status_code == 204
+
+        board_items_response = client.get(f"/pages/{page['id']}/board-items")
+        assert board_items_response.status_code == 200
+        assert [item["id"] for item in board_items_response.json()["items"]] == [
+            to_item["id"]
+        ]
+
+        connectors_response = client.get(f"/pages/{page['id']}/connectors")
+        assert connectors_response.status_code == 200
+        assert connectors_response.json()["items"] == []

@@ -8,16 +8,21 @@ import {
 } from 'react';
 import {
   type BoardItem,
+  type ConnectorLink,
+  type ConnectorLinkPayload,
   createBoardItem,
+  createConnector,
   deleteBoardItem,
   getPageBoardData,
   updateBoardItem,
+  updateConnector,
   updatePageViewport,
   type BoardItemPayload,
   type Page,
 } from './api';
 import { Inspector } from './Inspector';
 import { Toolbar } from './Toolbar';
+import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
 import { type FrameSummaryEntry } from './items/Frame';
 import {
@@ -34,6 +39,13 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 const VIEWPORT_SAVE_DELAY = 600;
 const ITEM_SAVE_DELAY = 500;
+const CONNECTOR_ITEM_PADDING = 20;
+
+type Anchor = 'top' | 'right' | 'bottom' | 'left';
+type Point = {
+  x: number;
+  y: number;
+};
 
 type DragState = {
   itemId: string;
@@ -59,11 +71,18 @@ type PanState = {
   startVpY: number;
 };
 
+type ArrowDraftState = {
+  fromItemId: string;
+};
+
 type Props = {
   page: Page;
 };
 
 type ItemsUpdater = BoardItem[] | ((current: BoardItem[]) => BoardItem[]);
+type ConnectorsUpdater =
+  | ConnectorLink[]
+  | ((current: ConnectorLink[]) => ConnectorLink[]);
 
 function toPayload(item: BoardItem): BoardItemPayload {
   return {
@@ -86,12 +105,26 @@ function toPayload(item: BoardItem): BoardItemPayload {
   };
 }
 
+function toConnectorPayload(connector: ConnectorLink): ConnectorLinkPayload {
+  return {
+    connector_item_id: connector.connector_item_id,
+    from_item_id: connector.from_item_id,
+    to_item_id: connector.to_item_id,
+    from_anchor: connector.from_anchor,
+    to_anchor: connector.to_anchor,
+  };
+}
+
 function isFrame(item: BoardItem): boolean {
   return item.type === ITEM_TYPE.frame;
 }
 
 function isSmallItem(item: BoardItem): boolean {
   return item.category === ITEM_CATEGORY.small_item;
+}
+
+function isArrowConnectable(item: BoardItem): boolean {
+  return isSmallItem(item) || item.type === ITEM_TYPE.frame;
 }
 
 function isInlineEditable(item: BoardItem): boolean {
@@ -240,6 +273,82 @@ function findContainingFrame(
   return candidates[0] ?? null;
 }
 
+function getItemCenter(item: BoardItem): Point {
+  return {
+    x: item.x + item.width / 2,
+    y: item.y + item.height / 2,
+  };
+}
+
+function getAutoAnchors(
+  fromItem: BoardItem,
+  toItem: BoardItem,
+): { from_anchor: Anchor; to_anchor: Anchor } {
+  const fromCenter = getItemCenter(fromItem);
+  const toCenter = getItemCenter(toItem);
+  const dx = toCenter.x - fromCenter.x;
+  const dy = toCenter.y - fromCenter.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { from_anchor: 'right', to_anchor: 'left' }
+      : { from_anchor: 'left', to_anchor: 'right' };
+  }
+
+  return dy >= 0
+    ? { from_anchor: 'bottom', to_anchor: 'top' }
+    : { from_anchor: 'top', to_anchor: 'bottom' };
+}
+
+function getAnchorPoint(item: BoardItem, anchor: Anchor | null): Point {
+  switch (anchor) {
+    case 'top':
+      return { x: item.x + item.width / 2, y: item.y };
+    case 'right':
+      return { x: item.x + item.width, y: item.y + item.height / 2 };
+    case 'bottom':
+      return { x: item.x + item.width / 2, y: item.y + item.height };
+    case 'left':
+      return { x: item.x, y: item.y + item.height / 2 };
+    default:
+      return getItemCenter(item);
+  }
+}
+
+function getConnectorPoints(
+  connector: ConnectorLink,
+  items: BoardItem[],
+): { fromPoint: Point; toPoint: Point } | null {
+  if (connector.from_item_id === null || connector.to_item_id === null) {
+    return null;
+  }
+
+  const fromItem = items.find((item) => item.id === connector.from_item_id);
+  const toItem = items.find((item) => item.id === connector.to_item_id);
+  if (!fromItem || !toItem) {
+    return null;
+  }
+
+  if (
+    isHiddenByCollapsedFrame(fromItem, items) ||
+    isHiddenByCollapsedFrame(toItem, items)
+  ) {
+    return null;
+  }
+
+  const autoAnchors = getAutoAnchors(fromItem, toItem);
+  return {
+    fromPoint: getAnchorPoint(
+      fromItem,
+      (connector.from_anchor as Anchor | null) ?? autoAnchors.from_anchor,
+    ),
+    toPoint: getAnchorPoint(
+      toItem,
+      (connector.to_anchor as Anchor | null) ?? autoAnchors.to_anchor,
+    ),
+  };
+}
+
 export function Canvas({ page }: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
@@ -247,13 +356,16 @@ export function Canvas({ page }: Props) {
     zoom: page.zoom,
   });
   const [items, setItems] = useState<BoardItem[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorLink[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
   const [isSpaceDown, setIsSpaceDown] = useState(false);
+  const [arrowDraft, setArrowDraft] = useState<ArrowDraftState | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
+  const connectorsRef = useRef<ConnectorLink[]>(connectors);
   const dragRef = useRef<DragState | null>(null);
   const resizeRef = useRef<ResizeState | null>(null);
   const panRef = useRef<PanState | null>(null);
@@ -265,6 +377,7 @@ export function Canvas({ page }: Props) {
   useLayoutEffect(() => {
     viewportRef.current = viewport;
     itemsRef.current = items;
+    connectorsRef.current = connectors;
   });
 
   const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
@@ -281,9 +394,31 @@ export function Canvas({ page }: Props) {
     setViewport(nextViewport);
   }, []);
 
+  const setConnectorsAndSync = useCallback((updater: ConnectorsUpdater) => {
+    setConnectors((current) => {
+      const nextConnectors =
+        typeof updater === 'function' ? updater(current) : updater;
+      connectorsRef.current = nextConnectors;
+      return nextConnectors;
+    });
+  }, []);
+
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
+  );
+  const selectedConnector = useMemo(
+    () =>
+      connectors.find((connector) => connector.connector_item_id === selectedId) ??
+      null,
+    [connectors, selectedId],
+  );
+  const connectorByItemId = useMemo(
+    () =>
+      new Map(
+        connectors.map((connector) => [connector.connector_item_id, connector]),
+      ),
+    [connectors],
   );
 
   const selectedChildCount = useMemo(() => {
@@ -312,6 +447,7 @@ export function Canvas({ page }: Props) {
       try {
         const data = await getPageBoardData(page.id, controller.signal);
         setItemsAndSync(data.board_items);
+        setConnectorsAndSync(data.connector_links);
         setViewportAndSync({
           x: data.page.viewport_x,
           y: data.page.viewport_y,
@@ -328,7 +464,7 @@ export function Canvas({ page }: Props) {
 
     void load();
     return () => controller.abort();
-  }, [page.id, setItemsAndSync, setViewportAndSync]);
+  }, [page.id, setConnectorsAndSync, setItemsAndSync, setViewportAndSync]);
 
   useEffect(
     () => () => {
@@ -380,21 +516,41 @@ export function Canvas({ page }: Props) {
         return;
       }
 
+      const relatedConnectors = connectorsRef.current.filter(
+        (connector) =>
+          connector.connector_item_id === itemId ||
+          connector.from_item_id === itemId ||
+          connector.to_item_id === itemId,
+      );
+      const relatedItemIds = new Set<string>([
+        itemId,
+        ...relatedConnectors.map((connector) => connector.connector_item_id),
+      ]);
+      const relatedConnectorIds = new Set(
+        relatedConnectors.map((connector) => connector.id),
+      );
+
       setItemsAndSync((current) =>
         current
-          .filter((item) => item.id !== itemId)
+          .filter((item) => !relatedItemIds.has(item.id))
           .map((item) =>
-            item.parent_item_id === itemId
+            item.parent_item_id !== null && relatedItemIds.has(item.parent_item_id)
               ? { ...item, parent_item_id: null }
               : item,
           ),
       );
+      setConnectorsAndSync((current) =>
+        current.filter((connector) => !relatedConnectorIds.has(connector.id)),
+      );
 
-      if (selectedId === itemId) {
+      if (selectedId !== null && relatedItemIds.has(selectedId)) {
         setSelectedId(null);
       }
-      if (editingId === itemId) {
+      if (editingId !== null && relatedItemIds.has(editingId)) {
         setEditingId(null);
+      }
+      if (arrowDraft !== null && relatedItemIds.has(arrowDraft.fromItemId)) {
+        setArrowDraft(null);
       }
 
       try {
@@ -403,7 +559,7 @@ export function Canvas({ page }: Props) {
         console.error('[Canvas] Failed to delete item', err);
       }
     },
-    [editingId, selectedId, setItemsAndSync],
+    [arrowDraft, editingId, selectedId, setConnectorsAndSync, setItemsAndSync],
   );
 
   useEffect(() => {
@@ -423,6 +579,7 @@ export function Canvas({ page }: Props) {
       if (e.key === 'Escape') {
         setSelectedId(null);
         setEditingId(null);
+        setArrowDraft(null);
         setActiveTool('select');
       }
     }
@@ -454,11 +611,20 @@ export function Canvas({ page }: Props) {
       if (key === 'f') {
         setActiveTool('frame');
       }
+      if (key === 'a') {
+        setActiveTool('arrow');
+      }
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (activeTool !== 'arrow' && arrowDraft !== null) {
+      setArrowDraft(null);
+    }
+  }, [activeTool, arrowDraft]);
 
   function screenToWorld(screenX: number, screenY: number) {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -572,6 +738,13 @@ export function Canvas({ page }: Props) {
       return;
     }
 
+    if (activeTool === 'arrow') {
+      setSelectedId(null);
+      setEditingId(null);
+      setArrowDraft(null);
+      return;
+    }
+
     if (activeTool !== 'select') {
       const worldPos = screenToWorld(e.clientX, e.clientY);
       const size = ITEM_DEFAULT_SIZE[activeTool] ?? { width: 200, height: 100 };
@@ -632,14 +805,163 @@ export function Canvas({ page }: Props) {
     }
   }
 
+  function syncConnectorAnchorsForItems(changedItemIds: string[]) {
+    if (changedItemIds.length === 0) {
+      return;
+    }
+
+    const changedIdSet = new Set(changedItemIds);
+    const connectorUpdates: ConnectorLink[] = [];
+
+    setConnectorsAndSync((current) =>
+      current.map((connector) => {
+        const touchesChangedItem =
+          (connector.from_item_id !== null &&
+            changedIdSet.has(connector.from_item_id)) ||
+          (connector.to_item_id !== null &&
+            changedIdSet.has(connector.to_item_id));
+
+        if (!touchesChangedItem) {
+          return connector;
+        }
+
+        if (connector.from_item_id === null || connector.to_item_id === null) {
+          return connector;
+        }
+
+        const fromItem = itemsRef.current.find(
+          (item) => item.id === connector.from_item_id,
+        );
+        const toItem = itemsRef.current.find(
+          (item) => item.id === connector.to_item_id,
+        );
+        if (!fromItem || !toItem) {
+          return connector;
+        }
+
+        const nextAnchors = getAutoAnchors(fromItem, toItem);
+        if (
+          connector.from_anchor === nextAnchors.from_anchor &&
+          connector.to_anchor === nextAnchors.to_anchor
+        ) {
+          return connector;
+        }
+
+        const updatedConnector = { ...connector, ...nextAnchors };
+        connectorUpdates.push(updatedConnector);
+        return updatedConnector;
+      }),
+    );
+
+    if (connectorUpdates.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      connectorUpdates.map((connector) =>
+        updateConnector(connector.id, toConnectorPayload(connector)),
+      ),
+    ).catch((err) => {
+      console.error('[Canvas] Failed to sync connector anchors', err);
+    });
+  }
+
+  async function handleCreateArrow(fromItemId: string, toItemId: string) {
+    if (fromItemId === toItemId) {
+      setArrowDraft(null);
+      return;
+    }
+
+    const fromItem = itemsRef.current.find((item) => item.id === fromItemId);
+    const toItem = itemsRef.current.find((item) => item.id === toItemId);
+    if (!fromItem || !toItem || !isArrowConnectable(fromItem) || !isArrowConnectable(toItem)) {
+      setArrowDraft(null);
+      return;
+    }
+
+    const anchors = getAutoAnchors(fromItem, toItem);
+    const fromPoint = getAnchorPoint(fromItem, anchors.from_anchor);
+    const toPoint = getAnchorPoint(toItem, anchors.to_anchor);
+    const zIndexes = itemsRef.current.map((item) => item.z_index);
+    const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
+    let createdArrow: BoardItem | null = null;
+
+    try {
+      createdArrow = await createBoardItem({
+        page_id: page.id,
+        parent_item_id: null,
+        category: ITEM_CATEGORY.connector,
+        type: ITEM_TYPE.arrow,
+        title: null,
+        content: null,
+        content_format: null,
+        x: Math.min(fromPoint.x, toPoint.x) - CONNECTOR_ITEM_PADDING,
+        y: Math.min(fromPoint.y, toPoint.y) - CONNECTOR_ITEM_PADDING,
+        width: Math.max(
+          Math.abs(toPoint.x - fromPoint.x) + CONNECTOR_ITEM_PADDING * 2,
+          40,
+        ),
+        height: Math.max(
+          Math.abs(toPoint.y - fromPoint.y) + CONNECTOR_ITEM_PADDING * 2,
+          40,
+        ),
+        rotation: 0,
+        z_index: maxZ + 1,
+        is_collapsed: false,
+        style_json: null,
+        data_json: '{"kind":"straight"}',
+      });
+
+      const connector = await createConnector({
+        connector_item_id: createdArrow.id,
+        from_item_id: fromItem.id,
+        to_item_id: toItem.id,
+        from_anchor: anchors.from_anchor,
+        to_anchor: anchors.to_anchor,
+      });
+
+      setItemsAndSync((current) => [...current, createdArrow as BoardItem]);
+      setConnectorsAndSync((current) => [...current, connector]);
+      setSelectedId(createdArrow.id);
+      setEditingId(null);
+      setActiveTool('select');
+    } catch (err) {
+      if (createdArrow !== null) {
+        void deleteBoardItem(createdArrow.id).catch((cleanupError) => {
+          console.error('[Canvas] Failed to cleanup incomplete arrow', cleanupError);
+        });
+      }
+      console.error('[Canvas] Failed to create arrow', err);
+    } finally {
+      setArrowDraft(null);
+    }
+  }
+
   function handleItemMouseDown(e: React.MouseEvent, itemId: string) {
-    if (activeTool !== 'select') {
+    const item = itemsRef.current.find((candidate) => candidate.id === itemId);
+    if (!item) {
       return;
     }
 
     e.stopPropagation();
-    const item = itemsRef.current.find((candidate) => candidate.id === itemId);
-    if (!item) {
+
+    if (activeTool === 'arrow') {
+      if (!isArrowConnectable(item)) {
+        return;
+      }
+
+      setEditingId(null);
+      if (arrowDraft === null) {
+        setArrowDraft({ fromItemId: itemId });
+        setSelectedId(itemId);
+        return;
+      }
+
+      void handleCreateArrow(arrowDraft.fromItemId, itemId);
+      return;
+    }
+
+    if (activeTool !== 'select') {
       return;
     }
 
@@ -659,6 +981,20 @@ export function Canvas({ page }: Props) {
           }))
         : [],
     };
+  }
+
+  function handleArrowMouseDown(
+    e: React.MouseEvent<SVGLineElement>,
+    itemId: string,
+  ) {
+    e.stopPropagation();
+
+    if (activeTool !== 'select') {
+      return;
+    }
+
+    setSelectedId(itemId);
+    setEditingId(null);
   }
 
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
@@ -760,6 +1096,7 @@ export function Canvas({ page }: Props) {
       );
       if (item) {
         persistItems([item]);
+        syncConnectorAnchorsForItems([item.id]);
       }
     }
 
@@ -786,13 +1123,17 @@ export function Canvas({ page }: Props) {
           }
 
           persistItems([updatedItem]);
+          syncConnectorAnchorsForItems([updatedItem.id]);
         } else if (isFrame(draggedItem)) {
-          persistItems([
+          const movedItems = [
             draggedItem,
             ...getFrameChildren(itemsRef.current, draggedItem.id),
-          ]);
+          ];
+          persistItems(movedItems);
+          syncConnectorAnchorsForItems(movedItems.map((item) => item.id));
         } else {
           persistItems([draggedItem]);
+          syncConnectorAnchorsForItems([draggedItem.id]);
         }
       }
     }
@@ -866,6 +1207,30 @@ export function Canvas({ page }: Props) {
               style={{ transform: worldTransform, transformOrigin: '0 0' }}
             >
               {visibleItems.map((item) => {
+                if (item.type === ITEM_TYPE.arrow) {
+                  const connector = connectorByItemId.get(item.id);
+                  const connectorPoints =
+                    connector !== undefined
+                      ? getConnectorPoints(connector, items)
+                      : null;
+
+                  if (!connector || !connectorPoints) {
+                    return null;
+                  }
+
+                  return (
+                    <ArrowConnector
+                      key={item.id}
+                      item={item}
+                      connector={connector}
+                      fromPoint={connectorPoints.fromPoint}
+                      toPoint={connectorPoints.toPoint}
+                      isSelected={item.id === selectedId}
+                      onMouseDown={(e) => handleArrowMouseDown(e, item.id)}
+                    />
+                  );
+                }
+
                 const childItems = isFrame(item)
                   ? getFrameChildren(items, item.id)
                   : [];
@@ -891,9 +1256,16 @@ export function Canvas({ page }: Props) {
             {items.length === 0 ? (
               <div className="canvas-empty-hint">
                 <p>
-                  用工具列新增文字框、便利貼、筆記紙或
-                  frame，滑鼠滾輪縮放，按住空白鍵拖曳平移。
+                  用工具列新增文字框、便利貼、筆記紙、frame 或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
                 </p>
+              </div>
+            ) : null}
+
+            {activeTool === 'arrow' ? (
+              <div className="canvas-guide-badge">
+                {arrowDraft === null
+                  ? '箭頭工具：先點選起點物件'
+                  : '箭頭工具：再點選終點物件完成連線'}
               </div>
             ) : null}
 
@@ -905,6 +1277,7 @@ export function Canvas({ page }: Props) {
 
         <Inspector
           item={selectedItem}
+          connector={selectedConnector}
           childCount={selectedChildCount}
           onUpdate={handleItemUpdate}
           onDelete={() => {

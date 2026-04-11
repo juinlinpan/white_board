@@ -13,6 +13,7 @@ const TOOLS: ToolDef[] = [
   { id: 'sticky_note', label: '便利貼', icon: '◧', shortcut: 'S' },
   { id: 'note_paper', label: '筆記紙', icon: '≡', shortcut: 'N' },
   { id: 'frame', label: '框架', icon: '▣', shortcut: 'F' },
+  { id: 'arrow', label: '箭頭', icon: '➜', shortcut: 'A' },
 ];
 
 type Props = {

@@ -28,6 +28,7 @@ from app.schemas import (
 from app.settings import AppSettings
 
 LOGGER = logging.getLogger("whiteboard.app")
+CONNECTABLE_ITEM_TYPES = {"text_box", "sticky_note", "note_paper", "frame"}
 
 SCHEMA_STATEMENTS = (
     """
@@ -651,6 +652,26 @@ class WhiteboardRepository:
 
     def delete_board_item(self, item_id: str) -> None:
         with self._connect() as connection:
+            related_arrow_ids = [
+                row["connector_item_id"]
+                for row in connection.execute(
+                    """
+                    SELECT DISTINCT connector_item_id
+                    FROM connector_links
+                    WHERE from_item_id = ? OR to_item_id = ?
+                    """,
+                    (item_id, item_id),
+                ).fetchall()
+                if row["connector_item_id"] != item_id
+            ]
+
+            if related_arrow_ids:
+                placeholders = ", ".join("?" for _ in related_arrow_ids)
+                connection.execute(
+                    f"DELETE FROM board_items WHERE id IN ({placeholders})",
+                    tuple(related_arrow_ids),
+                )
+
             cursor = connection.execute("DELETE FROM board_items WHERE id = ?", (item_id,))
             if cursor.rowcount == 0:
                 raise HTTPException(
@@ -703,11 +724,7 @@ class WhiteboardRepository:
         return self._connector_from_row(row)
 
     def create_connector_link(self, payload: ConnectorLinkCreatePayload) -> ConnectorLink:
-        self.get_board_item(payload.connector_item_id)
-        if payload.from_item_id is not None:
-            self.get_board_item(payload.from_item_id)
-        if payload.to_item_id is not None:
-            self.get_board_item(payload.to_item_id)
+        self._validate_connector_payload(payload)
         connector_id = str(uuid4())
         with self._connect() as connection:
             connection.execute(
@@ -747,11 +764,7 @@ class WhiteboardRepository:
         connector_id: str,
         payload: ConnectorLinkUpdatePayload,
     ) -> ConnectorLink:
-        self.get_board_item(payload.connector_item_id)
-        if payload.from_item_id is not None:
-            self.get_board_item(payload.from_item_id)
-        if payload.to_item_id is not None:
-            self.get_board_item(payload.to_item_id)
+        self._validate_connector_payload(payload)
         with self._connect() as connection:
             cursor = connection.execute(
                 """
@@ -835,6 +848,40 @@ class WhiteboardRepository:
 
     def _connector_from_row(self, row: sqlite3.Row) -> ConnectorLink:
         return ConnectorLink.model_validate(dict(row))
+
+    def _validate_connector_payload(
+        self,
+        payload: ConnectorLinkCreatePayload | ConnectorLinkUpdatePayload,
+    ) -> None:
+        connector_item = self.get_board_item(payload.connector_item_id)
+        if connector_item.type != "arrow" or connector_item.category != "connector":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Connector item must be an arrow board item.",
+            )
+
+        for role, item_id in (
+            ("from", payload.from_item_id),
+            ("to", payload.to_item_id),
+        ):
+            if item_id is None:
+                continue
+
+            target_item = self.get_board_item(item_id)
+            if target_item.page_id != connector_item.page_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Connector {role} item must be on the same page as the arrow.",
+                )
+
+            if target_item.type not in CONNECTABLE_ITEM_TYPES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Arrow endpoints can only connect to text_box, sticky_note, "
+                        "note_paper, or frame items."
+                    ),
+                )
 
 
 def utc_timestamp() -> str:

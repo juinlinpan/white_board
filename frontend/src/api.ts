@@ -31,6 +31,10 @@ type ListResponse<T> = {
 };
 
 type ErrorResponse = {
+  error?: {
+    message?: string;
+  };
+  message?: string;
   detail?: string;
 };
 
@@ -42,6 +46,12 @@ async function parseError(response: Response): Promise<string> {
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ErrorResponse;
+    if (typeof payload.error?.message === 'string' && payload.error.message.length > 0) {
+      return payload.error.message;
+    }
+    if (typeof payload.message === 'string' && payload.message.length > 0) {
+      return payload.message;
+    }
     if (typeof payload.detail === 'string' && payload.detail.length > 0) {
       return payload.detail;
     }
@@ -161,10 +171,21 @@ export type BoardItem = {
 
 export type BoardItemPayload = Omit<BoardItem, 'id' | 'created_at' | 'updated_at'>;
 
+export type ConnectorLink = {
+  id: string;
+  connector_item_id: string;
+  from_item_id: string | null;
+  to_item_id: string | null;
+  from_anchor: string | null;
+  to_anchor: string | null;
+};
+
+export type ConnectorLinkPayload = Omit<ConnectorLink, 'id'>;
+
 export type PageBoardData = {
   page: Page;
   board_items: BoardItem[];
-  connector_links: unknown[];
+  connector_links: ConnectorLink[];
 };
 
 export async function getPageBoardData(
@@ -195,6 +216,29 @@ export async function updateBoardItem(
 
 export async function deleteBoardItem(id: string): Promise<void> {
   await requestVoid(`/board-items/${id}`, { method: 'DELETE' });
+}
+
+export async function createConnector(
+  payload: ConnectorLinkPayload,
+): Promise<ConnectorLink> {
+  return requestJson<ConnectorLink>('/connectors', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateConnector(
+  id: string,
+  payload: ConnectorLinkPayload,
+): Promise<ConnectorLink> {
+  return requestJson<ConnectorLink>(`/connectors/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteConnector(id: string): Promise<void> {
+  await requestVoid(`/connectors/${id}`, { method: 'DELETE' });
 }
 
 // ──────────────────────────────────────────────
