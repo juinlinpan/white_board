@@ -18,6 +18,7 @@ import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 type Props = {
   item: BoardItem | null;
   connector: ConnectorLink | null;
+  selectionCount: number;
   childCount: number;
   onUpdate: (item: BoardItem) => void;
   onDelete: () => void;
@@ -73,6 +74,7 @@ function normalizeRotation(value: number): number {
 export function Inspector({
   item,
   connector,
+  selectionCount,
   childCount,
   onUpdate,
   onDelete,
@@ -86,6 +88,35 @@ export function Inspector({
         <div className="inspector-empty">
           <p className="eyebrow">Inspector</p>
           <p>選取物件以檢視屬性</p>
+        </div>
+      </aside>
+    );
+  }
+
+  if (selectionCount > 1) {
+    return (
+      <aside className="canvas-inspector">
+        <div className="inspector-panel">
+          <p className="eyebrow">Inspector</p>
+          <div className="inspector-title-row">
+            <div>
+              <h3>已選取 {selectionCount} 個物件</h3>
+              <p className="inspector-meta">
+                多選模式支援群組拖曳、複製、貼上與刪除。若要編輯屬性，請改成單選。
+              </p>
+            </div>
+            <button className="ghost-button danger-button" onClick={onDelete}>
+              刪除
+            </button>
+          </div>
+
+          <section className="inspector-section">
+            <p className="meta-label">Primary Selection</p>
+            <p className="inspector-meta">
+              目前主選取物件：
+              {ITEM_TYPE_LABEL[item.type as keyof typeof ITEM_TYPE_LABEL] ?? item.type}
+            </p>
+          </section>
         </div>
       </aside>
     );

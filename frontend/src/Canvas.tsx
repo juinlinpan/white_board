@@ -46,6 +46,9 @@ const CONNECTOR_ITEM_PADDING = 20;
 const SNAP_TOLERANCE = 10;
 const PASTE_OFFSET_STEP = 32;
 const MAX_HISTORY_ENTRIES = 50;
+const FRAME_LAYOUT_PADDING_X = 20;
+const FRAME_LAYOUT_PADDING_TOP = 72;
+const FRAME_LAYOUT_GAP = 16;
 
 type Anchor = 'top' | 'right' | 'bottom' | 'left';
 type Point = {
@@ -55,11 +58,12 @@ type Point = {
 
 type DragState = {
   itemId: string;
+  selectedItemIds: string[];
   startMouseX: number;
   startMouseY: number;
-  startItemX: number;
-  startItemY: number;
-  childPositions: Array<{ id: string; x: number; y: number }>;
+  startBoundsX: number;
+  startBoundsY: number;
+  itemPositions: Array<{ id: string; x: number; y: number }>;
   snapshot: BoardSnapshot;
 };
 
@@ -96,7 +100,7 @@ type LayerAction = 'bringToFront' | 'sendToBack';
 type BoardSnapshot = {
   items: BoardItem[];
   connectors: ConnectorLink[];
-  selectedId: string | null;
+  selectedIds: string[];
 };
 
 type EditSessionState = {
@@ -155,17 +159,19 @@ function cloneBoardSnapshot(snapshot: BoardSnapshot): BoardSnapshot {
   return {
     items: snapshot.items.map(cloneBoardItem),
     connectors: snapshot.connectors.map(cloneConnectorLink),
-    selectedId: snapshot.selectedId,
+    selectedIds: [...snapshot.selectedIds],
   };
 }
 
 function normalizeBoardSnapshot(snapshot: BoardSnapshot): {
   items: BoardItem[];
   connectors: ConnectorLink[];
+  selectedIds: string[];
 } {
   return {
     items: [...snapshot.items].sort((a, b) => a.id.localeCompare(b.id)),
     connectors: [...snapshot.connectors].sort((a, b) => a.id.localeCompare(b.id)),
+    selectedIds: [...snapshot.selectedIds].sort((a, b) => a.localeCompare(b)),
   };
 }
 
@@ -304,6 +310,217 @@ function getDescendantItems(items: BoardItem[], rootId: string): BoardItem[] {
   }
 
   return descendants;
+}
+
+function getUniqueItemIds(itemIds: string[]): string[] {
+  return [...new Set(itemIds)];
+}
+
+function getPrimarySelectionId(selectedIds: string[]): string | null {
+  return selectedIds[selectedIds.length - 1] ?? null;
+}
+
+function expandSelectionItemIds(
+  items: BoardItem[],
+  selectedIds: string[],
+  options: {
+    includeFrameDescendants?: boolean;
+    excludeArrows?: boolean;
+  } = {},
+): string[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const expandedIds: string[] = [];
+  const seen = new Set<string>();
+  const includeFrameDescendants = options.includeFrameDescendants ?? true;
+
+  function append(itemId: string) {
+    if (seen.has(itemId)) {
+      return;
+    }
+
+    const item = byId.get(itemId);
+    if (!item) {
+      return;
+    }
+
+    if (options.excludeArrows && item.type === ITEM_TYPE.arrow) {
+      return;
+    }
+
+    seen.add(itemId);
+    expandedIds.push(itemId);
+  }
+
+  for (const itemId of selectedIds) {
+    const item = byId.get(itemId);
+    if (!item) {
+      continue;
+    }
+
+    append(item.id);
+    if (!includeFrameDescendants || !isFrame(item)) {
+      continue;
+    }
+
+    for (const descendant of getDescendantItems(items, item.id)) {
+      append(descendant.id);
+    }
+  }
+
+  return expandedIds;
+}
+
+function getSelectionBounds(
+  items: BoardItem[],
+  selectedIds: string[],
+): { x: number; y: number; width: number; height: number } | null {
+  const selectedItems = selectedIds
+    .map((itemId) => items.find((item) => item.id === itemId))
+    .filter((item): item is BoardItem => item !== undefined);
+  if (selectedItems.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...selectedItems.map((item) => item.x));
+  const top = Math.min(...selectedItems.map((item) => item.y));
+  const right = Math.max(...selectedItems.map((item) => item.x + item.width));
+  const bottom = Math.max(...selectedItems.map((item) => item.y + item.height));
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function getItemDepth(
+  item: BoardItem,
+  itemById: Map<string, BoardItem>,
+): number {
+  let depth = 0;
+  let currentParentId = item.parent_item_id;
+
+  while (currentParentId !== null) {
+    const parent = itemById.get(currentParentId);
+    if (!parent) {
+      break;
+    }
+
+    depth += 1;
+    currentParentId = parent.parent_item_id;
+  }
+
+  return depth;
+}
+
+function sortItemsForClipboard(items: BoardItem[]): BoardItem[] {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  return [...items].sort((left, right) => {
+    const depthDiff =
+      getItemDepth(left, itemById) - getItemDepth(right, itemById);
+    if (depthDiff !== 0) {
+      return depthDiff;
+    }
+
+    if (left.z_index !== right.z_index) {
+      return left.z_index - right.z_index;
+    }
+
+    return left.created_at.localeCompare(right.created_at);
+  });
+}
+
+function layoutFrameChildren(
+  frame: BoardItem,
+  items: BoardItem[],
+): Map<string, BoardItem> {
+  const updates = new Map<string, BoardItem>();
+  const children = getFrameChildren(items, frame.id).filter(isSmallItem);
+  if (children.length === 0) {
+    return updates;
+  }
+
+  const contentLeft = frame.x + FRAME_LAYOUT_PADDING_X;
+  const contentTop = frame.y + FRAME_LAYOUT_PADDING_TOP;
+  const contentWidth = Math.max(frame.width - FRAME_LAYOUT_PADDING_X * 2, 80);
+  const contentRight = contentLeft + contentWidth;
+
+  let cursorX = contentLeft;
+  let cursorY = contentTop;
+  let rowHeight = 0;
+
+  for (const child of children) {
+    const minWidth = ITEM_MIN_SIZE[child.type]?.width ?? 60;
+    const nextWidth = Math.max(minWidth, Math.min(child.width, contentWidth));
+
+    if (cursorX > contentLeft && cursorX + nextWidth > contentRight) {
+      cursorX = contentLeft;
+      cursorY += rowHeight + FRAME_LAYOUT_GAP;
+      rowHeight = 0;
+    }
+
+    updates.set(
+      child.id,
+      child.x === cursorX && child.y === cursorY && child.width === nextWidth
+        ? child
+        : {
+            ...child,
+            x: cursorX,
+            y: cursorY,
+            width: nextWidth,
+          },
+    );
+
+    cursorX += nextWidth + FRAME_LAYOUT_GAP;
+    rowHeight = Math.max(rowHeight, child.height);
+  }
+
+  return updates;
+}
+
+function relayoutFrameItems(
+  items: BoardItem[],
+  frameIds: string[],
+): { items: BoardItem[]; changedIds: string[] } {
+  let nextItems = items;
+  const changedIds = new Set<string>();
+
+  for (const frameId of getUniqueItemIds(frameIds)) {
+    const frame = nextItems.find((item) => item.id === frameId);
+    if (!frame || !isFrame(frame)) {
+      continue;
+    }
+
+    const updates = layoutFrameChildren(frame, nextItems);
+    if (updates.size === 0) {
+      continue;
+    }
+
+    nextItems = nextItems.map((item) => {
+      const updated = updates.get(item.id);
+      if (!updated) {
+        return item;
+      }
+
+      if (
+        updated.x === item.x &&
+        updated.y === item.y &&
+        updated.width === item.width &&
+        updated.height === item.height
+      ) {
+        return item;
+      }
+
+      changedIds.add(item.id);
+      return updated;
+    });
+  }
+
+  return {
+    items: nextItems,
+    changedIds: [...changedIds],
+  };
 }
 
 function getLayerBlockIds(items: BoardItem[], itemId: string): string[] {
@@ -485,7 +702,7 @@ export function Canvas({ page }: Props) {
   });
   const [items, setItems] = useState<BoardItem[]>([]);
   const [connectors, setConnectors] = useState<ConnectorLink[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -499,7 +716,7 @@ export function Canvas({ page }: Props) {
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
   const connectorsRef = useRef<ConnectorLink[]>(connectors);
-  const selectedIdRef = useRef<string | null>(selectedId);
+  const selectedIdsRef = useRef<string[]>(selectedIds);
   const clipboardRef = useRef<ClipboardSnapshot | null>(null);
   const pasteCountRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
@@ -517,8 +734,8 @@ export function Canvas({ page }: Props) {
     viewportRef.current = viewport;
     itemsRef.current = items;
     connectorsRef.current = connectors;
-    selectedIdRef.current = selectedId;
-  }, [connectors, items, selectedId, viewport]);
+    selectedIdsRef.current = selectedIds;
+  }, [connectors, items, selectedIds, viewport]);
 
   const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
     setItems((current) => {
@@ -543,6 +760,20 @@ export function Canvas({ page }: Props) {
     });
   }, []);
 
+  const setSelection = useCallback((nextSelectedIds: string[]) => {
+    const availableIds = new Set(itemsRef.current.map((item) => item.id));
+    const normalizedSelection = getUniqueItemIds(
+      nextSelectedIds.filter((itemId) => availableIds.has(itemId)),
+    );
+    selectedIdsRef.current = normalizedSelection;
+    setSelectedIds(normalizedSelection);
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    selectedIdsRef.current = [];
+    setSelectedIds([]);
+  }, []);
+
   const syncHistoryState = useCallback(() => {
     setCanUndo(undoStackRef.current.length > 0);
     setCanRedo(redoStackRef.current.length > 0);
@@ -552,7 +783,7 @@ export function Canvas({ page }: Props) {
     return {
       items: itemsRef.current.map(cloneBoardItem),
       connectors: connectorsRef.current.map(cloneConnectorLink),
-      selectedId: selectedIdRef.current,
+      selectedIds: [...selectedIdsRef.current],
     };
   }, []);
 
@@ -616,11 +847,10 @@ export function Canvas({ page }: Props) {
         });
         setItemsAndSync(restored.board_items);
         setConnectorsAndSync(restored.connector_links);
-        setSelectedId(
-          snapshot.selectedId !== null &&
-            restored.board_items.some((item) => item.id === snapshot.selectedId)
-            ? snapshot.selectedId
-            : null,
+        setSelection(
+          snapshot.selectedIds.filter((itemId) =>
+            restored.board_items.some((item) => item.id === itemId),
+          ),
         );
         setEditingId(null);
         setArrowDraft(null);
@@ -639,6 +869,7 @@ export function Canvas({ page }: Props) {
       page.id,
       setConnectorsAndSync,
       setItemsAndSync,
+      setSelection,
       syncHistoryState,
     ],
   );
@@ -728,16 +959,20 @@ export function Canvas({ page }: Props) {
       }));
   }, []);
 
+  const primarySelectedId = useMemo(
+    () => getPrimarySelectionId(selectedIds),
+    [selectedIds],
+  );
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId],
+    () => items.find((item) => item.id === primarySelectedId) ?? null,
+    [items, primarySelectedId],
   );
   const selectedConnector = useMemo(
     () =>
       connectors.find(
-        (connector) => connector.connector_item_id === selectedId,
+        (connector) => connector.connector_item_id === primarySelectedId,
       ) ?? null,
-    [connectors, selectedId],
+    [connectors, primarySelectedId],
   );
   const connectorByItemId = useMemo(
     () =>
@@ -779,7 +1014,7 @@ export function Canvas({ page }: Props) {
           y: data.page.viewport_y,
           zoom: data.page.zoom,
         });
-        setSelectedId(null);
+        clearSelection();
         setEditingId(null);
         setArrowDraft(null);
         resetHistory();
@@ -797,6 +1032,7 @@ export function Canvas({ page }: Props) {
   }, [
     page.id,
     resetHistory,
+    clearSelection,
     setConnectorsAndSync,
     setItemsAndSync,
     setViewportAndSync,
@@ -845,22 +1081,27 @@ export function Canvas({ page }: Props) {
     };
   }, []);
 
-  const handleDeleteItem = useCallback(
-    async (itemId: string) => {
-      const target = itemsRef.current.find((item) => item.id === itemId);
-      if (!target) {
+  const handleDeleteItems = useCallback(
+    async (itemIds: string[]) => {
+      const deleteIds = getUniqueItemIds(itemIds).filter((itemId) =>
+        itemsRef.current.some((item) => item.id === itemId),
+      );
+      if (deleteIds.length === 0) {
         return;
       }
+
+      const deleteIdSet = new Set(deleteIds);
       const snapshotBeforeDelete = captureBoardSnapshot();
 
       const relatedConnectors = connectorsRef.current.filter(
         (connector) =>
-          connector.connector_item_id === itemId ||
-          connector.from_item_id === itemId ||
-          connector.to_item_id === itemId,
+          deleteIdSet.has(connector.connector_item_id) ||
+          (connector.from_item_id !== null &&
+            deleteIdSet.has(connector.from_item_id)) ||
+          (connector.to_item_id !== null && deleteIdSet.has(connector.to_item_id)),
       );
       const relatedItemIds = new Set<string>([
-        itemId,
+        ...deleteIds,
         ...relatedConnectors.map((connector) => connector.connector_item_id),
       ]);
       const relatedConnectorIds = new Set(
@@ -872,7 +1113,8 @@ export function Canvas({ page }: Props) {
           .filter((item) => !relatedItemIds.has(item.id))
           .map((item) =>
             item.parent_item_id !== null &&
-            relatedItemIds.has(item.parent_item_id)
+            deleteIdSet.has(item.parent_item_id) &&
+            !deleteIdSet.has(item.id)
               ? { ...item, parent_item_id: null }
               : item,
           ),
@@ -880,22 +1122,35 @@ export function Canvas({ page }: Props) {
       setConnectorsAndSync((current) =>
         current.filter((connector) => !relatedConnectorIds.has(connector.id)),
       );
+      setSelection(
+        selectedIdsRef.current.filter((itemId) => !relatedItemIds.has(itemId)),
+      );
 
-      if (selectedId !== null && relatedItemIds.has(selectedId)) {
-        setSelectedId(null);
-      }
       if (editingId !== null && relatedItemIds.has(editingId)) {
         setEditingId(null);
       }
-      if (arrowDraft !== null && relatedItemIds.has(arrowDraft.fromItemId)) {
+      if (arrowDraft !== null && deleteIdSet.has(arrowDraft.fromItemId)) {
         setArrowDraft(null);
       }
       pushUndoSnapshot(snapshotBeforeDelete);
 
-      try {
-        await deleteBoardItem(itemId);
-      } catch (err) {
-        console.error('[Canvas] Failed to delete item', err);
+      const deleteResults = await Promise.allSettled(
+        deleteIds.map((itemId) => deleteBoardItem(itemId)),
+      );
+      for (const result of deleteResults) {
+        if (result.status === 'fulfilled') {
+          continue;
+        }
+
+        const message =
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
+        if (/not found/i.test(message)) {
+          continue;
+        }
+
+        console.error('[Canvas] Failed to delete item', result.reason);
       }
     },
     [
@@ -903,11 +1158,15 @@ export function Canvas({ page }: Props) {
       captureBoardSnapshot,
       editingId,
       pushUndoSnapshot,
-      selectedId,
       setConnectorsAndSync,
       setItemsAndSync,
+      setSelection,
     ],
   );
+
+  const handleDeleteSelection = useCallback(async () => {
+    await handleDeleteItems(selectedIdsRef.current);
+  }, [handleDeleteItems]);
 
   const persistItems = useCallback((nextItems: BoardItem[]) => {
     if (nextItems.length === 0) {
@@ -923,7 +1182,7 @@ export function Canvas({ page }: Props) {
 
   const handleLayerChange = useCallback(
     (action: LayerAction) => {
-      const targetId = selectedId;
+      const targetId = primarySelectedId;
       if (targetId === null) {
         return;
       }
@@ -948,41 +1207,32 @@ export function Canvas({ page }: Props) {
     [
       captureBoardSnapshot,
       persistItems,
+      primarySelectedId,
       pushUndoSnapshot,
-      selectedId,
       setItemsAndSync,
     ],
   );
 
   const handleCopySelection = useCallback(() => {
-    if (selectedId === null) {
-      return;
-    }
-
-    const selectedItem = itemsRef.current.find(
-      (item) => item.id === selectedId,
+    const selectedItems = sortItemsForClipboard(
+      expandSelectionItemIds(itemsRef.current, selectedIdsRef.current, {
+        excludeArrows: true,
+      })
+        .map((itemId) => itemsRef.current.find((item) => item.id === itemId))
+        .filter((item): item is BoardItem => item !== undefined),
     );
-    if (!selectedItem || selectedItem.type === ITEM_TYPE.arrow) {
+    if (selectedItems.length === 0) {
       return;
     }
-
-    const itemsToCopy = isFrame(selectedItem)
-      ? [
-          selectedItem,
-          ...sortItemsByLayer(
-            getDescendantItems(itemsRef.current, selectedItem.id),
-          ),
-        ]
-      : [selectedItem];
 
     clipboardRef.current = {
-      items: itemsToCopy.map((item) => ({
+      items: selectedItems.map((item) => ({
         sourceId: item.id,
         payload: toPayload(item),
       })),
     };
     pasteCountRef.current = 0;
-  }, [selectedId]);
+  }, []);
 
   const handlePasteSelection = useCallback(async () => {
     const clipboard = clipboardRef.current;
@@ -1039,15 +1289,31 @@ export function Canvas({ page }: Props) {
       rootSourceId !== null
         ? (createdIdBySourceId.get(rootSourceId) ?? createdItems[0]?.id ?? null)
         : (createdItems[0]?.id ?? null);
-    setSelectedId(pastedRootId);
+    const pastedSelectionIds = createdItems.map((item) => item.id);
+    setSelection(
+      pastedRootId === null
+        ? pastedSelectionIds
+        : [
+            ...pastedSelectionIds.filter((itemId) => itemId !== pastedRootId),
+            pastedRootId,
+          ],
+    );
     const pastedRoot =
       createdItems.find((item) => item.id === pastedRootId) ?? null;
     setEditingId(
-      pastedRoot !== null && isInlineEditable(pastedRoot)
+      createdItems.length === 1 &&
+        pastedRoot !== null &&
+        isInlineEditable(pastedRoot)
         ? pastedRoot.id
         : null,
     );
-  }, [captureBoardSnapshot, page.id, pushUndoSnapshot, setItemsAndSync]);
+  }, [
+    captureBoardSnapshot,
+    page.id,
+    pushUndoSnapshot,
+    setItemsAndSync,
+    setSelection,
+  ]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -1084,14 +1350,14 @@ export function Canvas({ page }: Props) {
 
       if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
-        selectedId !== null
+        selectedIdsRef.current.length > 0
       ) {
         e.preventDefault();
-        void handleDeleteItem(selectedId);
+        void handleDeleteSelection();
       }
 
       if (e.key === 'Escape') {
-        setSelectedId(null);
+        clearSelection();
         setEditingId(null);
         setArrowDraft(null);
         setActiveTool('select');
@@ -1101,12 +1367,12 @@ export function Canvas({ page }: Props) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
+    clearSelection,
     handleCopySelection,
-    handleDeleteItem,
+    handleDeleteSelection,
     handlePasteSelection,
     handleRedo,
     handleUndo,
-    selectedId,
   ]);
 
   useEffect(() => {
@@ -1228,7 +1494,7 @@ export function Canvas({ page }: Props) {
     );
 
     if (updatedFrame.is_collapsed && selectedItem?.parent_item_id === frameId) {
-      setSelectedId(frameId);
+      setSelection([frameId]);
       setEditingId(null);
     }
 
@@ -1266,7 +1532,9 @@ export function Canvas({ page }: Props) {
     }
 
     if (activeTool === 'arrow') {
-      setSelectedId(null);
+      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        clearSelection();
+      }
       setEditingId(null);
       setArrowDraft(null);
       return;
@@ -1285,7 +1553,11 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    setSelectedId(null);
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      return;
+    }
+
+    clearSelection();
     setEditingId(null);
   }
 
@@ -1335,7 +1607,7 @@ export function Canvas({ page }: Props) {
       const created = await createBoardItem(payload);
       pushUndoSnapshot(snapshotBeforeCreate);
       setItemsAndSync((current) => [...current, created]);
-      setSelectedId(created.id);
+      setSelection([created.id]);
       setEditingId(isInlineEditable(created) ? created.id : null);
     } catch (err) {
       console.error('[Canvas] Failed to create item', err);
@@ -1466,7 +1738,7 @@ export function Canvas({ page }: Props) {
       pushUndoSnapshot(snapshotBeforeArrow);
       setItemsAndSync((current) => [...current, createdArrow as BoardItem]);
       setConnectorsAndSync((current) => [...current, connector]);
-      setSelectedId(createdArrow.id);
+      setSelection([createdArrow.id]);
       setEditingId(null);
       setActiveTool('select');
     } catch (err) {
@@ -1501,7 +1773,7 @@ export function Canvas({ page }: Props) {
       setEditingId(null);
       if (arrowDraft === null) {
         setArrowDraft({ fromItemId: itemId });
-        setSelectedId(itemId);
+        setSelection([itemId]);
         return;
       }
 
@@ -1513,21 +1785,54 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    setSelectedId(itemId);
+    const isModifierSelection = e.shiftKey || e.ctrlKey || e.metaKey;
+    const currentSelection = selectedIdsRef.current;
+    if (isModifierSelection) {
+      if (currentSelection.includes(itemId)) {
+        setSelection(currentSelection.filter((currentId) => currentId !== itemId));
+        if (editingId === itemId) {
+          setEditingId(null);
+        }
+      } else {
+        setSelection([...currentSelection, itemId]);
+      }
+      return;
+    }
+
+    const nextSelectedIds = currentSelection.includes(itemId)
+      ? currentSelection
+      : [itemId];
+    const draggedSelectionIds = expandSelectionItemIds(itemsRef.current, nextSelectedIds, {
+      excludeArrows: true,
+    });
+    const selectionBounds = getSelectionBounds(itemsRef.current, draggedSelectionIds);
+    if (selectionBounds === null) {
+      return;
+    }
+
+    setSelection(nextSelectedIds);
     setEditingId(null);
     dragRef.current = {
       itemId,
+      selectedItemIds: draggedSelectionIds,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
-      startItemX: item.x,
-      startItemY: item.y,
-      childPositions: isFrame(item)
-        ? getFrameChildren(itemsRef.current, itemId).map((child) => ({
-            id: child.id,
-            x: child.x,
-            y: child.y,
-          }))
-        : [],
+      startBoundsX: selectionBounds.x,
+      startBoundsY: selectionBounds.y,
+      itemPositions: draggedSelectionIds
+        .map((selectedItemId) => {
+          const selectedItem = itemsRef.current.find(
+            (candidate) => candidate.id === selectedItemId,
+          );
+          return selectedItem === undefined
+            ? null
+            : {
+                id: selectedItem.id,
+                x: selectedItem.x,
+                y: selectedItem.y,
+              };
+        })
+        .filter((entry): entry is { id: string; x: number; y: number } => entry !== null),
       snapshot: captureBoardSnapshot(),
     };
   }
@@ -1542,7 +1847,19 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    setSelectedId(itemId);
+    const isModifierSelection = e.shiftKey || e.ctrlKey || e.metaKey;
+    const currentSelection = selectedIdsRef.current;
+    if (isModifierSelection) {
+      if (currentSelection.includes(itemId)) {
+        setSelection(currentSelection.filter((currentId) => currentId !== itemId));
+      } else {
+        setSelection([...currentSelection, itemId]);
+      }
+      setEditingId(null);
+      return;
+    }
+
+    setSelection([itemId]);
     setEditingId(null);
   }
 
@@ -1554,7 +1871,7 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    setSelectedId(itemId);
+    setSelection([itemId]);
     setEditingId(null);
     resizeRef.current = {
       itemId,
@@ -1622,54 +1939,49 @@ export function Canvas({ page }: Props) {
       const vp = viewportRef.current;
       const dx = (e.clientX - drag.startMouseX) / vp.zoom;
       const dy = (e.clientY - drag.startMouseY) / vp.zoom;
-      const draggedItem = itemsRef.current.find(
-        (item) => item.id === drag.itemId,
-      );
-      if (!draggedItem) {
+      if (drag.itemPositions.length === 0) {
         setSnapGuides([]);
         return;
       }
 
-      const rawX = drag.startItemX + dx;
-      const rawY = drag.startItemY + dy;
+      const selectionBounds = getSelectionBounds(
+        itemsRef.current,
+        drag.selectedItemIds,
+      );
+      if (selectionBounds === null) {
+        setSnapGuides([]);
+        return;
+      }
+
+      const rawX = drag.startBoundsX + dx;
+      const rawY = drag.startBoundsY + dy;
       const snapResult = shouldUseSnap
         ? snapMoveRect(
             {
               x: rawX,
               y: rawY,
-              width: draggedItem.width,
-              height: draggedItem.height,
+              width: selectionBounds.width,
+              height: selectionBounds.height,
             },
-            getSnapTargetRects([
-              drag.itemId,
-              ...drag.childPositions.map((child) => child.id),
-            ]),
+            getSnapTargetRects(drag.selectedItemIds),
             SNAP_TOLERANCE,
           )
         : { x: rawX, y: rawY, guides: [] };
-      const offsetX = snapResult.x - drag.startItemX;
-      const offsetY = snapResult.y - drag.startItemY;
-      const childStartMap = new Map(
-        drag.childPositions.map((child) => [child.id, child] as const),
+      const offsetX = snapResult.x - drag.startBoundsX;
+      const offsetY = snapResult.y - drag.startBoundsY;
+      const itemStartMap = new Map(
+        drag.itemPositions.map((entry) => [entry.id, entry] as const),
       );
       setSnapGuides(snapResult.guides);
 
       setItemsAndSync((current) =>
         current.map((item) => {
-          if (item.id === drag.itemId) {
+          const itemStart = itemStartMap.get(item.id);
+          if (itemStart) {
             return {
               ...item,
-              x: snapResult.x,
-              y: snapResult.y,
-            };
-          }
-
-          const childStart = childStartMap.get(item.id);
-          if (childStart) {
-            return {
-              ...item,
-              x: childStart.x + offsetX,
-              y: childStart.y + offsetY,
+              x: itemStart.x + offsetX,
+              y: itemStart.y + offsetY,
             };
           }
 
@@ -1704,8 +2016,25 @@ export function Canvas({ page }: Props) {
         (candidate) => candidate.id === resize.itemId,
       );
       if (item) {
-        persistItems([item]);
-        syncConnectorAnchorsForItems([item.id]);
+        let nextItems = itemsRef.current;
+        const changedIds = new Set<string>([item.id]);
+
+        if (isFrame(item)) {
+          const relayoutResult = relayoutFrameItems(nextItems, [item.id]);
+          nextItems = relayoutResult.items;
+          for (const changedId of relayoutResult.changedIds) {
+            changedIds.add(changedId);
+          }
+
+          if (relayoutResult.changedIds.length > 0) {
+            setItemsAndSync(nextItems);
+          }
+        }
+
+        persistItems(
+          nextItems.filter((candidate) => changedIds.has(candidate.id)),
+        );
+        syncConnectorAnchorsForItems([...changedIds]);
       }
       recordHistoryCheckpoint(resize.snapshot);
     }
@@ -1713,39 +2042,62 @@ export function Canvas({ page }: Props) {
     const drag = dragRef.current;
     if (drag) {
       dragRef.current = null;
-      const draggedItem = itemsRef.current.find(
-        (item) => item.id === drag.itemId,
+      let nextItems = itemsRef.current;
+      const movedItemIds = getUniqueItemIds(drag.selectedItemIds);
+      const changedIds = new Set<string>(movedItemIds);
+      const frameIdsToRelayout = new Set<string>();
+      const movedFrameIds = new Set(
+        movedItemIds.filter((itemId) => {
+          const item = nextItems.find((candidate) => candidate.id === itemId);
+          return item !== undefined && isFrame(item);
+        }),
       );
-      if (draggedItem) {
-        if (isSmallItem(draggedItem)) {
-          const nextParent = findContainingFrame(draggedItem, itemsRef.current);
-          const updatedItem =
-            nextParent?.id !== draggedItem.parent_item_id
-              ? { ...draggedItem, parent_item_id: nextParent?.id ?? null }
-              : draggedItem;
 
-          if (updatedItem !== draggedItem) {
-            setItemsAndSync((current) =>
-              current.map((item) =>
-                item.id === updatedItem.id ? updatedItem : item,
-              ),
-            );
-          }
-
-          persistItems([updatedItem]);
-          syncConnectorAnchorsForItems([updatedItem.id]);
-        } else if (isFrame(draggedItem)) {
-          const movedItems = [
-            draggedItem,
-            ...getFrameChildren(itemsRef.current, draggedItem.id),
-          ];
-          persistItems(movedItems);
-          syncConnectorAnchorsForItems(movedItems.map((item) => item.id));
-        } else {
-          persistItems([draggedItem]);
-          syncConnectorAnchorsForItems([draggedItem.id]);
+      for (const movedItemId of movedItemIds) {
+        const movedItem = nextItems.find((item) => item.id === movedItemId);
+        if (!movedItem || !isSmallItem(movedItem)) {
+          continue;
         }
+
+        if (
+          movedItem.parent_item_id !== null &&
+          movedFrameIds.has(movedItem.parent_item_id)
+        ) {
+          continue;
+        }
+
+        const nextParent = findContainingFrame(movedItem, nextItems);
+        const nextParentId = nextParent?.id ?? null;
+        if (nextParentId === movedItem.parent_item_id) {
+          continue;
+        }
+
+        if (movedItem.parent_item_id !== null) {
+          frameIdsToRelayout.add(movedItem.parent_item_id);
+        }
+        if (nextParentId !== null) {
+          frameIdsToRelayout.add(nextParentId);
+        }
+
+        nextItems = nextItems.map((item) =>
+          item.id === movedItem.id
+            ? { ...item, parent_item_id: nextParentId }
+            : item,
+        );
       }
+
+      const relayoutResult = relayoutFrameItems(nextItems, [...frameIdsToRelayout]);
+      nextItems = relayoutResult.items;
+      for (const changedId of relayoutResult.changedIds) {
+        changedIds.add(changedId);
+      }
+
+      if (nextItems !== itemsRef.current) {
+        setItemsAndSync(nextItems);
+      }
+
+      persistItems(nextItems.filter((item) => changedIds.has(item.id)));
+      syncConnectorAnchorsForItems([...changedIds]);
       recordHistoryCheckpoint(drag.snapshot);
     }
 
@@ -1788,7 +2140,7 @@ export function Canvas({ page }: Props) {
   }, []);
 
   function handleItemDoubleClick(item: BoardItem) {
-    setSelectedId(item.id);
+    setSelection([item.id]);
     if (isFrame(item)) {
       handleToggleFrameCollapse(item.id);
       return;
@@ -1869,7 +2221,7 @@ export function Canvas({ page }: Props) {
                       connector={connector}
                       fromPoint={connectorPoints.fromPoint}
                       toPoint={connectorPoints.toPoint}
-                      isSelected={item.id === selectedId}
+                      isSelected={selectedIds.includes(item.id)}
                       onMouseDown={(e) => handleArrowMouseDown(e, item.id)}
                     />
                   );
@@ -1879,15 +2231,15 @@ export function Canvas({ page }: Props) {
                   ? getFrameChildren(items, item.id)
                   : [];
                 return (
-                  <BoardItemRenderer
-                    key={item.id}
-                    item={item}
-                    childCount={childItems.length}
-                    childSummaries={childItems.map(summarizeFrameChild)}
-                    isSelected={item.id === selectedId}
-                    isEditing={item.id === editingId}
-                    onMouseDown={(e) => handleItemMouseDown(e, item.id)}
-                    onDoubleClick={() => handleItemDoubleClick(item)}
+                    <BoardItemRenderer
+                      key={item.id}
+                      item={item}
+                      childCount={childItems.length}
+                      childSummaries={childItems.map(summarizeFrameChild)}
+                      isSelected={selectedIds.includes(item.id)}
+                      isEditing={item.id === editingId}
+                      onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+                      onDoubleClick={() => handleItemDoubleClick(item)}
                     onResizeMouseDown={(e) => handleResizeMouseDown(e, item.id)}
                     onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
                     onUpdate={handleItemUpdate}
@@ -1934,13 +2286,10 @@ export function Canvas({ page }: Props) {
         <Inspector
           item={selectedItem}
           connector={selectedConnector}
+          selectionCount={selectedIds.length}
           childCount={selectedChildCount}
           onUpdate={handleItemUpdate}
-          onDelete={() => {
-            if (selectedItem !== null) {
-              void handleDeleteItem(selectedItem.id);
-            }
-          }}
+          onDelete={() => void handleDeleteSelection()}
           onToggleCollapse={() => {
             if (selectedItem?.type === ITEM_TYPE.frame) {
               handleToggleFrameCollapse(selectedItem.id);
