@@ -711,7 +711,9 @@ button {
 }
 
 .inspector-grid input,
-.inspector-field input {
+.inspector-field input,
+.inspector-field textarea,
+.inspector-color-field input {
   width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -724,7 +726,9 @@ button {
 }
 
 .inspector-grid input:focus,
-.inspector-field input:focus {
+.inspector-field input:focus,
+.inspector-field textarea:focus,
+.inspector-color-field input:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
@@ -735,6 +739,40 @@ button {
   color: var(--muted);
   background: var(--surface-dim);
   cursor: not-allowed;
+}
+
+.inspector-textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.inspector-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inspector-color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.inspector-color-field input {
+  min-height: 42px;
+  padding: 4px;
+}
+
+.inspector-toggle-group {
+  display: flex;
+  gap: 8px;
+}
+
+.inspector-toggle-group .ghost-button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* ══════════════════════════════════════════

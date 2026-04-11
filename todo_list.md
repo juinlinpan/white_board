@@ -41,7 +41,7 @@
 - [x] 實作 connector CRUD API
 - [x] 實作 Page viewport API
 - [x] 實作 Page 全量載入 API
-- [ ] 統一 success response format
+- [x] 統一 success response format
 - [x] 統一 error format
 
 ### 5. Frontend App Shell
@@ -157,10 +157,10 @@
 - [x] 根據選取物件顯示不同內容
 - [x] 顯示位置資訊
 - [x] 顯示尺寸資訊
-- [ ] 顯示樣式欄位
-- [ ] 顯示文字或內容設定
-- [ ] 支援顏色調整
-- [ ] 支援基本字體樣式
+- [x] 顯示樣式欄位
+- [x] 顯示文字或內容設定
+- [x] 支援顏色調整
+- [x] 支援基本字體樣式
 - [x] 顯示目前物件型別
 
 ### 16. 快捷鍵
@@ -197,17 +197,7 @@
 ### 19. 進階內容功能
 
 - [ ] Markdown rich preview
-- [ ] table 進階排版
 - [ ] Undo / Redo 歷史優化
-- [ ] 多人協作
-
-### 20. 非核心能力
-
-- [ ] 使用者帳號
-- [ ] 雲端同步
-- [ ] 權限系統
-- [ ] 行動裝置版本
-- [ ] 匯出 / 匯入流程優化
 
 ## 建議實作順序
 

@@ -1,5 +1,11 @@
 import { type BoardItem, type ConnectorLink } from './api';
-import { ITEM_MIN_SIZE, ITEM_TYPE_LABEL } from './types';
+import {
+  parseBoardItemStyle,
+  resolveBoardItemStyle,
+  serializeBoardItemStyle,
+  type BoardItemStyle,
+} from './itemStyles';
+import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 
 type Props = {
   item: BoardItem | null;
@@ -33,6 +39,14 @@ function summarizeContent(item: BoardItem): string {
   return `${item.content.trim().length} 字`;
 }
 
+function isTextContentItem(item: BoardItem): boolean {
+  return (
+    item.type === ITEM_TYPE.text_box ||
+    item.type === ITEM_TYPE.sticky_note ||
+    item.type === ITEM_TYPE.note_paper
+  );
+}
+
 export function Inspector({
   item,
   connector,
@@ -55,7 +69,13 @@ export function Inspector({
   }
 
   const selectedItem = item;
-  const isArrow = selectedItem.type === 'arrow';
+  const isArrow = selectedItem.type === ITEM_TYPE.arrow;
+  const supportsContent = isTextContentItem(selectedItem);
+  const supportsTitle = selectedItem.type === ITEM_TYPE.frame;
+  const supportsStyling = !isArrow;
+  const resolvedStyle = resolveBoardItemStyle(selectedItem);
+  const hasCustomStyle =
+    selectedItem.style_json !== null && selectedItem.style_json.trim().length > 0;
 
   function handleNumberChange(
     field: 'x' | 'y' | 'width' | 'height',
@@ -76,6 +96,34 @@ export function Inspector({
 
   function handleTitleChange(rawValue: string) {
     onUpdate({ ...selectedItem, title: rawValue });
+  }
+
+  function handleContentChange(rawValue: string) {
+    onUpdate({
+      ...selectedItem,
+      content: rawValue,
+      content_format:
+        selectedItem.type === ITEM_TYPE.note_paper
+          ? 'markdown'
+          : selectedItem.content_format,
+    });
+  }
+
+  function handleStyleChange(patch: BoardItemStyle) {
+    const currentStyle = parseBoardItemStyle(selectedItem.style_json);
+    onUpdate({
+      ...selectedItem,
+      style_json: serializeBoardItemStyle({ ...currentStyle, ...patch }),
+    });
+  }
+
+  function handleFontSizeChange(rawValue: string) {
+    const value = Number(rawValue);
+    if (Number.isNaN(value)) {
+      return;
+    }
+
+    handleStyleChange({ fontSize: value });
   }
 
   return (
@@ -168,6 +216,134 @@ export function Inspector({
           </div>
         </section>
 
+        {supportsContent || supportsTitle ? (
+          <section className="inspector-section">
+            <p className="meta-label">Content</p>
+            {supportsTitle ? (
+              <label className="inspector-field">
+                標題
+                <input
+                  type="text"
+                  value={selectedItem.title ?? ''}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="Frame title"
+                />
+              </label>
+            ) : null}
+            {supportsContent ? (
+              <label className="inspector-field">
+                {selectedItem.type === ITEM_TYPE.note_paper
+                  ? 'Markdown'
+                  : '文字內容'}
+                <textarea
+                  className="inspector-textarea"
+                  value={selectedItem.content ?? ''}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  placeholder={
+                    selectedItem.type === ITEM_TYPE.note_paper
+                      ? '# 標題'
+                      : '輸入內容'
+                  }
+                />
+              </label>
+            ) : null}
+            {selectedItem.type === ITEM_TYPE.frame ? (
+              <div className="inspector-row">
+                <span>{childCount} 個內含物件</span>
+                <button className="ghost-button" onClick={onToggleCollapse}>
+                  {selectedItem.is_collapsed ? '展開內容' : '縮回摘要'}
+                </button>
+              </div>
+            ) : null}
+            {selectedItem.type === ITEM_TYPE.note_paper ? (
+              <p className="inspector-meta">以 Markdown 純文字儲存，右側可直接修改。</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {supportsStyling ? (
+          <section className="inspector-section">
+            <div className="inspector-title-row">
+              <p className="meta-label">Style</p>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!hasCustomStyle}
+                onClick={() => onUpdate({ ...selectedItem, style_json: null })}
+              >
+                重設
+              </button>
+            </div>
+            <div className="inspector-color-grid">
+              <label className="inspector-color-field">
+                背景色
+                <input
+                  type="color"
+                  value={resolvedStyle.backgroundColor}
+                  onChange={(e) =>
+                    handleStyleChange({ backgroundColor: e.target.value })
+                  }
+                />
+              </label>
+              <label className="inspector-color-field">
+                文字色
+                <input
+                  type="color"
+                  value={resolvedStyle.textColor}
+                  onChange={(e) =>
+                    handleStyleChange({ textColor: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <div className="inspector-grid">
+              <label>
+                字級
+                <input
+                  type="number"
+                  min={12}
+                  max={32}
+                  value={resolvedStyle.fontSize}
+                  onChange={(e) => handleFontSizeChange(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="inspector-toggle-group">
+              <button
+                type="button"
+                className={`ghost-button ${
+                  resolvedStyle.fontWeight === 'bold' ? 'is-active' : ''
+                }`}
+                onClick={() =>
+                  handleStyleChange({
+                    fontWeight:
+                      resolvedStyle.fontWeight === 'bold' ? 'normal' : 'bold',
+                  })
+                }
+              >
+                粗體
+              </button>
+              <button
+                type="button"
+                className={`ghost-button ${
+                  resolvedStyle.fontStyle === 'italic' ? 'is-active' : ''
+                }`}
+                onClick={() =>
+                  handleStyleChange({
+                    fontStyle:
+                      resolvedStyle.fontStyle === 'italic'
+                        ? 'normal'
+                        : 'italic',
+                  })
+                }
+              >
+                斜體
+              </button>
+            </div>
+            <p className="inspector-meta">變更會即時套用到畫布並自動儲存。</p>
+          </section>
+        ) : null}
+
         {isArrow ? (
           <section className="inspector-section">
             <p className="meta-label">Connector</p>
@@ -177,36 +353,6 @@ export function Inspector({
               <p>起點錨點：{connector?.from_anchor ?? 'auto'}</p>
               <p>終點錨點：{connector?.to_anchor ?? 'auto'}</p>
             </div>
-          </section>
-        ) : null}
-
-        {selectedItem.type === 'frame' ? (
-          <section className="inspector-section">
-            <p className="meta-label">Frame</p>
-            <label className="inspector-field">
-              Title
-              <input
-                type="text"
-                value={selectedItem.title ?? ''}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                placeholder="Frame title"
-              />
-            </label>
-            <div className="inspector-row">
-              <span>{childCount} 個內含物件</span>
-              <button className="ghost-button" onClick={onToggleCollapse}>
-                {selectedItem.is_collapsed ? '展開內容' : '縮回摘要'}
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {selectedItem.type === 'note_paper' ? (
-          <section className="inspector-section">
-            <p className="meta-label">Content Format</p>
-            <p className="inspector-meta">
-              {selectedItem.content_format?.toUpperCase() ?? 'MARKDOWN'}
-            </p>
           </section>
         ) : null}
       </div>

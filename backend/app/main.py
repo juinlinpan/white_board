@@ -15,11 +15,9 @@ from app.db import WhiteboardRepository, initialize_storage
 from app.schemas import (
     BoardItem,
     BoardItemCreatePayload,
-    BoardItemListResponse,
     BoardItemUpdatePayload,
     ConnectorLink,
     ConnectorLinkCreatePayload,
-    ConnectorLinkListResponse,
     ConnectorLinkUpdatePayload,
     ErrorDetail,
     ErrorPayload,
@@ -27,15 +25,14 @@ from app.schemas import (
     HealthResponse,
     OrderedIdsPayload,
     Page,
-    PageBoardDataResponse,
+    PageBoardData,
     PageCreatePayload,
-    PageListResponse,
     PageUpdatePayload,
     PageViewportPayload,
     Project,
     ProjectCreatePayload,
-    ProjectListResponse,
     ProjectUpdatePayload,
+    SuccessResponse,
 )
 from app.settings import AppSettings, get_settings
 
@@ -173,41 +170,47 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
             message="Internal server error.",
         )
 
-    @app.get("/healthz", response_model=HealthResponse)
-    def healthz() -> HealthResponse:
-        return HealthResponse(service="whiteboard-backend", status="ok")
+    @app.get("/healthz", response_model=SuccessResponse[HealthResponse])
+    def healthz() -> SuccessResponse[HealthResponse]:
+        return SuccessResponse(
+            data=HealthResponse(service="whiteboard-backend", status="ok")
+        )
 
-    @app.get("/projects", response_model=ProjectListResponse)
+    @app.get("/projects", response_model=SuccessResponse[list[Project]])
     def list_projects(
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ProjectListResponse:
-        return ProjectListResponse(items=repository.list_projects())
+    ) -> SuccessResponse[list[Project]]:
+        return SuccessResponse(data=repository.list_projects())
 
-    @app.post("/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
+    @app.post(
+        "/projects",
+        response_model=SuccessResponse[Project],
+        status_code=status.HTTP_201_CREATED,
+    )
     def create_project(
         payload: ProjectCreatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Project:
+    ) -> SuccessResponse[Project]:
         project = repository.create_project(payload)
         LOGGER.info("Created project %s", project.id)
-        return project
+        return SuccessResponse(data=project)
 
-    @app.get("/projects/{project_id}", response_model=Project)
+    @app.get("/projects/{project_id}", response_model=SuccessResponse[Project])
     def get_project(
         project_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Project:
-        return repository.get_project(project_id)
+    ) -> SuccessResponse[Project]:
+        return SuccessResponse(data=repository.get_project(project_id))
 
-    @app.patch("/projects/{project_id}", response_model=Project)
+    @app.patch("/projects/{project_id}", response_model=SuccessResponse[Project])
     def update_project(
         project_id: str,
         payload: ProjectUpdatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Project:
+    ) -> SuccessResponse[Project]:
         project = repository.update_project(project_id, payload)
         LOGGER.info("Updated project %s", project.id)
-        return project
+        return SuccessResponse(data=project)
 
     @app.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_project(
@@ -218,52 +221,52 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         LOGGER.info("Deleted project %s", project_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @app.post("/projects/reorder", response_model=ProjectListResponse)
+    @app.post("/projects/reorder", response_model=SuccessResponse[list[Project]])
     def reorder_projects(
         payload: OrderedIdsPayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ProjectListResponse:
+    ) -> SuccessResponse[list[Project]]:
         projects = repository.reorder_projects(payload.ordered_ids)
         LOGGER.info("Reordered %s projects", len(projects))
-        return ProjectListResponse(items=projects)
+        return SuccessResponse(data=projects)
 
-    @app.get("/projects/{project_id}/pages", response_model=PageListResponse)
+    @app.get("/projects/{project_id}/pages", response_model=SuccessResponse[list[Page]])
     def list_pages(
         project_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> PageListResponse:
-        return PageListResponse(items=repository.list_pages(project_id))
+    ) -> SuccessResponse[list[Page]]:
+        return SuccessResponse(data=repository.list_pages(project_id))
 
     @app.post(
         "/projects/{project_id}/pages",
-        response_model=Page,
+        response_model=SuccessResponse[Page],
         status_code=status.HTTP_201_CREATED,
     )
     def create_page(
         project_id: str,
         payload: PageCreatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Page:
+    ) -> SuccessResponse[Page]:
         page = repository.create_page(project_id, payload)
         LOGGER.info("Created page %s under project %s", page.id, project_id)
-        return page
+        return SuccessResponse(data=page)
 
-    @app.get("/pages/{page_id}", response_model=Page)
+    @app.get("/pages/{page_id}", response_model=SuccessResponse[Page])
     def get_page(
         page_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Page:
-        return repository.get_page(page_id)
+    ) -> SuccessResponse[Page]:
+        return SuccessResponse(data=repository.get_page(page_id))
 
-    @app.patch("/pages/{page_id}", response_model=Page)
+    @app.patch("/pages/{page_id}", response_model=SuccessResponse[Page])
     def update_page(
         page_id: str,
         payload: PageUpdatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Page:
+    ) -> SuccessResponse[Page]:
         page = repository.update_page(page_id, payload)
         LOGGER.info("Updated page %s", page.id)
-        return page
+        return SuccessResponse(data=page)
 
     @app.delete("/pages/{page_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_page(
@@ -276,76 +279,86 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     @app.post(
         "/pages/{page_id}/duplicate",
-        response_model=Page,
+        response_model=SuccessResponse[Page],
         status_code=status.HTTP_201_CREATED,
     )
     def duplicate_page(
         page_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Page:
+    ) -> SuccessResponse[Page]:
         page = repository.duplicate_page(page_id)
         LOGGER.info("Duplicated page %s to %s", page_id, page.id)
-        return page
+        return SuccessResponse(data=page)
 
-    @app.post("/projects/{project_id}/pages/reorder", response_model=PageListResponse)
+    @app.post(
+        "/projects/{project_id}/pages/reorder",
+        response_model=SuccessResponse[list[Page]],
+    )
     def reorder_pages(
         project_id: str,
         payload: OrderedIdsPayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> PageListResponse:
+    ) -> SuccessResponse[list[Page]]:
         pages = repository.reorder_pages(project_id, payload.ordered_ids)
         LOGGER.info("Reordered %s pages under project %s", len(pages), project_id)
-        return PageListResponse(items=pages)
+        return SuccessResponse(data=pages)
 
-    @app.patch("/pages/{page_id}/viewport", response_model=Page)
+    @app.patch("/pages/{page_id}/viewport", response_model=SuccessResponse[Page])
     def update_page_viewport(
         page_id: str,
         payload: PageViewportPayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> Page:
+    ) -> SuccessResponse[Page]:
         page = repository.update_page_viewport(page_id, payload)
         LOGGER.info("Updated viewport for page %s", page.id)
-        return page
+        return SuccessResponse(data=page)
 
-    @app.get("/pages/{page_id}/board-data", response_model=PageBoardDataResponse)
+    @app.get("/pages/{page_id}/board-data", response_model=SuccessResponse[PageBoardData])
     def get_page_board_data(
         page_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> PageBoardDataResponse:
-        return repository.get_page_board_data(page_id)
+    ) -> SuccessResponse[PageBoardData]:
+        return SuccessResponse(data=repository.get_page_board_data(page_id))
 
-    @app.get("/pages/{page_id}/board-items", response_model=BoardItemListResponse)
+    @app.get(
+        "/pages/{page_id}/board-items",
+        response_model=SuccessResponse[list[BoardItem]],
+    )
     def list_board_items(
         page_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> BoardItemListResponse:
-        return BoardItemListResponse(items=repository.list_board_items(page_id))
+    ) -> SuccessResponse[list[BoardItem]]:
+        return SuccessResponse(data=repository.list_board_items(page_id))
 
-    @app.post("/board-items", response_model=BoardItem, status_code=status.HTTP_201_CREATED)
+    @app.post(
+        "/board-items",
+        response_model=SuccessResponse[BoardItem],
+        status_code=status.HTTP_201_CREATED,
+    )
     def create_board_item(
         payload: BoardItemCreatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> BoardItem:
+    ) -> SuccessResponse[BoardItem]:
         item = repository.create_board_item(payload)
         LOGGER.info("Created board item %s", item.id)
-        return item
+        return SuccessResponse(data=item)
 
-    @app.get("/board-items/{item_id}", response_model=BoardItem)
+    @app.get("/board-items/{item_id}", response_model=SuccessResponse[BoardItem])
     def get_board_item(
         item_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> BoardItem:
-        return repository.get_board_item(item_id)
+    ) -> SuccessResponse[BoardItem]:
+        return SuccessResponse(data=repository.get_board_item(item_id))
 
-    @app.patch("/board-items/{item_id}", response_model=BoardItem)
+    @app.patch("/board-items/{item_id}", response_model=SuccessResponse[BoardItem])
     def update_board_item(
         item_id: str,
         payload: BoardItemUpdatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> BoardItem:
+    ) -> SuccessResponse[BoardItem]:
         item = repository.update_board_item(item_id, payload)
         LOGGER.info("Updated board item %s", item.id)
-        return item
+        return SuccessResponse(data=item)
 
     @app.delete("/board-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_board_item(
@@ -356,38 +369,51 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         LOGGER.info("Deleted board item %s", item_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @app.get("/pages/{page_id}/connectors", response_model=ConnectorLinkListResponse)
+    @app.get(
+        "/pages/{page_id}/connectors",
+        response_model=SuccessResponse[list[ConnectorLink]],
+    )
     def list_connectors(
         page_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ConnectorLinkListResponse:
-        return ConnectorLinkListResponse(items=repository.list_connector_links(page_id))
+    ) -> SuccessResponse[list[ConnectorLink]]:
+        return SuccessResponse(data=repository.list_connector_links(page_id))
 
-    @app.post("/connectors", response_model=ConnectorLink, status_code=status.HTTP_201_CREATED)
+    @app.post(
+        "/connectors",
+        response_model=SuccessResponse[ConnectorLink],
+        status_code=status.HTTP_201_CREATED,
+    )
     def create_connector(
         payload: ConnectorLinkCreatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ConnectorLink:
+    ) -> SuccessResponse[ConnectorLink]:
         connector = repository.create_connector_link(payload)
         LOGGER.info("Created connector %s", connector.id)
-        return connector
+        return SuccessResponse(data=connector)
 
-    @app.get("/connectors/{connector_id}", response_model=ConnectorLink)
+    @app.get(
+        "/connectors/{connector_id}",
+        response_model=SuccessResponse[ConnectorLink],
+    )
     def get_connector(
         connector_id: str,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ConnectorLink:
-        return repository.get_connector_link(connector_id)
+    ) -> SuccessResponse[ConnectorLink]:
+        return SuccessResponse(data=repository.get_connector_link(connector_id))
 
-    @app.patch("/connectors/{connector_id}", response_model=ConnectorLink)
+    @app.patch(
+        "/connectors/{connector_id}",
+        response_model=SuccessResponse[ConnectorLink],
+    )
     def update_connector(
         connector_id: str,
         payload: ConnectorLinkUpdatePayload,
         repository: Annotated[WhiteboardRepository, Depends(get_repository)],
-    ) -> ConnectorLink:
+    ) -> SuccessResponse[ConnectorLink]:
         connector = repository.update_connector_link(connector_id, payload)
         LOGGER.info("Updated connector %s", connector.id)
-        return connector
+        return SuccessResponse(data=connector)
 
     @app.delete("/connectors/{connector_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_connector(

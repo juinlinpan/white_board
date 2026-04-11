@@ -17,7 +17,7 @@ from app.schemas import (
     ConnectorLinkCreatePayload,
     ConnectorLinkUpdatePayload,
     Page,
-    PageBoardDataResponse,
+    PageBoardData,
     PageCreatePayload,
     PageUpdatePayload,
     PageViewportPayload,
@@ -1074,9 +1074,9 @@ class WhiteboardRepository:
                     detail=f"Connector '{connector_id}' was not found.",
                 )
 
-    def get_page_board_data(self, page_id: str) -> PageBoardDataResponse:
+    def get_page_board_data(self, page_id: str) -> PageBoardData:
         page = self.get_page(page_id)
-        return PageBoardDataResponse(
+        return PageBoardData(
             page=page,
             board_items=self.list_board_items(page_id),
             connector_links=self.list_connector_links(page_id),

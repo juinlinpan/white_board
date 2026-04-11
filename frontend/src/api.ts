@@ -26,8 +26,8 @@ export type Page = {
   updated_at: string;
 };
 
-type ListResponse<T> = {
-  items: T[];
+type SuccessResponse<T> = {
+  data: T;
 };
 
 type ErrorResponse = {
@@ -76,7 +76,8 @@ async function requestJson<T>(
     throw new Error(await parseError(response));
   }
 
-  return (await response.json()) as T;
+  const payload = (await response.json()) as SuccessResponse<T>;
+  return payload.data;
 }
 
 async function requestVoid(path: string, options: RequestOptions = {}): Promise<void> {
@@ -92,8 +93,7 @@ export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
 }
 
 export async function listProjects(signal?: AbortSignal): Promise<Project[]> {
-  const payload = await requestJson<ListResponse<Project>>('/projects', { signal });
-  return payload.items;
+  return requestJson<Project[]>('/projects', { signal });
 }
 
 export async function createProject(name: string): Promise<Project> {
@@ -115,22 +115,17 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function reorderProjects(orderedIds: string[]): Promise<Project[]> {
-  const payload = await requestJson<ListResponse<Project>>('/projects/reorder', {
+  return requestJson<Project[]>('/projects/reorder', {
     method: 'POST',
     body: JSON.stringify({ ordered_ids: orderedIds }),
   });
-  return payload.items;
 }
 
 export async function listPages(
   projectId: string,
   signal?: AbortSignal,
 ): Promise<Page[]> {
-  const payload = await requestJson<ListResponse<Page>>(
-    `/projects/${projectId}/pages`,
-    { signal },
-  );
-  return payload.items;
+  return requestJson<Page[]>(`/projects/${projectId}/pages`, { signal });
 }
 
 export async function createPage(projectId: string, name: string): Promise<Page> {
@@ -161,14 +156,10 @@ export async function reorderPages(
   projectId: string,
   orderedIds: string[],
 ): Promise<Page[]> {
-  const payload = await requestJson<ListResponse<Page>>(
-    `/projects/${projectId}/pages/reorder`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ ordered_ids: orderedIds }),
-    },
-  );
-  return payload.items;
+  return requestJson<Page[]>(`/projects/${projectId}/pages/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ ordered_ids: orderedIds }),
+  });
 }
 
 // ──────────────────────────────────────────────

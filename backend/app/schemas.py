@@ -140,23 +140,11 @@ class ErrorResponse(BaseModel):
     error: ErrorPayload
 
 
-class ProjectListResponse(BaseModel):
-    items: list[Project]
+class SuccessResponse[T](BaseModel):
+    data: T
 
 
-class PageListResponse(BaseModel):
-    items: list[Page]
-
-
-class BoardItemListResponse(BaseModel):
-    items: list[BoardItem]
-
-
-class ConnectorLinkListResponse(BaseModel):
-    items: list[ConnectorLink]
-
-
-class PageBoardDataResponse(BaseModel):
+class PageBoardData(BaseModel):
     page: Page
     board_items: list[BoardItem]
     connector_links: list[ConnectorLink]

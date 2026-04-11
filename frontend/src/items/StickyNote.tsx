@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { type BoardItem } from '../api';
+import {
+  getBoardItemTypographyStyle,
+  resolveBoardItemStyle,
+} from '../itemStyles';
 
 type Props = {
   item: BoardItem;
@@ -8,27 +12,14 @@ type Props = {
   onEditEnd: () => void;
 };
 
-// Sticky note background colours（輪流使用）
-const STICKY_COLORS = [
-  '#fef08a', // yellow
-  '#bbf7d0', // green
-  '#bfdbfe', // blue
-  '#fecaca', // red
-  '#e9d5ff', // purple
-  '#fed7aa', // orange
-];
-
-function getStickyColor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  return STICKY_COLORS[hash % STICKY_COLORS.length] ?? '#fef08a';
-}
-
 export function StickyNote({ item, isEditing, onUpdate, onEditEnd }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const bgColor = getStickyColor(item.id);
+  const resolvedStyle = resolveBoardItemStyle(item);
+  const typographyStyle = getBoardItemTypographyStyle(item);
+  const cardStyle = {
+    background: resolvedStyle.backgroundColor,
+    ...typographyStyle,
+  };
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -45,7 +36,7 @@ export function StickyNote({ item, isEditing, onUpdate, onEditEnd }: Props) {
       <textarea
         ref={textareaRef}
         className="sticky-note-editor"
-        style={{ background: bgColor }}
+        style={cardStyle}
         value={item.content ?? ''}
         onChange={handleChange}
         onBlur={onEditEnd}
@@ -55,7 +46,7 @@ export function StickyNote({ item, isEditing, onUpdate, onEditEnd }: Props) {
   }
 
   return (
-    <div className="sticky-note-display" style={{ background: bgColor }}>
+    <div className="sticky-note-display" style={cardStyle}>
       {item.content ? (
         <span className="sticky-note-content">{item.content}</span>
       ) : (

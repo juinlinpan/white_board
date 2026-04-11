@@ -14,8 +14,10 @@ def test_healthz(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "service": "whiteboard-backend",
-        "status": "ok",
+        "data": {
+            "service": "whiteboard-backend",
+            "status": "ok",
+        }
     }
     assert settings.data_dir.is_dir()
     assert settings.logs_dir.is_dir()

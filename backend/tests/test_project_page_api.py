@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -12,6 +13,12 @@ def create_client(tmp_path: Path) -> tuple[TestClient, AppSettings]:
     return TestClient(create_app(settings)), settings
 
 
+def response_data(response: Any) -> Any:
+    payload = response.json()
+    assert "data" in payload
+    return payload["data"]
+
+
 def test_schema_initialization_creates_expected_tables(tmp_path: Path) -> None:
     client, settings = create_client(tmp_path)
 
@@ -19,6 +26,7 @@ def test_schema_initialization_creates_expected_tables(tmp_path: Path) -> None:
         response = client.get("/healthz")
 
     assert response.status_code == 200
+    assert response_data(response)["status"] == "ok"
 
     with sqlite3.connect(settings.sqlite_path) as connection:
         rows = connection.execute(
@@ -44,18 +52,18 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
     with client:
         create_project_response = client.post("/projects", json={"name": "Roadmap"})
         assert create_project_response.status_code == 201
-        project = create_project_response.json()
+        project = response_data(create_project_response)
 
         list_projects_response = client.get("/projects")
         assert list_projects_response.status_code == 200
-        assert list_projects_response.json()["items"] == [project]
+        assert response_data(list_projects_response) == [project]
 
         update_project_response = client.patch(
             f"/projects/{project['id']}",
             json={"name": "Roadmap 2026"},
         )
         assert update_project_response.status_code == 200
-        updated_project = update_project_response.json()
+        updated_project = response_data(update_project_response)
         assert updated_project["name"] == "Roadmap 2026"
 
         create_page_response = client.post(
@@ -63,7 +71,7 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
             json={"name": "Quarter Planning"},
         )
         assert create_page_response.status_code == 201
-        page = create_page_response.json()
+        page = response_data(create_page_response)
         assert page["project_id"] == project["id"]
         assert page["sort_order"] == 0
         assert page["zoom"] == 1
@@ -73,12 +81,12 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
             json={"name": "Delivery Risks"},
         )
         assert second_page_response.status_code == 201
-        second_page = second_page_response.json()
+        second_page = response_data(second_page_response)
         assert second_page["sort_order"] == 1
 
         list_pages_response = client.get(f"/projects/{project['id']}/pages")
         assert list_pages_response.status_code == 200
-        assert [item["name"] for item in list_pages_response.json()["items"]] == [
+        assert [item["name"] for item in response_data(list_pages_response)] == [
             "Quarter Planning",
             "Delivery Risks",
         ]
@@ -88,14 +96,14 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
             json={"name": "Quarter Planning v2"},
         )
         assert update_page_response.status_code == 200
-        assert update_page_response.json()["name"] == "Quarter Planning v2"
+        assert response_data(update_page_response)["name"] == "Quarter Planning v2"
 
         delete_page_response = client.delete(f"/pages/{page['id']}")
         assert delete_page_response.status_code == 204
 
         pages_after_delete_response = client.get(f"/projects/{project['id']}/pages")
         assert pages_after_delete_response.status_code == 200
-        assert [item["id"] for item in pages_after_delete_response.json()["items"]] == [
+        assert [item["id"] for item in response_data(pages_after_delete_response)] == [
             second_page["id"]
         ]
 
@@ -104,7 +112,7 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
 
         final_projects_response = client.get("/projects")
         assert final_projects_response.status_code == 200
-        assert final_projects_response.json()["items"] == []
+        assert response_data(final_projects_response) == []
 
         missing_pages_response = client.get(f"/projects/{project['id']}/pages")
         assert missing_pages_response.status_code == 404
@@ -121,16 +129,16 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 
     with client:
-        alpha = client.post("/projects", json={"name": "Alpha"}).json()
-        beta = client.post("/projects", json={"name": "Beta"}).json()
-        gamma = client.post("/projects", json={"name": "Gamma"}).json()
+        alpha = response_data(client.post("/projects", json={"name": "Alpha"}))
+        beta = response_data(client.post("/projects", json={"name": "Beta"}))
+        gamma = response_data(client.post("/projects", json={"name": "Gamma"}))
 
         reorder_projects_response = client.post(
             "/projects/reorder",
             json={"ordered_ids": [gamma["id"], alpha["id"], beta["id"]]},
         )
         assert reorder_projects_response.status_code == 200
-        reordered_projects = reorder_projects_response.json()["items"]
+        reordered_projects = response_data(reorder_projects_response)
         assert [project["id"] for project in reordered_projects] == [
             gamma["id"],
             alpha["id"],
@@ -138,16 +146,18 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
         ]
         assert [project["sort_order"] for project in reordered_projects] == [0, 1, 2]
 
-        source_page = client.post(
+        source_page_response = client.post(
             f"/projects/{gamma['id']}/pages",
             json={"name": "Sprint Board"},
-        ).json()
-        trailing_page = client.post(
+        )
+        source_page = response_data(source_page_response)
+        trailing_page_response = client.post(
             f"/projects/{gamma['id']}/pages",
             json={"name": "Archive"},
-        ).json()
+        )
+        trailing_page = response_data(trailing_page_response)
 
-        frame = client.post(
+        frame_response = client.post(
             "/board-items",
             json={
                 "page_id": source_page["id"],
@@ -167,8 +177,9 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
                 "style_json": None,
                 "data_json": None,
             },
-        ).json()
-        child_item = client.post(
+        )
+        frame = response_data(frame_response)
+        child_item_response = client.post(
             "/board-items",
             json={
                 "page_id": source_page["id"],
@@ -188,8 +199,9 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
                 "style_json": '{"fontSize":14}',
                 "data_json": None,
             },
-        ).json()
-        arrow_item = client.post(
+        )
+        child_item = response_data(child_item_response)
+        arrow_item_response = client.post(
             "/board-items",
             json={
                 "page_id": source_page["id"],
@@ -209,7 +221,8 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
                 "style_json": None,
                 "data_json": '{"kind":"straight"}',
             },
-        ).json()
+        )
+        arrow_item = response_data(arrow_item_response)
         connector_response = client.post(
             "/connectors",
             json={
@@ -224,14 +237,14 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
 
         duplicate_page_response = client.post(f"/pages/{source_page['id']}/duplicate")
         assert duplicate_page_response.status_code == 201
-        duplicated_page = duplicate_page_response.json()
+        duplicated_page = response_data(duplicate_page_response)
         assert duplicated_page["project_id"] == gamma["id"]
         assert duplicated_page["name"] == "Sprint Board Copy"
         assert duplicated_page["sort_order"] == 1
 
         pages_after_duplicate_response = client.get(f"/projects/{gamma['id']}/pages")
         assert pages_after_duplicate_response.status_code == 200
-        pages_after_duplicate = pages_after_duplicate_response.json()["items"]
+        pages_after_duplicate = response_data(pages_after_duplicate_response)
         assert [page["id"] for page in pages_after_duplicate] == [
             source_page["id"],
             duplicated_page["id"],
@@ -242,7 +255,7 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
             f"/pages/{duplicated_page['id']}/board-data"
         )
         assert duplicated_board_response.status_code == 200
-        duplicated_payload = duplicated_board_response.json()
+        duplicated_payload = response_data(duplicated_board_response)
         duplicated_items = duplicated_payload["board_items"]
         duplicated_item_ids = {item["id"] for item in duplicated_items}
         assert len(duplicated_items) == 3
@@ -282,7 +295,7 @@ def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
             },
         )
         assert reorder_pages_response.status_code == 200
-        reordered_pages = reorder_pages_response.json()["items"]
+        reordered_pages = response_data(reorder_pages_response)
         assert [page["id"] for page in reordered_pages] == [
             trailing_page["id"],
             source_page["id"],
@@ -295,18 +308,19 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 
     with client:
-        project = client.post("/projects", json={"name": "Execution"}).json()
-        page = client.post(
+        project = response_data(client.post("/projects", json={"name": "Execution"}))
+        page_response = client.post(
             f"/projects/{project['id']}/pages",
             json={"name": "Main Board"},
-        ).json()
+        )
+        page = response_data(page_response)
 
         update_viewport_response = client.patch(
             f"/pages/{page['id']}/viewport",
             json={"viewport_x": 120, "viewport_y": 80, "zoom": 1.25},
         )
         assert update_viewport_response.status_code == 200
-        assert update_viewport_response.json()["zoom"] == 1.25
+        assert response_data(update_viewport_response)["zoom"] == 1.25
 
         text_box_payload = {
             "page_id": page["id"],
@@ -328,7 +342,7 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
         }
         create_item_response = client.post("/board-items", json=text_box_payload)
         assert create_item_response.status_code == 201
-        text_box = create_item_response.json()
+        text_box = response_data(create_item_response)
 
         arrow_payload = {
             "page_id": page["id"],
@@ -350,7 +364,7 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
         }
         create_arrow_response = client.post("/board-items", json=arrow_payload)
         assert create_arrow_response.status_code == 201
-        arrow_item = create_arrow_response.json()
+        arrow_item = response_data(create_arrow_response)
 
         connector_payload = {
             "connector_item_id": arrow_item["id"],
@@ -361,33 +375,33 @@ def test_board_item_connector_and_board_data_flow(tmp_path: Path) -> None:
         }
         create_connector_response = client.post("/connectors", json=connector_payload)
         assert create_connector_response.status_code == 201
-        connector = create_connector_response.json()
+        connector = response_data(create_connector_response)
 
         list_items_response = client.get(f"/pages/{page['id']}/board-items")
         assert list_items_response.status_code == 200
-        assert len(list_items_response.json()["items"]) == 2
+        assert len(response_data(list_items_response)) == 2
 
         update_item_response = client.patch(
             f"/board-items/{text_box['id']}",
             json={**text_box_payload, "content": "Updated launch checklist"},
         )
         assert update_item_response.status_code == 200
-        assert update_item_response.json()["content"] == "Updated launch checklist"
+        assert response_data(update_item_response)["content"] == "Updated launch checklist"
 
         list_connectors_response = client.get(f"/pages/{page['id']}/connectors")
         assert list_connectors_response.status_code == 200
-        assert list_connectors_response.json()["items"][0]["id"] == connector["id"]
+        assert response_data(list_connectors_response)[0]["id"] == connector["id"]
 
         update_connector_response = client.patch(
             f"/connectors/{connector['id']}",
             json={**connector_payload, "to_anchor": "top"},
         )
         assert update_connector_response.status_code == 200
-        assert update_connector_response.json()["to_anchor"] == "top"
+        assert response_data(update_connector_response)["to_anchor"] == "top"
 
         board_data_response = client.get(f"/pages/{page['id']}/board-data")
         assert board_data_response.status_code == 200
-        payload = board_data_response.json()
+        payload = response_data(board_data_response)
         assert payload["page"]["id"] == page["id"]
         assert len(payload["board_items"]) == 2
         assert len(payload["connector_links"]) == 1
@@ -416,13 +430,14 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 
     with client:
-        project = client.post("/projects", json={"name": "Execution"}).json()
-        page = client.post(
+        project = response_data(client.post("/projects", json={"name": "Execution"}))
+        page_response = client.post(
             f"/projects/{project['id']}/pages",
             json={"name": "Main Board"},
-        ).json()
+        )
+        page = response_data(page_response)
 
-        from_item = client.post(
+        from_item_response = client.post(
             "/board-items",
             json={
                 "page_id": page["id"],
@@ -442,8 +457,9 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
                 "style_json": None,
                 "data_json": None,
             },
-        ).json()
-        to_item = client.post(
+        )
+        from_item = response_data(from_item_response)
+        to_item_response = client.post(
             "/board-items",
             json={
                 "page_id": page["id"],
@@ -463,8 +479,9 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
                 "style_json": None,
                 "data_json": None,
             },
-        ).json()
-        arrow_item = client.post(
+        )
+        to_item = response_data(to_item_response)
+        arrow_item_response = client.post(
             "/board-items",
             json={
                 "page_id": page["id"],
@@ -484,7 +501,8 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
                 "style_json": None,
                 "data_json": '{"kind":"straight"}',
             },
-        ).json()
+        )
+        arrow_item = response_data(arrow_item_response)
 
         connector_response = client.post(
             "/connectors",
@@ -503,10 +521,10 @@ def test_deleting_target_item_removes_connected_arrow(tmp_path: Path) -> None:
 
         board_items_response = client.get(f"/pages/{page['id']}/board-items")
         assert board_items_response.status_code == 200
-        assert [item["id"] for item in board_items_response.json()["items"]] == [
+        assert [item["id"] for item in response_data(board_items_response)] == [
             to_item["id"]
         ]
 
         connectors_response = client.get(f"/pages/{page['id']}/connectors")
         assert connectors_response.status_code == 200
-        assert connectors_response.json()["items"] == []
+        assert response_data(connectors_response) == []

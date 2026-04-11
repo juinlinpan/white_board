@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { type BoardItem } from '../api';
+import {
+  getBoardItemTypographyStyle,
+  resolveBoardItemStyle,
+} from '../itemStyles';
 
 type Props = {
   item: BoardItem;
@@ -42,6 +46,12 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const title = getMarkdownTitle(item.content);
   const previewBody = getPreviewBody(item.content);
+  const resolvedStyle = resolveBoardItemStyle(item);
+  const typographyStyle = getBoardItemTypographyStyle(item);
+  const cardStyle = {
+    background: resolvedStyle.backgroundColor,
+    ...typographyStyle,
+  };
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -62,6 +72,7 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
       <textarea
         ref={textareaRef}
         className="note-paper-editor"
+        style={cardStyle}
         value={item.content ?? ''}
         onChange={handleChange}
         onBlur={onEditEnd}
@@ -74,13 +85,15 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
   }
 
   return (
-    <div className="note-paper-display">
+    <div className="note-paper-display" style={cardStyle}>
       <div className="note-paper-header">
         <span className="markdown-badge">Markdown</span>
         <strong>{title ?? 'Untitled note'}</strong>
       </div>
       {previewBody.length > 0 ? (
-        <pre className="note-paper-body">{previewBody}</pre>
+        <pre className="note-paper-body" style={typographyStyle}>
+          {previewBody}
+        </pre>
       ) : (
         <span className="item-placeholder">雙擊開始撰寫 Markdown 筆記</span>
       )}
