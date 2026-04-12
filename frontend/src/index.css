@@ -1076,6 +1076,11 @@ button {
   transition: box-shadow 100ms ease;
 }
 
+/* Segment items (line/arrow) cannot be dragged — use default cursor on the wrapper */
+.board-item-segment {
+  cursor: default;
+}
+
 .board-item.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -1154,6 +1159,66 @@ button {
   box-shadow: var(--shadow-md);
   transform: translate(-50%, -50%);
   cursor: crosshair;
+}
+
+.segment-waypoint-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+}
+
+.segment-waypoint-handle:active {
+  cursor: grabbing;
+}
+
+.segment-waypoint-handle.is-deleting {
+  border-color: var(--danger);
+  background: var(--danger);
+  cursor: no-drop;
+}
+
+.segment-waypoint-handle.is-deleting::before,
+.segment-waypoint-handle.is-deleting::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+}
+
+.segment-waypoint-handle.is-deleting::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.segment-waypoint-handle.is-deleting::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.segment-midpoint-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid var(--accent);
+  background: rgba(37, 99, 235, 0.2);
+  transform: translate(-50%, -50%) rotate(45deg);
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s ease-out;
+}
+
+.segment-midpoint-handle:hover {
+  opacity: 1;
 }
 
 /* ── Connector anchor indicators (draw.io style) ── */

@@ -17,6 +17,7 @@ type RelativeSegmentData = {
   kind: 'segment';
   start: Point;
   end: Point;
+  waypoints?: Point[];
   startConnection?: SegmentConnection | null;
   endConnection?: SegmentConnection | null;
 };
@@ -54,6 +55,10 @@ export function normalizeSegmentDraft(
   return { start, end };
 }
 
+function isPointArray(value: unknown): value is Point[] {
+  return Array.isArray(value) && value.every(isFinitePoint);
+}
+
 function isSegmentConnection(value: unknown): value is SegmentConnection {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -89,6 +94,7 @@ export function parseRelativeSegmentData(
       kind: 'segment',
       start: parsed.start,
       end: parsed.end,
+      waypoints: isPointArray(parsed.waypoints) ? parsed.waypoints : undefined,
       startConnection: isSegmentConnection(parsed.startConnection)
         ? parsed.startConnection
         : null,
@@ -170,6 +176,7 @@ export function getSegmentWorldPoints(
 export function buildSegmentGeometry(
   start: Point,
   end: Point,
+  waypoints?: Point[] | null,
   startConnection?: SegmentConnection | null,
   endConnection?: SegmentConnection | null,
 ): {
@@ -181,10 +188,11 @@ export function buildSegmentGeometry(
   data_json: string;
 } {
   const normalized = normalizeSegmentDraft(start, end);
-  const left = Math.min(normalized.start.x, normalized.end.x) - SEGMENT_ITEM_PADDING;
-  const top = Math.min(normalized.start.y, normalized.end.y) - SEGMENT_ITEM_PADDING;
-  const right = Math.max(normalized.start.x, normalized.end.x) + SEGMENT_ITEM_PADDING;
-  const bottom = Math.max(normalized.start.y, normalized.end.y) + SEGMENT_ITEM_PADDING;
+  const allPoints = [normalized.start, normalized.end, ...(waypoints ?? [])];
+  const left = Math.min(...allPoints.map((p) => p.x)) - SEGMENT_ITEM_PADDING;
+  const top = Math.min(...allPoints.map((p) => p.y)) - SEGMENT_ITEM_PADDING;
+  const right = Math.max(...allPoints.map((p) => p.x)) + SEGMENT_ITEM_PADDING;
+  const bottom = Math.max(...allPoints.map((p) => p.y)) + SEGMENT_ITEM_PADDING;
 
   const dataObj: Record<string, unknown> = {
     kind: 'segment',
@@ -197,6 +205,13 @@ export function buildSegmentGeometry(
       y: normalized.end.y - top,
     },
   };
+
+  if (waypoints && waypoints.length > 0) {
+    dataObj.waypoints = waypoints.map((wp) => ({
+      x: wp.x - left,
+      y: wp.y - top,
+    }));
+  }
 
   if (startConnection) {
     dataObj.startConnection = startConnection;
@@ -213,6 +228,109 @@ export function buildSegmentGeometry(
     rotation: 0,
     data_json: JSON.stringify(dataObj),
   };
+}
+
+export function getSegmentWaypoints(item: BoardItem): Point[] {
+  const parsed = parseRelativeSegmentData(item.data_json);
+  return parsed?.waypoints ?? [];
+}
+
+/** Returns all world-space points: [start, ...waypoints, end] */
+export function getSegmentAllWorldPoints(item: BoardItem): Point[] | null {
+  const parsed = parseRelativeSegmentData(item.data_json);
+  if (parsed === null) {
+    return null;
+  }
+
+  const waypoints = (parsed.waypoints ?? []).map((wp) => ({
+    x: item.x + wp.x,
+    y: item.y + wp.y,
+  }));
+
+  return [
+    { x: item.x + parsed.start.x, y: item.y + parsed.start.y },
+    ...waypoints,
+    { x: item.x + parsed.end.x, y: item.y + parsed.end.y },
+  ];
+}
+
+/**
+ * Inserts a new waypoint at segmentIndex (the gap between all-points[segmentIndex] and
+ * all-points[segmentIndex+1]) using the given world-space point.
+ * Returns the new geometry and the new waypoint's index in the waypoints array.
+ */
+export function insertWaypointAt(
+  item: BoardItem,
+  segmentIndex: number,
+  worldPoint: Point,
+): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  data_json: string;
+  waypointIndex: number;
+} | null {
+  const worldPts = getSegmentWorldPoints(item);
+  if (worldPts === null) {
+    return null;
+  }
+
+  const conns = getSegmentConnections(item);
+  const existingWorldWaypoints = getSegmentWaypoints(item).map((wp) => ({
+    x: item.x + wp.x,
+    y: item.y + wp.y,
+  }));
+
+  const newWaypoints = [...existingWorldWaypoints];
+  newWaypoints.splice(segmentIndex, 0, worldPoint);
+
+  const geometry = buildSegmentGeometry(
+    worldPts.start,
+    worldPts.end,
+    newWaypoints,
+    conns.startConnection,
+    conns.endConnection,
+  );
+
+  return { ...geometry, waypointIndex: segmentIndex };
+}
+
+/** Moves a waypoint (by index) to a new world-space position. */
+export function moveWaypointAt(
+  item: BoardItem,
+  waypointIndex: number,
+  worldPoint: Point,
+): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  data_json: string;
+} | null {
+  const worldPts = getSegmentWorldPoints(item);
+  if (worldPts === null) {
+    return null;
+  }
+
+  const conns = getSegmentConnections(item);
+  const existingWorldWaypoints = getSegmentWaypoints(item).map((wp) => ({
+    x: item.x + wp.x,
+    y: item.y + wp.y,
+  }));
+
+  const newWaypoints = [...existingWorldWaypoints];
+  newWaypoints[waypointIndex] = worldPoint;
+
+  return buildSegmentGeometry(
+    worldPts.start,
+    worldPts.end,
+    newWaypoints,
+    conns.startConnection,
+    conns.endConnection,
+  );
 }
 
 export function updateSegmentEndpoint(
@@ -234,12 +352,17 @@ export function updateSegmentEndpoint(
   }
 
   const existing = getSegmentConnections(item);
+  const existingWorldWaypoints = getSegmentWaypoints(item).map((wp) => ({
+    x: item.x + wp.x,
+    y: item.y + wp.y,
+  }));
   const startConn = endpoint === 'start' ? (connection ?? null) : existing.startConnection;
   const endConn = endpoint === 'end' ? (connection ?? null) : existing.endConnection;
 
   return buildSegmentGeometry(
     endpoint === 'start' ? nextPoint : currentPoints.start,
     endpoint === 'end' ? nextPoint : currentPoints.end,
+    existingWorldWaypoints,
     startConn,
     endConn,
   );

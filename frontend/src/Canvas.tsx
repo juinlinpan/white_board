@@ -46,8 +46,11 @@ import { Inspector } from './Inspector';
 import {
   buildSegmentGeometry,
   getSegmentConnections,
+  getSegmentWaypoints,
   getSegmentWorldPoints,
   hasStoredSegmentData,
+  insertWaypointAt,
+  moveWaypointAt,
   updateSegmentEndpoint,
   type Point,
   type SegmentConnection,
@@ -123,6 +126,12 @@ type SegmentEndpointDragState = {
   itemId: string;
   endpoint: SegmentEndpoint;
   connection: SegmentConnection | null;
+  snapshot: BoardSnapshot;
+};
+
+type WaypointDragState = {
+  itemId: string;
+  waypointIndex: number;
   snapshot: BoardSnapshot;
 };
 
@@ -542,6 +551,7 @@ export function Canvas({ page }: Props) {
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [anchorIndicatorItems, setAnchorIndicatorItems] = useState<BoardItem[]>([]);
   const [activeAnchorHit, setActiveAnchorHit] = useState<AnchorHit | null>(null);
+  const [deletingWaypointInfo, setDeletingWaypointInfo] = useState<{ itemId: string; waypointIndex: number } | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -552,6 +562,7 @@ export function Canvas({ page }: Props) {
   const dragRef = useRef<DragState | null>(null);
   const resizeRef = useRef<ResizeState | null>(null);
   const segmentEndpointDragRef = useRef<SegmentEndpointDragState | null>(null);
+  const waypointDragRef = useRef<WaypointDragState | null>(null);
   const panRef = useRef<PanState | null>(null);
   const isSpaceRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -847,7 +858,7 @@ export function Canvas({ page }: Props) {
       return null;
     }
 
-    const geometry = buildSegmentGeometry(segmentDraft.start, segmentDraft.end);
+    const geometry = buildSegmentGeometry(segmentDraft.start, segmentDraft.end, null);
     return {
       id: '__segment-draft__',
       page_id: page.id,
@@ -1522,6 +1533,7 @@ export function Canvas({ page }: Props) {
     const geometry = buildSegmentGeometry(
       draft.start,
       draft.end,
+      null,
       draft.startConnection,
       draft.endConnection,
     );
@@ -1677,9 +1689,11 @@ export function Canvas({ page }: Props) {
           }
         }
 
+        const waypoints = getSegmentWaypoints(item);
         const geometry = buildSegmentGeometry(
           newStart,
           newEnd,
+          waypoints,
           conns.startConnection,
           conns.endConnection,
         );
@@ -1744,6 +1758,14 @@ export function Canvas({ page }: Props) {
 
     setSelection(nextSelectedIds);
     setEditingId(null);
+
+    // Segment items (line/arrow) cannot be moved by dragging the body —
+    // only endpoints and waypoints are draggable.
+    const isSegmentItem = item.type === ITEM_TYPE.line || item.type === ITEM_TYPE.arrow;
+    if (isSegmentItem) {
+      return;
+    }
+
     dragRef.current = {
       itemId,
       selectedItemIds: draggedSelectionIds,
@@ -1818,6 +1840,60 @@ export function Canvas({ page }: Props) {
     };
   }
 
+  function handleSegmentWaypointMouseDown(
+    e: React.MouseEvent<HTMLButtonElement>,
+    itemId: string,
+    waypointIndex: number,
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    setSnapGuides([]);
+    setSelection([itemId]);
+    setEditingId(null);
+    waypointDragRef.current = {
+      itemId,
+      waypointIndex,
+      snapshot: captureBoardSnapshot(),
+    };
+  }
+
+  function handleSegmentMidpointMouseDown(
+    e: React.MouseEvent<HTMLButtonElement>,
+    itemId: string,
+    segmentIndex: number,
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const item = itemsRef.current.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return;
+    }
+
+    const worldPoint = screenToWorld(e.clientX, e.clientY);
+    const result = insertWaypointAt(item, segmentIndex, worldPoint);
+    if (result === null) {
+      return;
+    }
+
+    const snapshot = captureBoardSnapshot();
+    const { waypointIndex: newIndex, ...geometry } = result;
+
+    setItemsAndSync((current) =>
+      current.map((candidate) =>
+        candidate.id === itemId ? { ...candidate, ...geometry } : candidate,
+      ),
+    );
+    setSelection([itemId]);
+    setEditingId(null);
+
+    waypointDragRef.current = {
+      itemId,
+      waypointIndex: newIndex,
+      snapshot,
+    };
+  }
+
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
     setSnapGuides([]);
@@ -1840,6 +1916,47 @@ export function Canvas({ page }: Props) {
 
   function handleMouseMove(e: React.MouseEvent) {
     const shouldUseSnap = snapEnabled && !e.altKey;
+
+    const waypointDrag = waypointDragRef.current;
+    if (waypointDrag) {
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === waypointDrag.itemId,
+      );
+      if (!item) {
+        setSnapGuides([]);
+        return;
+      }
+
+      const rawPoint = screenToWorld(e.clientX, e.clientY);
+      const nextGeometry = moveWaypointAt(item, waypointDrag.waypointIndex, rawPoint);
+      if (nextGeometry === null) {
+        return;
+      }
+
+      // Check if dragged close enough to start/end to trigger delete
+      const SNAP_DELETE_DIST = 10;
+      const worldPts = getSegmentWorldPoints(item);
+      if (worldPts !== null) {
+        const dStart = Math.hypot(rawPoint.x - worldPts.start.x, rawPoint.y - worldPts.start.y);
+        const dEnd = Math.hypot(rawPoint.x - worldPts.end.x, rawPoint.y - worldPts.end.y);
+        if (dStart < SNAP_DELETE_DIST || dEnd < SNAP_DELETE_DIST) {
+          setDeletingWaypointInfo({ itemId: waypointDrag.itemId, waypointIndex: waypointDrag.waypointIndex });
+        } else {
+          setDeletingWaypointInfo(null);
+        }
+      }
+
+      setSnapGuides([]);
+      setItemsAndSync((current) =>
+        current.map((candidate) =>
+          candidate.id === waypointDrag.itemId
+            ? { ...candidate, ...nextGeometry }
+            : candidate,
+        ),
+      );
+      return;
+    }
+
     const endpointDrag = segmentEndpointDragRef.current;
     if (endpointDrag) {
       const item = itemsRef.current.find(
@@ -2104,9 +2221,11 @@ export function Canvas({ page }: Props) {
             }
           }
 
+          const waypoints = getSegmentWaypoints(item);
           const geometry = buildSegmentGeometry(
             newStart,
             newEnd,
+            waypoints,
             conns.startConnection,
             conns.endConnection,
           );
@@ -2137,6 +2256,56 @@ export function Canvas({ page }: Props) {
     setSnapGuides([]);
     setAnchorIndicatorItems([]);
     setActiveAnchorHit(null);
+
+    const waypointDrag = waypointDragRef.current;
+    if (waypointDrag) {
+      waypointDragRef.current = null;
+      setDeletingWaypointInfo(null);
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === waypointDrag.itemId,
+      );
+      if (item) {
+        // If the waypoint is too close to start or end, remove it
+        const worldPts = getSegmentWorldPoints(item);
+        const waypoints = getSegmentWaypoints(item);
+        const wp = waypoints[waypointDrag.waypointIndex];
+        const SNAP_DELETE_DIST = 10;
+        let shouldDelete = false;
+        if (wp !== undefined && worldPts !== null) {
+          const wpWorld = { x: item.x + wp.x, y: item.y + wp.y };
+          const dStart = Math.hypot(wpWorld.x - worldPts.start.x, wpWorld.y - worldPts.start.y);
+          const dEnd = Math.hypot(wpWorld.x - worldPts.end.x, wpWorld.y - worldPts.end.y);
+          shouldDelete = dStart < SNAP_DELETE_DIST || dEnd < SNAP_DELETE_DIST;
+        }
+
+        if (shouldDelete && worldPts !== null) {
+          const { startConnection, endConnection } = getSegmentConnections(item);
+          const newWaypoints = waypoints.filter((_, i) => i !== waypointDrag.waypointIndex);
+          const newWorldWaypoints = newWaypoints.map((w) => ({
+            x: item.x + w.x,
+            y: item.y + w.y,
+          }));
+          const geometry = buildSegmentGeometry(
+            worldPts.start,
+            worldPts.end,
+            newWorldWaypoints,
+            startConnection,
+            endConnection,
+          );
+          const nextItem = { ...item, ...geometry };
+          setItemsAndSync((current) =>
+            current.map((candidate) =>
+              candidate.id === waypointDrag.itemId ? nextItem : candidate,
+            ),
+          );
+          persistItems([nextItem]);
+        } else {
+          persistItems([item]);
+        }
+        recordHistoryCheckpoint(waypointDrag.snapshot);
+      }
+      return;
+    }
 
     const endpointDrag = segmentEndpointDragRef.current;
     if (endpointDrag) {
@@ -2417,6 +2586,17 @@ export function Canvas({ page }: Props) {
                       onMouseDown={(e) => handleItemMouseDown(e, item.id)}
                       onEndpointMouseDown={(e, endpoint) =>
                         handleSegmentEndpointMouseDown(e, item.id, endpoint)
+                      }
+                      onWaypointMouseDown={(e, waypointIndex) =>
+                        handleSegmentWaypointMouseDown(e, item.id, waypointIndex)
+                      }
+                      onMidpointMouseDown={(e, segmentIndex) =>
+                        handleSegmentMidpointMouseDown(e, item.id, segmentIndex)
+                      }
+                      deletingWaypointIndex={
+                        deletingWaypointInfo?.itemId === item.id
+                          ? deletingWaypointInfo.waypointIndex
+                          : undefined
                       }
                       onDoubleClick={() => handleItemDoubleClick(item)}
                       onResizeMouseDown={(e) => handleResizeMouseDown(e, item.id)}

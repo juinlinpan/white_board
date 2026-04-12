@@ -238,7 +238,7 @@ export function resolveBoardItemStyle(item: BoardItem): ResolvedBoardItemStyle {
     strokeColor: parsed.strokeColor ?? '#475569',
     strokeWidth: parsed.strokeWidth ?? 3,
     strokeStyle: parsed.strokeStyle ?? 'solid',
-    arrowHeadSize: parsed.arrowHeadSize ?? 20,
+    arrowHeadSize: parsed.arrowHeadSize ?? 30,
   };
 }
 

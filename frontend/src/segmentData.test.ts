@@ -51,6 +51,7 @@ describe('segmentData', () => {
     const geometry = buildSegmentGeometry(
       { x: 100, y: 80 },
       { x: 260, y: 190 },
+      null,
     );
 
     const item = createBoardItem({
@@ -74,7 +75,7 @@ describe('segmentData', () => {
 
   it('updates a single endpoint and rebuilds the stored bounds', () => {
     const item = createBoardItem({
-      ...buildSegmentGeometry({ x: 100, y: 80 }, { x: 260, y: 190 }),
+      ...buildSegmentGeometry({ x: 100, y: 80 }, { x: 260, y: 190 }, null),
     });
 
     const updated = updateSegmentEndpoint(item, 'end', { x: 320, y: 140 });
@@ -112,6 +113,7 @@ describe('segmentData', () => {
     const geometry = buildSegmentGeometry(
       { x: 100, y: 80 },
       { x: 260, y: 190 },
+      null,
       startConn,
       endConn,
     );
@@ -135,6 +137,7 @@ describe('segmentData', () => {
       ...buildSegmentGeometry(
         { x: 100, y: 80 },
         { x: 260, y: 190 },
+        null,
         startConn,
         endConn,
       ),

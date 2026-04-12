@@ -1,16 +1,19 @@
 import { type BoardItem } from '../api';
 import { resolveBoardItemStyle } from '../itemStyles';
-import { getSegmentLocalPoints, type SegmentEndpoint } from '../segmentData';
+import { getSegmentLocalPoints, getSegmentWaypoints, type SegmentEndpoint } from '../segmentData';
 import { ITEM_TYPE } from '../types';
 
 type Props = {
   item: BoardItem;
   isSelected: boolean;
-  onMouseDown: (e: React.MouseEvent<SVGLineElement>) => void;
+  onMouseDown: (e: React.MouseEvent<SVGPolylineElement>) => void;
   onEndpointMouseDown: (
     e: React.MouseEvent<HTMLButtonElement>,
     endpoint: SegmentEndpoint,
   ) => void;
+  onWaypointMouseDown: (e: React.MouseEvent<HTMLButtonElement>, waypointIndex: number) => void;
+  onMidpointMouseDown: (e: React.MouseEvent<HTMLButtonElement>, segmentIndex: number) => void;
+  deletingWaypointIndex?: number;
 };
 
 function getStrokeDasharray(style: 'solid' | 'dashed' | 'dotted'): string | undefined {
@@ -29,8 +32,12 @@ export function SegmentShape({
   isSelected,
   onMouseDown,
   onEndpointMouseDown,
+  onWaypointMouseDown,
+  onMidpointMouseDown,
+  deletingWaypointIndex,
 }: Props) {
   const points = getSegmentLocalPoints(item);
+  const localWaypoints = getSegmentWaypoints(item);
   const resolvedStyle = resolveBoardItemStyle(item);
   const markerId = `segment-arrow-head-${item.id}`;
   // Calculate arrow head dimensions based on size preference
@@ -41,6 +48,11 @@ export function SegmentShape({
   if (points === null) {
     return null;
   }
+
+  // All points in local (item-relative) coordinates
+  const allLocalPoints = [points.start, ...localWaypoints, points.end];
+  const polylinePoints = allLocalPoints.map((p) => `${p.x},${p.y}`).join(' ');
+  const strokeDasharray = getStrokeDasharray(resolvedStyle.strokeStyle);
 
   return (
     <div className="segment-shape" aria-hidden="true">
@@ -70,32 +82,28 @@ export function SegmentShape({
           </defs>
         ) : null}
 
-        <line
-          x1={points.start.x}
-          y1={points.start.y}
-          x2={points.end.x}
-          y2={points.end.y}
+        <polyline
+          points={polylinePoints}
+          fill="none"
           className={`segment-line ${isSelected ? 'is-selected' : ''}`}
           style={{
             stroke: resolvedStyle.strokeColor,
             strokeWidth: resolvedStyle.strokeWidth,
-            strokeDasharray: getStrokeDasharray(resolvedStyle.strokeStyle),
+            strokeDasharray,
           }}
           markerEnd={item.type === ITEM_TYPE.arrow ? `url(#${markerId})` : undefined}
         />
-        <line
-          x1={points.start.x}
-          y1={points.start.y}
-          x2={points.end.x}
-          y2={points.end.y}
+        <polyline
+          points={polylinePoints}
+          fill="none"
           className="segment-hit-line"
           onMouseDown={onMouseDown}
-          markerEnd={item.type === ITEM_TYPE.arrow ? `url(#${markerId})` : undefined}
         />
       </svg>
 
       {isSelected ? (
         <>
+          {/* Start endpoint handle */}
           <button
             type="button"
             className="segment-endpoint-handle"
@@ -103,6 +111,7 @@ export function SegmentShape({
             onMouseDown={(e) => onEndpointMouseDown(e, 'start')}
             aria-label="Adjust start point"
           />
+          {/* End endpoint handle */}
           <button
             type="button"
             className="segment-endpoint-handle"
@@ -110,6 +119,36 @@ export function SegmentShape({
             onMouseDown={(e) => onEndpointMouseDown(e, 'end')}
             aria-label="Adjust end point"
           />
+          {/* Waypoint handles */}
+          {localWaypoints.map((wp, i) => (
+            <button
+              key={`wp-${i}`}
+              type="button"
+              className={`segment-waypoint-handle${i === deletingWaypointIndex ? ' is-deleting' : ''}`}
+              style={{ left: wp.x, top: wp.y }}
+              onMouseDown={(e) => onWaypointMouseDown(e, i)}
+              aria-label={`Waypoint ${i + 1}`}
+            />
+          ))}
+          {/* Midpoint add-bend handles (one per segment) */}
+          {allLocalPoints.map((pt, i) => {
+            if (i === allLocalPoints.length - 1) {
+              return null;
+            }
+            const next = allLocalPoints[i + 1]!;
+            const midX = (pt.x + next.x) / 2;
+            const midY = (pt.y + next.y) / 2;
+            return (
+              <button
+                key={`mid-${i}`}
+                type="button"
+                className="segment-midpoint-handle"
+                style={{ left: midX, top: midY }}
+                onMouseDown={(e) => onMidpointMouseDown(e, i)}
+                aria-label={`Add bend point`}
+              />
+            );
+          })}
         </>
       ) : null}
     </div>
