@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent as ReactDragEvent,
+} from 'react';
 import {
   apiBaseUrl,
   createPage,
@@ -20,6 +25,15 @@ import { Canvas } from './Canvas';
 
 type LoadState = 'loading' | 'ready' | 'error';
 type HealthState = 'loading' | 'ready' | 'error';
+type SidebarListKind = 'projects' | 'pages';
+type DropPosition = 'before' | 'after';
+type SidebarDragState = {
+  kind: SidebarListKind;
+  itemId: string;
+};
+type SidebarDropState = SidebarDragState & {
+  position: DropPosition;
+};
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) {
@@ -61,29 +75,55 @@ function selectFallbackId<T extends { id: string }>(
   return items[0]?.id ?? null;
 }
 
-function buildReorderedIds<T extends { id: string }>(
+function buildDraggedOrder<T extends { id: string }>(
   items: T[],
-  selectedId: string,
-  offset: -1 | 1,
+  draggedId: string,
+  targetId: string,
+  position: DropPosition,
 ): string[] | null {
-  const currentIndex = items.findIndex((item) => item.id === selectedId);
-  if (currentIndex === -1) {
-    return null;
-  }
-
-  const nextIndex = currentIndex + offset;
-  if (nextIndex < 0 || nextIndex >= items.length) {
-    return null;
-  }
-
   const orderedIds = items.map((item) => item.id);
-  const [movedId] = orderedIds.splice(currentIndex, 1);
+  const draggedIndex = orderedIds.indexOf(draggedId);
+  const targetIndex = orderedIds.indexOf(targetId);
+  if (draggedIndex === -1 || targetIndex === -1) {
+    return null;
+  }
+
+  const [movedId] = orderedIds.splice(draggedIndex, 1);
   if (movedId === undefined) {
     return null;
   }
 
-  orderedIds.splice(nextIndex, 0, movedId);
-  return orderedIds;
+  const insertionIndex = orderedIds.indexOf(targetId);
+  if (insertionIndex === -1) {
+    return null;
+  }
+
+  orderedIds.splice(
+    position === 'after' ? insertionIndex + 1 : insertionIndex,
+    0,
+    movedId,
+  );
+
+  return orderedIds.every((id, index) => id === items[index]?.id)
+    ? null
+    : orderedIds;
+}
+
+function reorderItemsByIds<T extends { id: string }>(
+  items: T[],
+  orderedIds: string[],
+): T[] {
+  const positions = new Map(orderedIds.map((id, index) => [id, index]));
+  return [...items].sort((left, right) => {
+    const leftPosition = positions.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+    const rightPosition = positions.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+    return leftPosition - rightPosition;
+  });
+}
+
+function getDropPosition(event: ReactDragEvent<HTMLElement>): DropPosition {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return event.clientY - bounds.top < bounds.height / 2 ? 'before' : 'after';
 }
 
 export function App() {
@@ -101,6 +141,8 @@ export function App() {
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
+  const [dragState, setDragState] = useState<SidebarDragState | null>(null);
+  const [dropState, setDropState] = useState<SidebarDropState | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -108,20 +150,6 @@ export function App() {
   );
   const selectedPage = useMemo(
     () => pages.find((page) => page.id === selectedPageId) ?? null,
-    [pages, selectedPageId],
-  );
-  const selectedProjectIndex = useMemo(
-    () =>
-      selectedProjectId === null
-        ? -1
-        : projects.findIndex((project) => project.id === selectedProjectId),
-    [projects, selectedProjectId],
-  );
-  const selectedPageIndex = useMemo(
-    () =>
-      selectedPageId === null
-        ? -1
-        : pages.findIndex((page) => page.id === selectedPageId),
     [pages, selectedPageId],
   );
 
@@ -276,22 +304,6 @@ export function App() {
     });
   }
 
-  async function handleMoveProject(offset: -1 | 1): Promise<void> {
-    if (selectedProject === null) {
-      return;
-    }
-
-    const orderedIds = buildReorderedIds(projects, selectedProject.id, offset);
-    if (orderedIds === null) {
-      return;
-    }
-
-    await runMutation(async () => {
-      const nextProjects = await reorderProjects(orderedIds);
-      setProjects(nextProjects);
-    });
-  }
-
   async function handleCreatePage(): Promise<void> {
     if (selectedProject === null) {
       return;
@@ -361,20 +373,142 @@ export function App() {
     });
   }
 
-  async function handleMovePage(offset: -1 | 1): Promise<void> {
-    if (selectedProject === null || selectedPage === null) {
+  function clearDragState(): void {
+    setDragState(null);
+    setDropState(null);
+  }
+
+  function handleSidebarDragStart(
+    kind: SidebarListKind,
+    itemId: string,
+    event: ReactDragEvent<HTMLButtonElement>,
+  ): void {
+    if (isMutating) {
+      event.preventDefault();
       return;
     }
 
-    const orderedIds = buildReorderedIds(pages, selectedPage.id, offset);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `${kind}:${itemId}`);
+    setDragState({ kind, itemId });
+    setDropState(null);
+  }
+
+  function handleSidebarDragOver(
+    kind: SidebarListKind,
+    targetId: string,
+    event: ReactDragEvent<HTMLElement>,
+  ): void {
+    if (
+      dragState === null ||
+      dragState.kind !== kind ||
+      dragState.itemId === targetId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const position = getDropPosition(event);
+    setDropState((current) => {
+      if (
+        current !== null &&
+        current.kind === kind &&
+        current.itemId === targetId &&
+        current.position === position
+      ) {
+        return current;
+      }
+
+      return { kind, itemId: targetId, position };
+    });
+  }
+
+  async function handleProjectDrop(
+    draggedId: string,
+    targetId: string,
+    position: DropPosition,
+  ): Promise<void> {
+    const orderedIds = buildDraggedOrder(
+      projects,
+      draggedId,
+      targetId,
+      position,
+    );
     if (orderedIds === null) {
       return;
     }
 
-    await runMutation(async () => {
+    const previousProjects = projects;
+    setProjects(reorderItemsByIds(projects, orderedIds));
+    setIsMutating(true);
+    setErrorMessage(null);
+
+    try {
+      const nextProjects = await reorderProjects(orderedIds);
+      setProjects(nextProjects);
+    } catch (error) {
+      setProjects(previousProjects);
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  async function handlePageDrop(
+    draggedId: string,
+    targetId: string,
+    position: DropPosition,
+  ): Promise<void> {
+    if (selectedProject === null) {
+      return;
+    }
+
+    const orderedIds = buildDraggedOrder(pages, draggedId, targetId, position);
+    if (orderedIds === null) {
+      return;
+    }
+
+    const previousPages = pages;
+    setPages(reorderItemsByIds(pages, orderedIds));
+    setIsMutating(true);
+    setErrorMessage(null);
+
+    try {
       const nextPages = await reorderPages(selectedProject.id, orderedIds);
       setPages(nextPages);
-    });
+    } catch (error) {
+      setPages(previousPages);
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  function handleSidebarDrop(
+    kind: SidebarListKind,
+    targetId: string,
+    event: ReactDragEvent<HTMLElement>,
+  ): void {
+    event.preventDefault();
+    const currentDragState = dragState;
+    const position = getDropPosition(event);
+    clearDragState();
+
+    if (
+      currentDragState === null ||
+      currentDragState.kind !== kind ||
+      currentDragState.itemId === targetId
+    ) {
+      return;
+    }
+
+    if (kind === 'projects') {
+      void handleProjectDrop(currentDragState.itemId, targetId, position);
+      return;
+    }
+
+    void handlePageDrop(currentDragState.itemId, targetId, position);
   }
 
   if (loadState === 'error') {
@@ -425,47 +559,70 @@ export function App() {
             </p>
           ) : (
             <div className="list-stack">
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  className={`list-button ${
-                    project.id === selectedProjectId ? 'is-selected' : ''
-                  }`}
-                  onClick={() => {
-                    setSelectedPageId(null);
-                    setSelectedProjectId(project.id);
-                  }}
-                >
-                  <span>{project.name}</span>
-                  <small>{formatDate(project.updated_at)}</small>
-                </button>
-              ))}
+              {projects.map((project) => {
+                const isDragging =
+                  dragState?.kind === 'projects' &&
+                  dragState.itemId === project.id;
+                const isDropBefore =
+                  dropState?.kind === 'projects' &&
+                  dropState.itemId === project.id &&
+                  dropState.position === 'before';
+                const isDropAfter =
+                  dropState?.kind === 'projects' &&
+                  dropState.itemId === project.id &&
+                  dropState.position === 'after';
+
+                return (
+                  <div
+                    key={project.id}
+                    className={`list-entry ${isDropBefore ? 'is-drop-before' : ''} ${
+                      isDropAfter ? 'is-drop-after' : ''
+                    }`}
+                    onDragOver={(event) =>
+                      handleSidebarDragOver('projects', project.id, event)
+                    }
+                    onDrop={(event) =>
+                      handleSidebarDrop('projects', project.id, event)
+                    }
+                  >
+                    <button
+                      className={`list-button ${
+                        project.id === selectedProjectId ? 'is-selected' : ''
+                      } ${isDragging ? 'is-dragging' : ''} ${
+                        projects.length > 1 ? 'is-sortable' : ''
+                      }`}
+                      draggable={!isMutating && projects.length > 1}
+                      aria-label={
+                        projects.length > 1
+                          ? `按住拖拉排序 Project ${project.name}`
+                          : undefined
+                      }
+                      title={
+                        projects.length > 1
+                          ? `按住拖拉排序 Project ${project.name}`
+                          : undefined
+                      }
+                      onDragStart={(event) =>
+                        handleSidebarDragStart('projects', project.id, event)
+                      }
+                      onDragEnd={clearDragState}
+                      onClick={() => {
+                        setSelectedPageId(null);
+                        setSelectedProjectId(project.id);
+                      }}
+                    >
+                      <span>{project.name}</span>
+                      <small>{formatDate(project.updated_at)}</small>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
+          {projects.length > 1 ? (
+            <p className="sort-hint">按住 Project 項目直接拖拉即可調整順序。</p>
+          ) : null}
           <div className="action-row">
-            <button
-              className="ghost-button"
-              disabled={
-                selectedProject === null ||
-                isMutating ||
-                selectedProjectIndex <= 0
-              }
-              onClick={() => void handleMoveProject(-1)}
-            >
-              上移
-            </button>
-            <button
-              className="ghost-button"
-              disabled={
-                selectedProject === null ||
-                isMutating ||
-                selectedProjectIndex === -1 ||
-                selectedProjectIndex >= projects.length - 1
-              }
-              onClick={() => void handleMoveProject(1)}
-            >
-              下移
-            </button>
             <button
               className="ghost-button"
               disabled={selectedProject === null || isMutating}
@@ -496,20 +653,65 @@ export function App() {
             <p className="empty-copy">這個 Project 還沒有 Page。</p>
           ) : (
             <div className="list-stack">
-              {pages.map((page) => (
-                <button
-                  key={page.id}
-                  className={`list-button ${
-                    page.id === selectedPageId ? 'is-selected' : ''
-                  }`}
-                  onClick={() => setSelectedPageId(page.id)}
-                >
-                  <span>{page.name}</span>
-                  <small>zoom {page.zoom.toFixed(1)}x</small>
-                </button>
-              ))}
+              {pages.map((page) => {
+                const isDragging =
+                  dragState?.kind === 'pages' && dragState.itemId === page.id;
+                const isDropBefore =
+                  dropState?.kind === 'pages' &&
+                  dropState.itemId === page.id &&
+                  dropState.position === 'before';
+                const isDropAfter =
+                  dropState?.kind === 'pages' &&
+                  dropState.itemId === page.id &&
+                  dropState.position === 'after';
+
+                return (
+                  <div
+                    key={page.id}
+                    className={`list-entry ${isDropBefore ? 'is-drop-before' : ''} ${
+                      isDropAfter ? 'is-drop-after' : ''
+                    }`}
+                    onDragOver={(event) =>
+                      handleSidebarDragOver('pages', page.id, event)
+                    }
+                    onDrop={(event) =>
+                      handleSidebarDrop('pages', page.id, event)
+                    }
+                  >
+                    <button
+                      className={`list-button ${
+                        page.id === selectedPageId ? 'is-selected' : ''
+                      } ${isDragging ? 'is-dragging' : ''} ${
+                        pages.length > 1 ? 'is-sortable' : ''
+                      }`}
+                      draggable={!isMutating && pages.length > 1}
+                      aria-label={
+                        pages.length > 1
+                          ? `按住拖拉排序 Page ${page.name}`
+                          : undefined
+                      }
+                      title={
+                        pages.length > 1
+                          ? `按住拖拉排序 Page ${page.name}`
+                          : undefined
+                      }
+                      onDragStart={(event) =>
+                        handleSidebarDragStart('pages', page.id, event)
+                      }
+                      onDragEnd={clearDragState}
+                      onClick={() => setSelectedPageId(page.id)}
+                    >
+                      <span>{page.name}</span>
+                      <small>zoom {page.zoom.toFixed(1)}x</small>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
+          {pages.length > 1 ? (
+            <p className="sort-hint">按住 Page 項目直接拖拉即可調整順序。</p>
+          ) : null}
           <div className="action-row">
             <button
               className="ghost-button"
@@ -524,27 +726,6 @@ export function App() {
               onClick={() => void handleDuplicatePage()}
             >
               複製
-            </button>
-            <button
-              className="ghost-button"
-              disabled={
-                selectedPage === null || isMutating || selectedPageIndex <= 0
-              }
-              onClick={() => void handleMovePage(-1)}
-            >
-              上移
-            </button>
-            <button
-              className="ghost-button"
-              disabled={
-                selectedPage === null ||
-                isMutating ||
-                selectedPageIndex === -1 ||
-                selectedPageIndex >= pages.length - 1
-              }
-              onClick={() => void handleMovePage(1)}
-            >
-              下移
             </button>
             <button
               className="ghost-button"
@@ -585,9 +766,7 @@ export function App() {
           <section className="hero-panel">
             <div className="hero-copy">
               <h3>建立你的第一個 Project</h3>
-              <p className="hero-text">
-                從左側新增 Project 開始規劃。
-              </p>
+              <p className="hero-text">從左側新增 Project 開始規劃。</p>
               <button
                 className="primary-button"
                 disabled={isMutating}

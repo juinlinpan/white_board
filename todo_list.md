@@ -49,6 +49,7 @@
 
 - [x] 建立整體 app layout
 - [x] 實作左側 Project / Page 導覽
+- [x] 提升左側導覽區對比與選取辨識
 - [x] 實作中央白板區域
 - [x] 實作基本工具列與側欄
 - [x] 串接 backend API
@@ -59,12 +60,12 @@
 - [x] 新增 Project
 - [x] 重新命名 Project
 - [x] 刪除 Project
-- [x] 調整 Project 排序
+- [x] 以拖拉調整 Project 排序
 - [x] 新增 Page
 - [x] 重新命名 Page
 - [x] 刪除 Page
 - [x] 複製 Page
-- [x] 調整 Page 排序
+- [x] 以拖拉調整 Page 排序
 - [x] 切換 Page
 
 ### 7. 白板通用能力

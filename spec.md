@@ -100,7 +100,7 @@
 - 建立 Project
 - 重新命名 Project
 - 刪除 Project
-- 調整 Project 排序
+- 以拖拉調整 Project 排序
 - 切換目前 Project
 
 Project 至少包含：
@@ -119,7 +119,7 @@ Project 至少包含：
 - 重新命名 Page
 - 刪除 Page
 - 複製 Page
-- 調整 Page 排序
+- 以拖拉調整 Page 排序
 - 切換 Page
 
 Page 至少包含：
@@ -223,7 +223,7 @@ Page 至少包含：
 
 ## 7. UX 原則
 
-- 左側提供 Project / Page 導覽
+- 左側提供 Project / Page 導覽，且需有明顯區塊層次與足夠對比
 - 中間是白板主區域
 - 右側或浮動面板負責物件設定
 - 快捷鍵至少支援 `Delete`、`Ctrl/Cmd + C`、`Ctrl/Cmd + V`、`Ctrl/Cmd + Z`、`Ctrl/Cmd + Shift + Z`
