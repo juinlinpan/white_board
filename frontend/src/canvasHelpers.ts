@@ -2,11 +2,43 @@ import type { BoardItem, ConnectorLink } from './api';
 import type { FrameSummaryEntry } from './items/Frame';
 import { ITEM_CATEGORY, ITEM_TYPE } from './types';
 
-type Anchor = 'top' | 'right' | 'bottom' | 'left';
+type Anchor =
+  | 'top_left'
+  | 'top'
+  | 'top_right'
+  | 'right'
+  | 'bottom_right'
+  | 'bottom'
+  | 'bottom_left'
+  | 'left';
+
+export type { Anchor };
+
 type Point = {
   x: number;
   y: number;
 };
+
+export type AnchorHit = {
+  itemId: string;
+  anchor: Anchor;
+  point: Point;
+  distance: number;
+};
+
+/** The four cardinal anchors used for connector snapping (draw.io style). */
+const CONNECTOR_ANCHORS: Anchor[] = ['top', 'right', 'bottom', 'left'];
+
+const DIRECTIONAL_ANCHORS: Anchor[] = [
+  'right',
+  'bottom_right',
+  'bottom',
+  'bottom_left',
+  'left',
+  'top_left',
+  'top',
+  'top_right',
+];
 
 export function isHiddenByCollapsedFrame(
   item: BoardItem,
@@ -114,25 +146,46 @@ export function getAutoAnchors(
   const dx = toCenter.x - fromCenter.x;
   const dy = toCenter.y - fromCenter.y;
 
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0
-      ? { from_anchor: 'right', to_anchor: 'left' }
-      : { from_anchor: 'left', to_anchor: 'right' };
+  if (dx === 0 && dy === 0) {
+    return { from_anchor: 'right', to_anchor: 'left' };
   }
 
-  return dy >= 0
-    ? { from_anchor: 'bottom', to_anchor: 'top' }
-    : { from_anchor: 'top', to_anchor: 'bottom' };
+  const angle = Math.atan2(dy, dx);
+  const oppositeAngle = Math.atan2(-dy, -dx);
+  const anchorStep = Math.PI / 4;
+
+  return {
+    from_anchor:
+      DIRECTIONAL_ANCHORS[
+        ((Math.round(angle / anchorStep) % DIRECTIONAL_ANCHORS.length) +
+          DIRECTIONAL_ANCHORS.length) %
+          DIRECTIONAL_ANCHORS.length
+      ],
+    to_anchor:
+      DIRECTIONAL_ANCHORS[
+        ((Math.round(oppositeAngle / anchorStep) % DIRECTIONAL_ANCHORS.length) +
+          DIRECTIONAL_ANCHORS.length) %
+          DIRECTIONAL_ANCHORS.length
+      ],
+  };
 }
 
 export function getAnchorPoint(item: BoardItem, anchor: Anchor | null): Point {
   switch (anchor) {
+    case 'top_left':
+      return { x: item.x, y: item.y };
     case 'top':
       return { x: item.x + item.width / 2, y: item.y };
+    case 'top_right':
+      return { x: item.x + item.width, y: item.y };
     case 'right':
       return { x: item.x + item.width, y: item.y + item.height / 2 };
+    case 'bottom_right':
+      return { x: item.x + item.width, y: item.y + item.height };
     case 'bottom':
       return { x: item.x + item.width / 2, y: item.y + item.height };
+    case 'bottom_left':
+      return { x: item.x, y: item.y + item.height };
     case 'left':
       return { x: item.x, y: item.y + item.height / 2 };
     default:
@@ -176,4 +229,111 @@ export function getConnectorPoints(
 
 export function isSmallItem(item: BoardItem): boolean {
   return item.category === ITEM_CATEGORY.small_item;
+}
+
+// ──────────────────────────────────────────────
+// Connector anchor helpers (draw.io style)
+// ──────────────────────────────────────────────
+
+/** Types eligible to act as connector anchor targets. */
+function isConnectable(item: BoardItem): boolean {
+  return (
+    item.type === ITEM_TYPE.text_box ||
+    item.type === ITEM_TYPE.sticky_note ||
+    item.type === ITEM_TYPE.note_paper ||
+    item.type === ITEM_TYPE.frame ||
+    item.type === ITEM_TYPE.table
+  );
+}
+
+/** Get the four cardinal anchor points for an item. */
+export function getItemConnectorAnchors(
+  item: BoardItem,
+): Array<{ anchor: Anchor; point: Point }> {
+  return CONNECTOR_ANCHORS.map((anchor) => ({
+    anchor,
+    point: getAnchorPoint(item, anchor),
+  }));
+}
+
+/** Check if a world point is within a threshold distance of any item boundary (expanded). */
+function isPointNearItem(
+  point: Point,
+  item: BoardItem,
+  threshold: number,
+): boolean {
+  return (
+    point.x >= item.x - threshold &&
+    point.x <= item.x + item.width + threshold &&
+    point.y >= item.y - threshold &&
+    point.y <= item.y + item.height + threshold
+  );
+}
+
+/**
+ * Find the nearest connectable anchor point within a distance threshold.
+ * Returns null if nothing is close enough.
+ */
+export function findNearestConnectorAnchor(
+  worldPoint: Point,
+  items: BoardItem[],
+  excludeItemIds: Set<string>,
+  threshold: number,
+): AnchorHit | null {
+  let best: AnchorHit | null = null;
+
+  for (const item of items) {
+    if (excludeItemIds.has(item.id)) {
+      continue;
+    }
+    if (!isConnectable(item)) {
+      continue;
+    }
+    if (isHiddenByCollapsedFrame(item, items)) {
+      continue;
+    }
+    if (!isPointNearItem(worldPoint, item, threshold)) {
+      continue;
+    }
+
+    for (const { anchor, point } of getItemConnectorAnchors(item)) {
+      const dx = worldPoint.x - point.x;
+      const dy = worldPoint.y - point.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > threshold) {
+        continue;
+      }
+
+      if (best === null || distance < best.distance) {
+        best = { itemId: item.id, anchor, point, distance };
+      }
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Get all nearby connectable items that should show anchor indicators.
+ * Returns items whose bounding box is within the threshold of the point.
+ */
+export function getItemsNearPoint(
+  worldPoint: Point,
+  items: BoardItem[],
+  excludeItemIds: Set<string>,
+  threshold: number,
+): BoardItem[] {
+  return items.filter((item) => {
+    if (excludeItemIds.has(item.id)) {
+      return false;
+    }
+    if (!isConnectable(item)) {
+      return false;
+    }
+    if (isHiddenByCollapsedFrame(item, items)) {
+      return false;
+    }
+    return isPointNearItem(worldPoint, item, threshold);
+  });
 }

@@ -162,7 +162,8 @@ Page 至少包含：
 ### 5.5 `line`
 
 - 可自由拖曳
-- 可調整長度與方向
+- 以起點與終點定義線段，而非以旋轉矩形作為主要互動模型
+- 可直接拖曳控制點調整起點、終點、長度與方向
 - 可設定基本樣式
 
 ### 5.6 `table`
@@ -200,9 +201,12 @@ Page 至少包含：
 
 ### 5.11 `arrow`
 
-- 可連結 `small_item` 與 `large_item`
-- 連線端點可跟隨目標位置變動
-- 目標刪除時需同步處理連線
+- 以起點與終點定義箭頭，而非以矩形框或物件連結作為主要互動模型
+- 建立時應可像 draw.io 一樣以拖曳方式決定方向與長度
+- 可直接拖曳控制點調整起點、終點、長度與方向
+- 可設定基本線條樣式
+- 起點與終點可連結至物件的磁性錨點（connector anchor），連結關係存放於 `data_json` 中的 `startConnection` / `endConnection`
+- 被連結物件移動時，已連結的 `arrow` 與 `line` 端點會自動跟隨
 
 ### 5.12 對齊與磁吸
 
@@ -212,6 +216,18 @@ Page 至少包含：
 - 物件與 frame 邊界對齊
 - 顯示對齊輔助線
 - 支援可調整的 snap 容忍距離
+
+### 5.13 連接器磁性錨點（Connector Anchor）
+
+當使用 `line` 或 `arrow` 工具時：
+
+- 游標靠近可連結物件時，物件四邊中點會顯示錨點指示器（小圓圈）
+- 可連結物件類型包含：`text_box`、`sticky_note`、`note_paper`、`frame`、`table`
+- 拖曳 `line` / `arrow` 的起點或終點時，靠近錨點會自動吸附（磁性 snap）
+- 吸附閾值為 24px
+- 錨點分為四個基本方位：`top`、`right`、`bottom`、`left`
+- 連結關係記錄於 segment 的 `data_json` 中，格式為 `{ itemId: string, anchor: string }`
+- 被連結物件在拖曳移動時，連結的 segment 端點即時跟隨
 
 ## 6. 使用流程
 
@@ -274,6 +290,11 @@ Page 至少包含：
 - `created_at`
 - `updated_at`
 
+補充：
+
+- `line` 與 `arrow` 的起點 / 終點資料應存放於 `data_json`
+- `x`、`y`、`width`、`height` 仍可作為命中、選取與拖曳所需的包圍盒
+
 ### 8.4 `connector_links`
 
 - `id`
@@ -282,6 +303,8 @@ Page 至少包含：
 - `to_item_id`
 - `from_anchor`
 - `to_anchor`
+
+`connector_links` 可暫時保留供既有資料相容或未來擴充，但 MVP 的 `arrow` 與 `line` 已改用 `data_json` 中的 `startConnection` / `endConnection` 欄位記錄磁性錨點連結，不再依賴此表作為主要互動方式。
 
 ## 9. 系統架構
 
@@ -372,7 +395,7 @@ MVP 至少包含：
 3. Page 中可建立至少 `text_box`、`sticky_note`、`note_paper`、`frame`、`arrow`
 4. 物件可拖曳、resize、選取與排序
 5. `frame` 可展開 / 縮回，且縮回摘要規則正確
-6. `arrow` 可正確連到目標物件
+6. `line` 與 `arrow` 可像 draw.io 一樣以起點 / 終點建立，且可拖曳控制點調整
 7. snap 對齊可用
 8. 資料可寫入並重讀 SQLite
 9. 前端可成功呼叫 `GET /healthz`

@@ -98,7 +98,8 @@
 ### 9. `shape`
 
 - [x] 實作 `line`
-- [x] 支援 `line` 長度 / 方向調整
+- [x] 支援 `line` 以起點 / 終點控制長度與方向
+- [x] 支援 `line` 拖曳端點調整
 - [x] 支援 `line` 樣式設定
 - [x] 實作 `table`
 - [x] 支援列數 / 欄數調整
@@ -137,12 +138,12 @@
 ### 13. `arrow`
 
 - [x] 實作 `arrow`
-- [x] 支援 `arrow` 兩端 endpoint
-- [x] 支援 endpoint 連到 `small_item`
-- [x] 支援 endpoint 連到 `frame`
-- [x] 目標移動時更新連線
-- [x] 目標刪除時清理 connector
-- [x] 支援 endpoint 與目標錨點同步
+- [x] 支援 `arrow` 以起點 / 終點建立
+- [x] 支援 `arrow` 拖曳建立方向與長度
+- [x] 支援 `arrow` 拖曳端點調整
+- [x] 支援 `arrow` 基本線條樣式
+- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor snap）
+- [x] 支援已連結的 `arrow` / `line` 端點在物件移動時即時跟隨
 
 ### 14. Snap / 對齊
 
@@ -153,6 +154,7 @@
 - [x] 定義 snap 容忍距離
 - [x] 支援可調整的 snap 設定
 - [x] 支援暫時停用 snap
+- [x] 實作 connector anchor 磁性吸附指示器（anchor indicator）
 
 ### 15. 右側編輯面板
 
@@ -188,7 +190,7 @@
 - [x] 驗收物件建立 / 編輯 / 刪除
 - [x] 驗收 frame 展開 / 縮回
 - [x] 驗收縮回摘要規則
-- [x] 驗收 arrow 連線更新
+- [x] 驗收 line / arrow 起終點建立與控制點調整
 - [x] 驗收 snap 對齊
 - [x] 驗收 Undo / Redo
 - [x] 驗收本機持久化
@@ -200,6 +202,10 @@
 
 - [x] Markdown rich preview
 - [x] Undo / Redo 歷史優化
+
+### 20. 連線資料整理
+
+- [ ] 清理或重構 legacy `connector_links` 的前後端流程，避免與新的自由箭頭模型混淆
 
 ## 建議實作順序
 

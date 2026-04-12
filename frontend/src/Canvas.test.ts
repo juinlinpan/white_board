@@ -142,6 +142,18 @@ describe('connector geometry helpers', () => {
     });
   });
 
+  it('uses corner anchors when the target sits on a diagonal', () => {
+    const anchors = getAutoAnchors(
+      createBoardItem({ x: 0, y: 0, width: 100, height: 80 }),
+      createBoardItem({ x: 220, y: 180, width: 120, height: 100 }),
+    );
+
+    expect(anchors).toEqual({
+      from_anchor: 'bottom_right',
+      to_anchor: 'top_left',
+    });
+  });
+
   it('computes connector points from inferred anchors', () => {
     const fromItem = createBoardItem({
       id: 'from-item',
@@ -161,6 +173,28 @@ describe('connector geometry helpers', () => {
     expect(getConnectorPoints(createConnector(), [fromItem, toItem])).toEqual({
       fromPoint: { x: 100, y: 40 },
       toPoint: { x: 300, y: 70 },
+    });
+  });
+
+  it('computes connector points from inferred corner anchors', () => {
+    const fromItem = createBoardItem({
+      id: 'from-item',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 80,
+    });
+    const toItem = createBoardItem({
+      id: 'to-item',
+      x: 220,
+      y: 180,
+      width: 120,
+      height: 100,
+    });
+
+    expect(getConnectorPoints(createConnector(), [fromItem, toItem])).toEqual({
+      fromPoint: { x: 100, y: 80 },
+      toPoint: { x: 220, y: 180 },
     });
   });
 

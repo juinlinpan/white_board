@@ -57,4 +57,34 @@ describe('Inspector style palette', () => {
     );
     expect(markup).toContain('背景固定 7 色');
   });
+
+  it('treats freeform arrows as segment items instead of legacy connectors', () => {
+    const markup = renderToStaticMarkup(
+      <Inspector
+        item={createBoardItem({
+          category: ITEM_CATEGORY.connector,
+          type: ITEM_TYPE.arrow,
+          width: 220,
+          height: 100,
+          data_json: JSON.stringify({
+            kind: 'segment',
+            start: { x: 20, y: 20 },
+            end: { x: 180, y: 80 },
+          }),
+        })}
+        connector={null}
+        selectionCount={1}
+        childCount={0}
+        onUpdate={() => {}}
+        onDelete={() => {}}
+        onToggleCollapse={() => {}}
+        onBringToFront={() => {}}
+        onSendToBack={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('Line Style');
+    expect(markup).toContain('直接拖曳畫布上的起點與終點控制點');
+    expect(markup).not.toContain('起點 ID');
+  });
 });

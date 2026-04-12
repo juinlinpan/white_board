@@ -8,6 +8,7 @@ import {
   type BoardItemStyle,
   type ColorOption,
 } from './itemStyles';
+import { hasStoredSegmentData } from './segmentData';
 import {
   countFilledTableCells,
   parseTableData,
@@ -180,11 +181,14 @@ export function Inspector({
   const selectedItem = item;
   const isArrow = selectedItem.type === ITEM_TYPE.arrow;
   const isLine = selectedItem.type === ITEM_TYPE.line;
+  const isSegmentItem =
+    (isArrow || isLine) && hasStoredSegmentData(selectedItem);
+  const isLegacyConnectorArrow = isArrow && !isSegmentItem;
   const isTable = selectedItem.type === ITEM_TYPE.table;
   const supportsContent = isTextContentItem(selectedItem);
   const supportsTitle = selectedItem.type === ITEM_TYPE.frame;
   const supportsTextStyling = !isArrow && !isLine;
-  const supportsLineStyling = isLine;
+  const supportsLineStyling = isLine || isArrow;
   const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
   const hasCustomStyle =
@@ -295,8 +299,10 @@ export function Inspector({
               ] ?? selectedItem.type}
             </h3>
             <p className="inspector-meta">
-              {isArrow
+              {isLegacyConnectorArrow
                 ? '位置與尺寸會隨連線目標自動計算'
+                : isSegmentItem
+                  ? '直接拖曳畫布上的起點與終點控制點，調整長度與方向。'
                 : summarizeContent(selectedItem)}
             </p>
           </div>
@@ -313,7 +319,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.x)}
-                disabled={isArrow}
+                disabled={isLegacyConnectorArrow}
                 onChange={(e) => handleNumberChange('x', e.target.value)}
               />
             </label>
@@ -322,7 +328,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.y)}
-                disabled={isArrow}
+                disabled={isLegacyConnectorArrow}
                 onChange={(e) => handleNumberChange('y', e.target.value)}
               />
             </label>
@@ -337,7 +343,7 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.width)}
-                disabled={isArrow}
+                disabled={isLegacyConnectorArrow || isSegmentItem}
                 onChange={(e) => handleNumberChange('width', e.target.value)}
               />
             </label>
@@ -346,12 +352,12 @@ export function Inspector({
               <input
                 type="number"
                 value={Math.round(selectedItem.height)}
-                disabled={isArrow}
+                disabled={isLegacyConnectorArrow || isSegmentItem}
                 onChange={(e) => handleNumberChange('height', e.target.value)}
               />
             </label>
           </div>
-          {isLine ? (
+          {isLine && !isSegmentItem ? (
             <label className="inspector-field">
               角度
               <input
@@ -362,6 +368,11 @@ export function Inspector({
                 onChange={(e) => handleRotationChange(e.target.value)}
               />
             </label>
+          ) : null}
+          {isSegmentItem ? (
+            <p className="inspector-meta">
+              線條與箭頭會以包圍盒儲存，尺寸請直接用畫布上的端點控制。
+            </p>
           ) : null}
         </section>
 
@@ -600,13 +611,31 @@ export function Inspector({
                 <option value="dotted">點線</option>
               </select>
             </label>
+            {isArrow ? (
+              <label className="inspector-field">
+                箭頭大小
+                <input
+                  type="number"
+                  min={8}
+                  max={40}
+                  value={resolvedStyle.arrowHeadSize}
+                  onChange={(e) =>
+                    handleStyleChange({
+                      arrowHeadSize: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+            ) : null}
             <p className="inspector-meta">
-              寬度控制線段長度，高度保留互動命中區，角度用來調整方向。
+              {isSegmentItem
+                ? '直接拖曳畫布上的端點控制長度與方向，這裡只調整樣式。'
+                : '寬度控制線段長度，高度保留互動命中區，角度用來調整方向。'}
             </p>
           </section>
         ) : null}
 
-        {isArrow ? (
+        {isLegacyConnectorArrow ? (
           <section className="inspector-section">
             <p className="meta-label">Connector</p>
             <div className="inspector-list">

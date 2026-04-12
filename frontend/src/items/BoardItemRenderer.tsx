@@ -1,7 +1,8 @@
 import { type BoardItem } from '../api';
+import type { SegmentEndpoint } from '../segmentData';
 import { Frame, type FrameSummaryEntry } from './Frame';
-import { Line } from './Line';
 import { NotePaper } from './NotePaper';
+import { SegmentShape } from './SegmentShape';
 import { StickyNote } from './StickyNote';
 import { Table } from './Table';
 import { TextBox } from './TextBox';
@@ -13,6 +14,10 @@ type Props = {
   isSelected: boolean;
   isEditing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
+  onEndpointMouseDown: (
+    e: React.MouseEvent<HTMLButtonElement>,
+    endpoint: SegmentEndpoint,
+  ) => void;
   onDoubleClick: () => void;
   onResizeMouseDown: (e: React.MouseEvent) => void;
   onToggleCollapse: () => void;
@@ -27,6 +32,7 @@ export function BoardItemRenderer({
   isSelected,
   isEditing,
   onMouseDown,
+  onEndpointMouseDown,
   onDoubleClick,
   onResizeMouseDown,
   onToggleCollapse,
@@ -44,8 +50,9 @@ export function BoardItemRenderer({
   };
 
   const wrapperClass = `board-item ${isSelected ? 'is-selected' : ''}`;
+  const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const resizeHandle =
-    isSelected && !isEditing ? (
+    isSelected && !isEditing && !isSegmentItem ? (
       <button
         type="button"
         className="board-item-resize-handle"
@@ -56,9 +63,18 @@ export function BoardItemRenderer({
 
   switch (item.type) {
     case 'line':
+    case 'arrow':
       return (
-        <div style={baseStyle} className={wrapperClass} onMouseDown={onMouseDown}>
-          <Line item={item} />
+        <div
+          style={baseStyle}
+          className={`${wrapperClass} board-item-segment`}
+        >
+          <SegmentShape
+            item={item}
+            isSelected={isSelected}
+            onMouseDown={onMouseDown as (e: React.MouseEvent<SVGLineElement>) => void}
+            onEndpointMouseDown={onEndpointMouseDown}
+          />
           {resizeHandle}
         </div>
       );

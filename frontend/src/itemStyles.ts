@@ -19,6 +19,7 @@ export type BoardItemStyle = {
   strokeColor?: string;
   strokeWidth?: number;
   strokeStyle?: StrokeStyleValue;
+  arrowHeadSize?: number;
 };
 
 export type ResolvedBoardItemStyle = {
@@ -30,6 +31,7 @@ export type ResolvedBoardItemStyle = {
   strokeColor: string;
   strokeWidth: number;
   strokeStyle: StrokeStyleValue;
+  arrowHeadSize: number;
 };
 
 export const BACKGROUND_COLOR_OPTIONS = [
@@ -139,6 +141,14 @@ function sanitizeStrokeStyle(value: unknown): StrokeStyleValue | undefined {
     : undefined;
 }
 
+function sanitizeArrowHeadSize(value: unknown): number | undefined {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return undefined;
+  }
+
+  return Math.min(40, Math.max(8, Math.round(value)));
+}
+
 export function getStickyNoteColor(itemId: string): string {
   let hash = 0;
   for (let index = 0; index < itemId.length; index += 1) {
@@ -170,6 +180,7 @@ export function parseBoardItemStyle(styleJson: string | null): BoardItemStyle {
       strokeColor: sanitizeFreeColor(parsed.strokeColor),
       strokeWidth: sanitizeStrokeWidth(parsed.strokeWidth),
       strokeStyle: sanitizeStrokeStyle(parsed.strokeStyle),
+      arrowHeadSize: sanitizeArrowHeadSize(parsed.arrowHeadSize),
     };
   } catch {
     return {};
@@ -189,6 +200,7 @@ export function serializeBoardItemStyle(style: BoardItemStyle): string | null {
     strokeColor: sanitizeFreeColor(style.strokeColor),
     strokeWidth: sanitizeStrokeWidth(style.strokeWidth),
     strokeStyle: sanitizeStrokeStyle(style.strokeStyle),
+    arrowHeadSize: sanitizeArrowHeadSize(style.arrowHeadSize),
   };
 
   const entries = Object.entries(nextStyle).filter(
@@ -226,6 +238,7 @@ export function resolveBoardItemStyle(item: BoardItem): ResolvedBoardItemStyle {
     strokeColor: parsed.strokeColor ?? '#475569',
     strokeWidth: parsed.strokeWidth ?? 3,
     strokeStyle: parsed.strokeStyle ?? 'solid',
+    arrowHeadSize: parsed.arrowHeadSize ?? 20,
   };
 }
 

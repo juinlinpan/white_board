@@ -11,7 +11,6 @@ import {
   type ConnectorLink,
   type ConnectorLinkPayload,
   createBoardItem,
-  createConnector,
   deleteBoardItem,
   getPageBoardData,
   replacePageBoardState,
@@ -35,15 +34,30 @@ import {
   getAutoAnchors,
   getConnectorPoints,
   getFrameChildren,
+  getItemConnectorAnchors,
+  findNearestConnectorAnchor,
+  getItemsNearPoint,
   isHiddenByCollapsedFrame,
   isSmallItem,
   summarizeFrameChild,
+  type AnchorHit,
 } from './canvasHelpers';
 import { Inspector } from './Inspector';
+import {
+  buildSegmentGeometry,
+  getSegmentConnections,
+  getSegmentWorldPoints,
+  hasStoredSegmentData,
+  updateSegmentEndpoint,
+  type Point,
+  type SegmentConnection,
+  type SegmentEndpoint,
+} from './segmentData';
 import { snapMoveRect, snapResizeRect, type SnapGuide } from './snap';
 import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
+import { SegmentShape } from './items/SegmentShape';
 import { createTableData, serializeTableData } from './tableData';
 import {
   ITEM_CATEGORY,
@@ -59,8 +73,8 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 const VIEWPORT_SAVE_DELAY = 600;
 const ITEM_SAVE_DELAY = 500;
-const CONNECTOR_ITEM_PADDING = 20;
 const SNAP_TOLERANCE = 10;
+const CONNECTOR_SNAP_THRESHOLD = 24;
 const PASTE_OFFSET_STEP = 32;
 const MAX_HISTORY_ENTRIES = 50;
 const FRAME_LAYOUT_PADDING_X = 20;
@@ -94,8 +108,22 @@ type PanState = {
   startVpY: number;
 };
 
-type ArrowDraftState = {
-  fromItemId: string;
+type SegmentDraftTool = Extract<ActiveTool, 'line' | 'arrow'>;
+
+type SegmentDraftState = {
+  type: SegmentDraftTool;
+  start: Point;
+  end: Point;
+  startConnection: SegmentConnection | null;
+  endConnection: SegmentConnection | null;
+  snapshot: BoardSnapshot;
+};
+
+type SegmentEndpointDragState = {
+  itemId: string;
+  endpoint: SegmentEndpoint;
+  connection: SegmentConnection | null;
+  snapshot: BoardSnapshot;
 };
 
 type ClipboardEntry = {
@@ -157,8 +185,8 @@ function isFrame(item: BoardItem): boolean {
   return item.type === ITEM_TYPE.frame;
 }
 
-function isArrowConnectable(item: BoardItem): boolean {
-  return isSmallItem(item) || item.type === ITEM_TYPE.frame;
+function isLegacyConnectorArrow(item: BoardItem): boolean {
+  return item.type === ITEM_TYPE.arrow && !hasStoredSegmentData(item);
 }
 
 function isInlineEditable(item: BoardItem): boolean {
@@ -506,10 +534,14 @@ export function Canvas({ page }: Props) {
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
-  const [arrowDraft, setArrowDraft] = useState<ArrowDraftState | null>(null);
+  const [segmentDraft, setSegmentDraft] = useState<SegmentDraftState | null>(
+    null,
+  );
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
+  const [anchorIndicatorItems, setAnchorIndicatorItems] = useState<BoardItem[]>([]);
+  const [activeAnchorHit, setActiveAnchorHit] = useState<AnchorHit | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -519,6 +551,7 @@ export function Canvas({ page }: Props) {
   const pasteCountRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
   const resizeRef = useRef<ResizeState | null>(null);
+  const segmentEndpointDragRef = useRef<SegmentEndpointDragState | null>(null);
   const panRef = useRef<PanState | null>(null);
   const isSpaceRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -647,7 +680,7 @@ export function Canvas({ page }: Props) {
           ),
         );
         setEditingId(null);
-        setArrowDraft(null);
+        setSegmentDraft(null);
         setSnapGuides([]);
         return true;
       } catch (err) {
@@ -809,6 +842,35 @@ export function Canvas({ page }: Props) {
     [items],
   );
 
+  const segmentDraftPreviewItem = useMemo(() => {
+    if (segmentDraft === null) {
+      return null;
+    }
+
+    const geometry = buildSegmentGeometry(segmentDraft.start, segmentDraft.end);
+    return {
+      id: '__segment-draft__',
+      page_id: page.id,
+      parent_item_id: null,
+      category: ITEM_CATEGORY_FOR_TYPE[segmentDraft.type] ?? ITEM_CATEGORY.shape,
+      type: segmentDraft.type,
+      title: null,
+      content: null,
+      content_format: null,
+      x: geometry.x,
+      y: geometry.y,
+      width: geometry.width,
+      height: geometry.height,
+      rotation: geometry.rotation,
+      z_index: Number.MAX_SAFE_INTEGER,
+      is_collapsed: false,
+      style_json: null,
+      data_json: geometry.data_json,
+      created_at: 'draft',
+      updated_at: 'draft',
+    } satisfies BoardItem;
+  }, [page.id, segmentDraft]);
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -824,7 +886,7 @@ export function Canvas({ page }: Props) {
         });
         clearSelection();
         setEditingId(null);
-        setArrowDraft(null);
+        setSegmentDraft(null);
         resetHistory();
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
@@ -937,9 +999,6 @@ export function Canvas({ page }: Props) {
       if (editingId !== null && relatedItemIds.has(editingId)) {
         setEditingId(null);
       }
-      if (arrowDraft !== null && deleteIdSet.has(arrowDraft.fromItemId)) {
-        setArrowDraft(null);
-      }
       pushUndoSnapshot(snapshotBeforeDelete);
 
       const deleteResults = await Promise.allSettled(
@@ -962,7 +1021,6 @@ export function Canvas({ page }: Props) {
       }
     },
     [
-      arrowDraft,
       captureBoardSnapshot,
       editingId,
       pushUndoSnapshot,
@@ -1167,7 +1225,7 @@ export function Canvas({ page }: Props) {
       if (e.key === 'Escape') {
         clearSelection();
         setEditingId(null);
-        setArrowDraft(null);
+        setSegmentDraft(null);
         setActiveTool('select');
       }
     }
@@ -1226,14 +1284,20 @@ export function Canvas({ page }: Props) {
   }, []);
 
   useEffect(() => {
-    if (activeTool !== 'arrow' && arrowDraft !== null) {
-      setArrowDraft(null);
+    if (segmentDraft !== null && activeTool !== segmentDraft.type) {
+      setSegmentDraft(null);
     }
 
     if (activeTool !== 'select') {
       setSnapGuides([]);
     }
-  }, [activeTool, arrowDraft]);
+
+    // Clear anchor indicators when switching away from line/arrow tool
+    if (activeTool !== 'line' && activeTool !== 'arrow') {
+      setAnchorIndicatorItems([]);
+      setActiveAnchorHit(null);
+    }
+  }, [activeTool, segmentDraft]);
 
   function screenToWorld(screenX: number, screenY: number) {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -1260,6 +1324,42 @@ export function Canvas({ page }: Props) {
         zoom: nextViewport.zoom,
       });
     }, VIEWPORT_SAVE_DELAY);
+  }
+
+  function startSegmentDraft(
+    type: SegmentDraftTool,
+    clientX: number,
+    clientY: number,
+  ) {
+    const worldPos = screenToWorld(clientX, clientY);
+    const snapshot = captureBoardSnapshot();
+
+    // Check if starting near an anchor point
+    const anchorHit = findNearestConnectorAnchor(
+      worldPos,
+      itemsRef.current,
+      new Set(),
+      CONNECTOR_SNAP_THRESHOLD,
+    );
+
+    const startPoint = anchorHit ? anchorHit.point : worldPos;
+    const startConn: SegmentConnection | null = anchorHit
+      ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
+      : null;
+
+    clearSelection();
+    setEditingId(null);
+    setSnapGuides([]);
+    setAnchorIndicatorItems([]);
+    setActiveAnchorHit(anchorHit);
+    setSegmentDraft({
+      type,
+      start: startPoint,
+      end: startPoint,
+      startConnection: startConn,
+      endConnection: null,
+      snapshot,
+    });
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -1339,12 +1439,8 @@ export function Canvas({ page }: Props) {
       return;
     }
 
-    if (activeTool === 'arrow') {
-      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        clearSelection();
-      }
-      setEditingId(null);
-      setArrowDraft(null);
+    if (activeTool === 'line' || activeTool === 'arrow') {
+      startSegmentDraft(activeTool, e.clientX, e.clientY);
       return;
     }
 
@@ -1422,6 +1518,48 @@ export function Canvas({ page }: Props) {
     }
   }
 
+  async function handleCreateSegmentItem(draft: SegmentDraftState) {
+    const geometry = buildSegmentGeometry(
+      draft.start,
+      draft.end,
+      draft.startConnection,
+      draft.endConnection,
+    );
+    const zIndexes = itemsRef.current.map((item) => item.z_index);
+    const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
+
+    try {
+      const created = await createBoardItem({
+        page_id: page.id,
+        parent_item_id: null,
+        category: ITEM_CATEGORY_FOR_TYPE[draft.type] ?? ITEM_CATEGORY.shape,
+        type: draft.type,
+        title: null,
+        content: null,
+        content_format: null,
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
+        rotation: geometry.rotation,
+        z_index: maxZ + 1,
+        is_collapsed: false,
+        style_json: null,
+        data_json: geometry.data_json,
+      });
+
+      pushUndoSnapshot(draft.snapshot);
+      setItemsAndSync((current) => [...current, created]);
+      setSelection([created.id]);
+      setEditingId(null);
+      setActiveTool('select');
+      setAnchorIndicatorItems([]);
+      setActiveAnchorHit(null);
+    } catch (err) {
+      console.error('[Canvas] Failed to create segment item', err);
+    }
+  }
+
   function syncConnectorAnchorsForItems(changedItemIds: string[]) {
     if (changedItemIds.length === 0) {
       return;
@@ -1483,84 +1621,80 @@ export function Canvas({ page }: Props) {
     });
   }
 
-  async function handleCreateArrow(fromItemId: string, toItemId: string) {
-    if (fromItemId === toItemId) {
-      setArrowDraft(null);
-      return;
-    }
-    const snapshotBeforeArrow = captureBoardSnapshot();
-
-    const fromItem = itemsRef.current.find((item) => item.id === fromItemId);
-    const toItem = itemsRef.current.find((item) => item.id === toItemId);
-    if (
-      !fromItem ||
-      !toItem ||
-      !isArrowConnectable(fromItem) ||
-      !isArrowConnectable(toItem)
-    ) {
-      setArrowDraft(null);
+  /**
+   * When connectable items move, update any segment (line/arrow) that has a
+   * connection pointing at one of those items so the endpoint follows.
+   */
+  function syncSegmentConnectionsForItems(changedItemIds: string[]) {
+    if (changedItemIds.length === 0) {
       return;
     }
 
-    const anchors = getAutoAnchors(fromItem, toItem);
-    const fromPoint = getAnchorPoint(fromItem, anchors.from_anchor);
-    const toPoint = getAnchorPoint(toItem, anchors.to_anchor);
-    const zIndexes = itemsRef.current.map((item) => item.z_index);
-    const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
-    let createdArrow: BoardItem | null = null;
+    const changedIdSet = new Set(changedItemIds);
+    const itemById = new Map(itemsRef.current.map((item) => [item.id, item]));
+    const segmentUpdates: BoardItem[] = [];
 
-    try {
-      createdArrow = await createBoardItem({
-        page_id: page.id,
-        parent_item_id: null,
-        category: ITEM_CATEGORY.connector,
-        type: ITEM_TYPE.arrow,
-        title: null,
-        content: null,
-        content_format: null,
-        x: Math.min(fromPoint.x, toPoint.x) - CONNECTOR_ITEM_PADDING,
-        y: Math.min(fromPoint.y, toPoint.y) - CONNECTOR_ITEM_PADDING,
-        width: Math.max(
-          Math.abs(toPoint.x - fromPoint.x) + CONNECTOR_ITEM_PADDING * 2,
-          40,
-        ),
-        height: Math.max(
-          Math.abs(toPoint.y - fromPoint.y) + CONNECTOR_ITEM_PADDING * 2,
-          40,
-        ),
-        rotation: 0,
-        z_index: maxZ + 1,
-        is_collapsed: false,
-        style_json: null,
-        data_json: '{"kind":"straight"}',
+    setItemsAndSync((current) =>
+      current.map((item) => {
+        if (item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow) {
+          return item;
+        }
+        if (!hasStoredSegmentData(item)) {
+          return item;
+        }
+
+        const conns = getSegmentConnections(item);
+        const startTouched =
+          conns.startConnection !== null &&
+          changedIdSet.has(conns.startConnection.itemId);
+        const endTouched =
+          conns.endConnection !== null &&
+          changedIdSet.has(conns.endConnection.itemId);
+
+        if (!startTouched && !endTouched) {
+          return item;
+        }
+
+        const worldPoints = getSegmentWorldPoints(item);
+        if (!worldPoints) {
+          return item;
+        }
+
+        let newStart = worldPoints.start;
+        let newEnd = worldPoints.end;
+
+        if (startTouched && conns.startConnection) {
+          const targetItem = itemById.get(conns.startConnection.itemId);
+          if (targetItem) {
+            newStart = getAnchorPoint(targetItem, conns.startConnection.anchor);
+          }
+        }
+
+        if (endTouched && conns.endConnection) {
+          const targetItem = itemById.get(conns.endConnection.itemId);
+          if (targetItem) {
+            newEnd = getAnchorPoint(targetItem, conns.endConnection.anchor);
+          }
+        }
+
+        const geometry = buildSegmentGeometry(
+          newStart,
+          newEnd,
+          conns.startConnection,
+          conns.endConnection,
+        );
+        const updated = { ...item, ...geometry };
+        segmentUpdates.push(updated);
+        return updated;
+      }),
+    );
+
+    if (segmentUpdates.length > 0) {
+      void Promise.all(
+        segmentUpdates.map((item) => updateBoardItem(item.id, toPayload(item))),
+      ).catch((err) => {
+        console.error('[Canvas] Failed to sync segment connections', err);
       });
-
-      const connector = await createConnector({
-        connector_item_id: createdArrow.id,
-        from_item_id: fromItem.id,
-        to_item_id: toItem.id,
-        from_anchor: anchors.from_anchor,
-        to_anchor: anchors.to_anchor,
-      });
-
-      pushUndoSnapshot(snapshotBeforeArrow);
-      setItemsAndSync((current) => [...current, createdArrow as BoardItem]);
-      setConnectorsAndSync((current) => [...current, connector]);
-      setSelection([createdArrow.id]);
-      setEditingId(null);
-      setActiveTool('select');
-    } catch (err) {
-      if (createdArrow !== null) {
-        void deleteBoardItem(createdArrow.id).catch((cleanupError) => {
-          console.error(
-            '[Canvas] Failed to cleanup incomplete arrow',
-            cleanupError,
-          );
-        });
-      }
-      console.error('[Canvas] Failed to create arrow', err);
-    } finally {
-      setArrowDraft(null);
     }
   }
 
@@ -1573,19 +1707,8 @@ export function Canvas({ page }: Props) {
     e.stopPropagation();
     setSnapGuides([]);
 
-    if (activeTool === 'arrow') {
-      if (!isArrowConnectable(item)) {
-        return;
-      }
-
-      setEditingId(null);
-      if (arrowDraft === null) {
-        setArrowDraft({ fromItemId: itemId });
-        setSelection([itemId]);
-        return;
-      }
-
-      void handleCreateArrow(arrowDraft.fromItemId, itemId);
+    if (activeTool === 'line' || activeTool === 'arrow') {
+      startSegmentDraft(activeTool, e.clientX, e.clientY);
       return;
     }
 
@@ -1610,9 +1733,10 @@ export function Canvas({ page }: Props) {
     const nextSelectedIds = currentSelection.includes(itemId)
       ? currentSelection
       : [itemId];
-    const draggedSelectionIds = expandSelectionItemIds(itemsRef.current, nextSelectedIds, {
-      excludeArrows: true,
-    });
+    const draggedSelectionIds = expandSelectionItemIds(
+      itemsRef.current,
+      nextSelectedIds,
+    );
     const selectionBounds = getSelectionBounds(itemsRef.current, draggedSelectionIds);
     if (selectionBounds === null) {
       return;
@@ -1651,6 +1775,11 @@ export function Canvas({ page }: Props) {
   ) {
     e.stopPropagation();
 
+    if (activeTool === 'line' || activeTool === 'arrow') {
+      startSegmentDraft(activeTool, e.clientX, e.clientY);
+      return;
+    }
+
     if (activeTool !== 'select') {
       return;
     }
@@ -1669,6 +1798,24 @@ export function Canvas({ page }: Props) {
 
     setSelection([itemId]);
     setEditingId(null);
+  }
+
+  function handleSegmentEndpointMouseDown(
+    e: React.MouseEvent<HTMLButtonElement>,
+    itemId: string,
+    endpoint: SegmentEndpoint,
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    setSnapGuides([]);
+    setSelection([itemId]);
+    setEditingId(null);
+    segmentEndpointDragRef.current = {
+      itemId,
+      endpoint,
+      connection: null,
+      snapshot: captureBoardSnapshot(),
+    };
   }
 
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
@@ -1693,6 +1840,121 @@ export function Canvas({ page }: Props) {
 
   function handleMouseMove(e: React.MouseEvent) {
     const shouldUseSnap = snapEnabled && !e.altKey;
+    const endpointDrag = segmentEndpointDragRef.current;
+    if (endpointDrag) {
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === endpointDrag.itemId,
+      );
+      if (!item) {
+        setSnapGuides([]);
+        setAnchorIndicatorItems([]);
+        setActiveAnchorHit(null);
+        return;
+      }
+
+      const rawPoint = screenToWorld(e.clientX, e.clientY);
+
+      // Check for connector anchor snap
+      const anchorHit = findNearestConnectorAnchor(
+        rawPoint,
+        itemsRef.current,
+        new Set([endpointDrag.itemId]),
+        CONNECTOR_SNAP_THRESHOLD,
+      );
+      const nextPoint = anchorHit ? anchorHit.point : rawPoint;
+      const nextConn: SegmentConnection | null = anchorHit
+        ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
+        : null;
+
+      endpointDrag.connection = nextConn;
+
+      // Show anchor indicators on nearby items
+      const nearbyItems = getItemsNearPoint(
+        rawPoint,
+        itemsRef.current,
+        new Set([endpointDrag.itemId]),
+        CONNECTOR_SNAP_THRESHOLD * 2,
+      );
+      setAnchorIndicatorItems(nearbyItems);
+      setActiveAnchorHit(anchorHit);
+
+      const nextGeometry = updateSegmentEndpoint(
+        item,
+        endpointDrag.endpoint,
+        nextPoint,
+        nextConn,
+      );
+      if (nextGeometry === null) {
+        return;
+      }
+
+      setSnapGuides([]);
+      setItemsAndSync((current) =>
+        current.map((candidate) =>
+          candidate.id === endpointDrag.itemId
+            ? { ...candidate, ...nextGeometry }
+            : candidate,
+        ),
+      );
+      return;
+    }
+
+    if (segmentDraft !== null) {
+      setSnapGuides([]);
+      const rawPoint = screenToWorld(e.clientX, e.clientY);
+
+      // Check for connector anchor snap on end point
+      const excludeIds = new Set<string>();
+      if (segmentDraft.startConnection) {
+        excludeIds.add(segmentDraft.startConnection.itemId);
+      }
+      const anchorHit = findNearestConnectorAnchor(
+        rawPoint,
+        itemsRef.current,
+        excludeIds,
+        CONNECTOR_SNAP_THRESHOLD,
+      );
+      const nextPoint = anchorHit ? anchorHit.point : rawPoint;
+      const nextConn: SegmentConnection | null = anchorHit
+        ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
+        : null;
+
+      // Show anchor indicators on nearby items
+      const nearbyItems = getItemsNearPoint(
+        rawPoint,
+        itemsRef.current,
+        excludeIds,
+        CONNECTOR_SNAP_THRESHOLD * 2,
+      );
+      setAnchorIndicatorItems(nearbyItems);
+      setActiveAnchorHit(anchorHit);
+
+      setSegmentDraft((current) =>
+        current === null ? null : { ...current, end: nextPoint, endConnection: nextConn },
+      );
+      return;
+    }
+
+    // When line/arrow tool is active but no draft, show anchor indicators on hover
+    if (activeTool === 'line' || activeTool === 'arrow') {
+      const worldPos = screenToWorld(e.clientX, e.clientY);
+      const nearbyItems = getItemsNearPoint(
+        worldPos,
+        itemsRef.current,
+        new Set(),
+        CONNECTOR_SNAP_THRESHOLD * 2,
+      );
+      setAnchorIndicatorItems(nearbyItems);
+
+      const anchorHit = findNearestConnectorAnchor(
+        worldPos,
+        itemsRef.current,
+        new Set(),
+        CONNECTOR_SNAP_THRESHOLD,
+      );
+      setActiveAnchorHit(anchorHit);
+    }
+
     const resize = resizeRef.current;
     if (resize) {
       const vp = viewportRef.current;
@@ -1782,8 +2044,10 @@ export function Canvas({ page }: Props) {
       );
       setSnapGuides(snapResult.guides);
 
-      setItemsAndSync((current) =>
-        current.map((item) => {
+      setItemsAndSync((current) => {
+        const draggedIdSet = new Set(drag.selectedItemIds);
+        // First apply the drag offsets
+        let nextItems = current.map((item) => {
           const itemStart = itemStartMap.get(item.id);
           if (itemStart) {
             return {
@@ -1794,8 +2058,63 @@ export function Canvas({ page }: Props) {
           }
 
           return item;
-        }),
-      );
+        });
+
+        // Then update any segments connected to dragged items
+        const itemById = new Map(nextItems.map((item) => [item.id, item]));
+        nextItems = nextItems.map((item) => {
+          if (
+            (item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow) ||
+            !hasStoredSegmentData(item) ||
+            draggedIdSet.has(item.id)
+          ) {
+            return item;
+          }
+
+          const conns = getSegmentConnections(item);
+          const startTouched =
+            conns.startConnection !== null &&
+            draggedIdSet.has(conns.startConnection.itemId);
+          const endTouched =
+            conns.endConnection !== null &&
+            draggedIdSet.has(conns.endConnection.itemId);
+
+          if (!startTouched && !endTouched) {
+            return item;
+          }
+
+          const worldPts = getSegmentWorldPoints(item);
+          if (!worldPts) {
+            return item;
+          }
+
+          let newStart = worldPts.start;
+          let newEnd = worldPts.end;
+
+          if (startTouched && conns.startConnection) {
+            const target = itemById.get(conns.startConnection.itemId);
+            if (target) {
+              newStart = getAnchorPoint(target, conns.startConnection.anchor);
+            }
+          }
+          if (endTouched && conns.endConnection) {
+            const target = itemById.get(conns.endConnection.itemId);
+            if (target) {
+              newEnd = getAnchorPoint(target, conns.endConnection.anchor);
+            }
+          }
+
+          const geometry = buildSegmentGeometry(
+            newStart,
+            newEnd,
+            conns.startConnection,
+            conns.endConnection,
+          );
+          return { ...item, ...geometry };
+        });
+
+        return nextItems;
+      });
       return;
     }
 
@@ -1814,8 +2133,55 @@ export function Canvas({ page }: Props) {
     setSnapGuides([]);
   }
 
-  function handleMouseUp() {
+  function handleMouseUp(e?: React.MouseEvent) {
     setSnapGuides([]);
+    setAnchorIndicatorItems([]);
+    setActiveAnchorHit(null);
+
+    const endpointDrag = segmentEndpointDragRef.current;
+    if (endpointDrag) {
+      segmentEndpointDragRef.current = null;
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === endpointDrag.itemId,
+      );
+      if (item) {
+        persistItems([item]);
+        recordHistoryCheckpoint(endpointDrag.snapshot);
+      }
+      return;
+    }
+
+    const pendingSegmentDraft = segmentDraft;
+    if (pendingSegmentDraft !== null) {
+      // Snap end point to anchor if available
+      let finalEnd = pendingSegmentDraft.end;
+      let finalEndConn = pendingSegmentDraft.endConnection;
+      if (e !== undefined) {
+        const rawEnd = screenToWorld(e.clientX, e.clientY);
+        const excludeIds = new Set<string>();
+        if (pendingSegmentDraft.startConnection) {
+          excludeIds.add(pendingSegmentDraft.startConnection.itemId);
+        }
+        const anchorHit = findNearestConnectorAnchor(
+          rawEnd,
+          itemsRef.current,
+          excludeIds,
+          CONNECTOR_SNAP_THRESHOLD,
+        );
+        finalEnd = anchorHit ? anchorHit.point : rawEnd;
+        finalEndConn = anchorHit
+          ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
+          : null;
+      }
+
+      setSegmentDraft(null);
+      void handleCreateSegmentItem({
+        ...pendingSegmentDraft,
+        end: finalEnd,
+        endConnection: finalEndConn,
+      });
+      return;
+    }
 
     const resize = resizeRef.current;
     if (resize) {
@@ -1843,6 +2209,7 @@ export function Canvas({ page }: Props) {
           nextItems.filter((candidate) => changedIds.has(candidate.id)),
         );
         syncConnectorAnchorsForItems([...changedIds]);
+        syncSegmentConnectionsForItems([...changedIds]);
       }
       recordHistoryCheckpoint(resize.snapshot);
     }
@@ -1906,6 +2273,7 @@ export function Canvas({ page }: Props) {
 
       persistItems(nextItems.filter((item) => changedIds.has(item.id)));
       syncConnectorAnchorsForItems([...changedIds]);
+      syncSegmentConnectionsForItems([...changedIds]);
       recordHistoryCheckpoint(drag.snapshot);
     }
 
@@ -2011,7 +2379,7 @@ export function Canvas({ page }: Props) {
               style={{ transform: worldTransform, transformOrigin: '0 0' }}
             >
               {visibleItems.map((item) => {
-                if (item.type === ITEM_TYPE.arrow) {
+                if (isLegacyConnectorArrow(item)) {
                   const connector = connectorByItemId.get(item.id);
                   const connectorPoints =
                     connector !== undefined
@@ -2047,14 +2415,78 @@ export function Canvas({ page }: Props) {
                       isSelected={selectedIds.includes(item.id)}
                       isEditing={item.id === editingId}
                       onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+                      onEndpointMouseDown={(e, endpoint) =>
+                        handleSegmentEndpointMouseDown(e, item.id, endpoint)
+                      }
                       onDoubleClick={() => handleItemDoubleClick(item)}
-                    onResizeMouseDown={(e) => handleResizeMouseDown(e, item.id)}
-                    onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
-                    onUpdate={handleItemUpdate}
-                    onEditEnd={handleEditEnd}
-                  />
+                      onResizeMouseDown={(e) => handleResizeMouseDown(e, item.id)}
+                      onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
+                      onUpdate={handleItemUpdate}
+                      onEditEnd={handleEditEnd}
+                    />
                 );
               })}
+              {segmentDraftPreviewItem !== null ? (
+                <div
+                  className="board-item board-item-segment board-item-draft"
+                  style={{
+                    position: 'absolute',
+                    left: segmentDraftPreviewItem.x,
+                    top: segmentDraftPreviewItem.y,
+                    width: segmentDraftPreviewItem.width,
+                    height: segmentDraftPreviewItem.height,
+                    zIndex: segmentDraftPreviewItem.z_index,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <SegmentShape
+                    item={segmentDraftPreviewItem}
+                    isSelected={false}
+                    onMouseDown={() => {}}
+                    onEndpointMouseDown={() => {}}
+                  />
+                </div>
+              ) : null}
+
+              {/* Connector anchor indicators on nearby items */}
+              {anchorIndicatorItems.map((item) =>
+                getItemConnectorAnchors(item).map(({ anchor, point }) => {
+                  const isActive =
+                    activeAnchorHit !== null &&
+                    activeAnchorHit.itemId === item.id &&
+                    activeAnchorHit.anchor === anchor;
+                  return (
+                    <div
+                      key={`anchor-${item.id}-${anchor}`}
+                      className={`connector-anchor-indicator ${isActive ? 'is-active' : ''}`}
+                      style={{
+                        left: point.x,
+                        top: point.y,
+                      }}
+                    />
+                  );
+                }),
+              )}
+
+              {/* Connector anchor indicators on nearby items */}
+              {anchorIndicatorItems.map((item) =>
+                getItemConnectorAnchors(item).map(({ anchor, point }) => {
+                  const isActive =
+                    activeAnchorHit !== null &&
+                    activeAnchorHit.itemId === item.id &&
+                    activeAnchorHit.anchor === anchor;
+                  return (
+                    <div
+                      key={`anchor-${item.id}-${anchor}`}
+                      className={`connector-anchor-indicator ${isActive ? 'is-active' : ''}`}
+                      style={{
+                        left: point.x,
+                        top: point.y,
+                      }}
+                    />
+                  );
+                }),
+              )}
             </div>
 
             {items.length === 0 ? (
@@ -2067,11 +2499,11 @@ export function Canvas({ page }: Props) {
             ) : null}
 
             <div className="canvas-corner-stack">
-              {activeTool === 'arrow' ? (
+              {activeTool === 'line' || activeTool === 'arrow' ? (
                 <div className="canvas-guide-badge">
-                  {arrowDraft === null
-                    ? '箭頭工具：先點選起點物件'
-                    : '箭頭工具：再點選終點物件完成連線'}
+                  {segmentDraft === null
+                    ? `${activeTool === 'line' ? '線條' : '箭頭'}工具：按住拖曳建立`
+                    : `${activeTool === 'line' ? '線條' : '箭頭'}工具：放開滑鼠完成，選取後可拉端點`}
                 </div>
               ) : null}
               <div
