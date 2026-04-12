@@ -48,6 +48,7 @@
 ### In Scope
 
 - Project 管理
+- 首頁提供 Project 選擇、建立與匯入入口
 - 每個 Project 底下多個 Page
 - 每個 Page 是一張白板
 - 白板物件的建立、編輯、刪除、移動、縮放、排序
@@ -97,7 +98,10 @@
 
 使用者可以：
 
+- 啟動後先看到首頁
+- 從首頁選擇既有 Project 進入工作區
 - 建立 Project
+- 從 JSON 檔匯入 Project
 - 重新命名 Project
 - 刪除 Project
 - 以拖拉調整 Project 排序
@@ -110,6 +114,13 @@ Project 至少包含：
 - `created_at`
 - `updated_at`
 - `sort_order`
+
+Project 匯入規則：
+
+- 首頁提供匯入入口
+- 匯入檔案格式為 JSON snapshot
+- 匯入時會建立新的本機 Project，不覆寫既有 Project
+- 匯入時需重建 Page、board item 與 connector 的本機 id，避免與既有 SQLite 資料衝突
 
 ### 5.2 Page
 
@@ -233,14 +244,16 @@ Page 至少包含：
 
 典型操作流程：
 
-1. 建立 Project
-2. 在 Project 底下建立一到多個 Page
-3. 在 Page 中建立 frame、note、table、arrow
-4. 拖曳與排版內容
-5. 存回 SQLite
+1. 啟動後先進入首頁
+2. 從首頁選擇既有 Project，或建立 / 匯入新的 Project
+3. 在 Project 底下建立一到多個 Page
+4. 在 Page 中建立 frame、note、table、arrow
+5. 拖曳與排版內容
+6. 存回 SQLite
 
 ## 7. UX 原則
 
+- 啟動後先顯示首頁，集中放置 Project 選擇、建立與匯入入口
 - 左側提供 Project / Page 導覽，且需有明顯區塊層次與足夠對比
 - 中間是白板主區域
 - 右側或浮動面板負責物件設定
@@ -372,6 +385,7 @@ Log 必須位於：
 MVP 至少包含：
 
 - Project / Page 管理
+- 首頁與 Project JSON 匯入
 - `text_box`、`sticky_note`、`note_paper`
 - `frame`
 - `arrow`
@@ -390,16 +404,17 @@ MVP 至少包含：
 
 驗收至少需包含：
 
-1. 可建立、重新命名、刪除 Project
-2. 可在 Project 下建立、重新命名、刪除、切換 Page
-3. Page 中可建立至少 `text_box`、`sticky_note`、`note_paper`、`frame`、`arrow`
-4. 物件可拖曳、resize、選取與排序
-5. `frame` 可展開 / 縮回，且縮回摘要規則正確
-6. `line` 與 `arrow` 可像 draw.io 一樣以起點 / 終點建立，且可拖曳控制點調整
-7. snap 對齊可用
-8. 資料可寫入並重讀 SQLite
-9. 前端可成功呼叫 `GET /healthz`
-10. 背景色與文字色只能從系統提供的固定色票中選擇
+1. 啟動前端後先進入首頁，且可從首頁選擇既有 Project
+2. 可建立、重新命名、刪除 Project，並可從 JSON 匯入新的 Project
+3. 可在 Project 下建立、重新命名、刪除、切換 Page
+4. Page 中可建立至少 `text_box`、`sticky_note`、`note_paper`、`frame`、`arrow`
+5. 物件可拖曳、resize、選取與排序
+6. `frame` 可展開 / 縮回，且縮回摘要規則正確
+7. `line` 與 `arrow` 可像 draw.io 一樣以起點 / 終點建立，且可拖曳控制點調整
+8. snap 對齊可用
+9. 資料可寫入並重讀 SQLite
+10. 前端可成功呼叫 `GET /healthz`
+11. 背景色與文字色只能從系統提供的固定色票中選擇
 
 ## 14. 建議實作順序
 

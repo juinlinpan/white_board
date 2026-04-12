@@ -48,6 +48,66 @@ Open `http://127.0.0.1:5173` in your browser.
 
 This mode keeps Vite on `5173` and the FastAPI backend on `18000`.
 
+## Project Home
+
+The app now opens on a dedicated home page. From there you can:
+
+- open an existing `Project`
+- create a new `Project`
+- import a `Project` from a local JSON snapshot
+
+Import always creates a new local project in SQLite and regenerates page / item /
+connector ids to avoid collisions with existing data.
+
+## Project Import
+
+The home page accepts `.json` or `.whiteboard-project.json` files with a v1
+project snapshot payload. Supported top-level shapes are either:
+
+```json
+{
+  "version": 1,
+  "project": {
+    "name": "Roadmap",
+    "pages": []
+  }
+}
+```
+
+or:
+
+```json
+{
+  "name": "Roadmap",
+  "pages": []
+}
+```
+
+Each page entry can include either flat viewport fields or a nested `viewport`
+object:
+
+```json
+{
+  "name": "Sprint Planning",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "board_items": [
+    {
+      "id": "note-1",
+      "category": "small_item",
+      "type": "sticky_note",
+      "x": 120,
+      "y": 140,
+      "width": 180,
+      "height": 120
+    }
+  ],
+  "connector_links": []
+}
+```
+
+`board_items[].id` is required inside the import file so parent relations and
+connector references can be rebuilt correctly during import.
+
 ## Single-Port Local Run
 
 Build the frontend bundle first:

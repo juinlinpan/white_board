@@ -40,6 +40,21 @@ const DIRECTIONAL_ANCHORS: Anchor[] = [
   'top_right',
 ];
 
+const ALL_ANCHORS = new Set<Anchor>([
+  'top_left',
+  'top',
+  'top_right',
+  'right',
+  'bottom_right',
+  'bottom',
+  'bottom_left',
+  'left',
+]);
+
+export function isAnchor(value: string | null | undefined): value is Anchor {
+  return value !== null && value !== undefined && ALL_ANCHORS.has(value as Anchor);
+}
+
 export function isHiddenByCollapsedFrame(
   item: BoardItem,
   items: BoardItem[],

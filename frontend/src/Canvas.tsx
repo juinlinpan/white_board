@@ -37,6 +37,7 @@ import {
   getItemConnectorAnchors,
   findNearestConnectorAnchor,
   getItemsNearPoint,
+  isAnchor,
   isHiddenByCollapsedFrame,
   isSmallItem,
   summarizeFrameChild,
@@ -1678,14 +1679,24 @@ export function Canvas({ page }: Props) {
         if (startTouched && conns.startConnection) {
           const targetItem = itemById.get(conns.startConnection.itemId);
           if (targetItem) {
-            newStart = getAnchorPoint(targetItem, conns.startConnection.anchor);
+            newStart = getAnchorPoint(
+              targetItem,
+              isAnchor(conns.startConnection.anchor)
+                ? conns.startConnection.anchor
+                : null,
+            );
           }
         }
 
         if (endTouched && conns.endConnection) {
           const targetItem = itemById.get(conns.endConnection.itemId);
           if (targetItem) {
-            newEnd = getAnchorPoint(targetItem, conns.endConnection.anchor);
+            newEnd = getAnchorPoint(
+              targetItem,
+              isAnchor(conns.endConnection.anchor)
+                ? conns.endConnection.anchor
+                : null,
+            );
           }
         }
 
@@ -2211,13 +2222,23 @@ export function Canvas({ page }: Props) {
           if (startTouched && conns.startConnection) {
             const target = itemById.get(conns.startConnection.itemId);
             if (target) {
-              newStart = getAnchorPoint(target, conns.startConnection.anchor);
+              newStart = getAnchorPoint(
+                target,
+                isAnchor(conns.startConnection.anchor)
+                  ? conns.startConnection.anchor
+                  : null,
+              );
             }
           }
           if (endTouched && conns.endConnection) {
             const target = itemById.get(conns.endConnection.itemId);
             if (target) {
-              newEnd = getAnchorPoint(target, conns.endConnection.anchor);
+              newEnd = getAnchorPoint(
+                target,
+                isAnchor(conns.endConnection.anchor)
+                  ? conns.endConnection.anchor
+                  : null,
+              );
             }
           }
 
@@ -2624,6 +2645,8 @@ export function Canvas({ page }: Props) {
                     isSelected={false}
                     onMouseDown={() => {}}
                     onEndpointMouseDown={() => {}}
+                    onWaypointMouseDown={() => {}}
+                    onMidpointMouseDown={() => {}}
                   />
                 </div>
               ) : null}

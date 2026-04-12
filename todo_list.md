@@ -48,6 +48,7 @@
 ### 5. Frontend App Shell
 
 - [x] 建立整體 app layout
+- [x] 實作首頁，集中提供 Project 選擇 / 建立 / 匯入入口
 - [x] 實作左側 Project / Page 導覽
 - [x] 提升左側導覽區對比與選取辨識
 - [x] 實作中央白板區域
@@ -57,7 +58,9 @@
 
 ### 6. Project / Page UI
 
+- [x] 啟動後先進入首頁，再進入工作區
 - [x] 新增 Project
+- [x] 匯入 Project JSON snapshot
 - [x] 重新命名 Project
 - [x] 刪除 Project
 - [x] 以拖拉調整 Project 排序

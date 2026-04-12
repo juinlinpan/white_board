@@ -135,7 +135,10 @@ export function SegmentShape({
             if (i === allLocalPoints.length - 1) {
               return null;
             }
-            const next = allLocalPoints[i + 1]!;
+            const next = allLocalPoints[i + 1];
+            if (next === undefined) {
+              return null;
+            }
             const midX = (pt.x + next.x) / 2;
             const midY = (pt.y + next.y) / 2;
             return (
