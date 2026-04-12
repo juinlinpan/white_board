@@ -1,5 +1,13 @@
 # Whiteboard Planning App Spec
 
+## Navigation Update Notes
+
+- Opening a `Project` from the dedicated home screen must create a browser history entry and enter a concrete `Page` immediately.
+- If the target project is already loaded in memory, the workspace should keep the current page when possible and otherwise fall back to that project's first page.
+- The workspace left sidebar should stay focused on page navigation and should not render a project details panel.
+- Basic project name editing should happen in the top workspace header.
+- The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。

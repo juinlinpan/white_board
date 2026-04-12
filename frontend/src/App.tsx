@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -10,13 +11,11 @@ import {
   createPage,
   createProject,
   deletePage,
-  deleteProject,
   duplicatePage,
   getHealth,
   listPages,
   listProjects,
   reorderPages,
-  reorderProjects,
   updatePage,
   updateProject,
   type Page,
@@ -28,11 +27,13 @@ import {
   importProjectSnapshot,
   parseProjectImportText,
 } from './projectImport';
+import { buildAppRouteUrl, readAppRoute, type AppRoute } from './appRoute';
+import { resolveProjectEntryPageId } from './workspaceNavigation';
 
 type AppView = 'home' | 'workspace';
 type LoadState = 'loading' | 'ready' | 'error';
 type HealthState = 'loading' | 'ready' | 'error';
-type SidebarListKind = 'projects' | 'pages';
+type SidebarListKind = 'pages';
 type DropPosition = 'before' | 'after';
 type SidebarDragState = {
   kind: SidebarListKind;
@@ -62,13 +63,6 @@ function askForName(label: string, initialValue: string): string | null {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('zh-TW', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
 }
 
 function selectFallbackId<T extends { id: string }>(
@@ -133,8 +127,24 @@ function getDropPosition(event: ReactDragEvent<HTMLElement>): DropPosition {
   return event.clientY - bounds.top < bounds.height / 2 ? 'before' : 'after';
 }
 
+function syncBrowserRoute(route: AppRoute, mode: 'push' | 'replace'): void {
+  const nextUrl = buildAppRouteUrl(route);
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  if (currentUrl === nextUrl) {
+    return;
+  }
+
+  if (mode === 'push') {
+    window.history.pushState(null, '', nextUrl);
+    return;
+  }
+
+  window.history.replaceState(null, '', nextUrl);
+}
+
 export function App() {
-  const [appView, setAppView] = useState<AppView>('home');
+  const initialRoute = readAppRoute(window.location.search);
+  const [appView, setAppView] = useState<AppView>(initialRoute.view);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [healthState, setHealthState] = useState<HealthState>('loading');
   const [healthMessage, setHealthMessage] = useState(
@@ -144,9 +154,12 @@ export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
+    initialRoute.view === 'workspace' ? initialRoute.projectId : null,
   );
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(
+    initialRoute.view === 'workspace' ? initialRoute.pageId : null,
+  );
+  const [projectNameDraft, setProjectNameDraft] = useState('');
   const [isMutating, setIsMutating] = useState(false);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
   const [dragState, setDragState] = useState<SidebarDragState | null>(null);
@@ -161,14 +174,41 @@ export function App() {
     () => pages.find((page) => page.id === selectedPageId) ?? null,
     [pages, selectedPageId],
   );
+  const normalizedProjectNameDraft = projectNameDraft.trim();
 
-  function openProject(projectId: string, preferredPageId: string | null): void {
-    setSelectedPageId(preferredPageId);
+  function goHome(mode: 'push' | 'replace' = 'push'): void {
+    syncBrowserRoute({ view: 'home' }, mode);
+    setAppView('home');
+  }
+
+  function openProject(
+    projectId: string,
+    preferredPageId: string | null,
+    mode: 'push' | 'replace' = 'push',
+  ): void {
+    const nextPageId = resolveProjectEntryPageId({
+      preferredPageId,
+      targetProjectId: projectId,
+      selectedProjectId,
+      selectedPageId,
+      pages,
+    });
+
+    syncBrowserRoute(
+      {
+        view: 'workspace',
+        projectId,
+        pageId: nextPageId,
+      },
+      mode,
+    );
+    setSelectedPageId(nextPageId);
     setSelectedProjectId(projectId);
     setAppView('workspace');
   }
 
-  async function loadWorkspace(signal?: AbortSignal): Promise<void> {
+  const loadWorkspace = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
     setLoadState('loading');
     setErrorMessage(null);
     setHealthState('loading');
@@ -184,7 +224,9 @@ export function App() {
       setHealthMessage(`${health.service} is ${health.status}`);
       setProjects(nextProjects);
       setSelectedProjectId((current) =>
-        selectFallbackId(nextProjects, current),
+        appView === 'workspace'
+          ? current
+          : selectFallbackId(nextProjects, current),
       );
       setLoadState('ready');
     } catch (error) {
@@ -202,15 +244,75 @@ export function App() {
       setSelectedProjectId(null);
       setSelectedPageId(null);
       setLoadState('error');
+      syncBrowserRoute({ view: 'home' }, 'replace');
       setAppView('home');
     }
-  }
+    },
+    [appView],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     void loadWorkspace(controller.signal);
     return () => controller.abort();
+  }, [loadWorkspace]);
+
+  useEffect(() => {
+    function handlePopState(): void {
+      const route = readAppRoute(window.location.search);
+      if (route.view === 'home') {
+        setAppView('home');
+        return;
+      }
+
+      setSelectedProjectId(route.projectId);
+      setSelectedPageId(route.pageId);
+      setAppView('workspace');
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (appView === 'workspace' && selectedProjectId !== null) {
+      syncBrowserRoute(
+        {
+          view: 'workspace',
+          projectId: selectedProjectId,
+          pageId: selectedPageId,
+        },
+        'replace',
+      );
+      return;
+    }
+
+    if (appView === 'home') {
+      syncBrowserRoute({ view: 'home' }, 'replace');
+    }
+  }, [appView, selectedProjectId, selectedPageId]);
+
+  useEffect(() => {
+    if (
+      loadState !== 'ready' ||
+      appView !== 'workspace' ||
+      selectedProjectId === null
+    ) {
+      return;
+    }
+
+    if (projects.some((project) => project.id === selectedProjectId)) {
+      return;
+    }
+
+    setErrorMessage('The requested project no longer exists.');
+    syncBrowserRoute({ view: 'home' }, 'replace');
+    setAppView('home');
+  }, [appView, loadState, projects, selectedProjectId]);
+
+  useEffect(() => {
+    setProjectNameDraft(selectedProject?.name ?? '');
+  }, [selectedProject]);
 
   useEffect(() => {
     if (selectedProjectId === null) {
@@ -274,53 +376,29 @@ export function App() {
     });
   }
 
-  async function handleRenameProject(): Promise<void> {
+  async function handleSaveProjectName(): Promise<void> {
     if (selectedProject === null) {
       return;
     }
 
-    const name = askForName('重新命名 Project', selectedProject.name);
-    if (name === null || name === selectedProject.name) {
+    if (
+      normalizedProjectNameDraft.length === 0 ||
+      normalizedProjectNameDraft === selectedProject.name
+    ) {
       return;
     }
 
     await runMutation(async () => {
-      const updatedProject = await updateProject(selectedProject.id, name);
+      const updatedProject = await updateProject(
+        selectedProject.id,
+        normalizedProjectNameDraft,
+      );
       setProjects((current) =>
         current.map((project) =>
           project.id === updatedProject.id ? updatedProject : project,
         ),
       );
-    });
-  }
-
-  async function handleDeleteProject(): Promise<void> {
-    if (selectedProject === null) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `刪除 Project「${selectedProject.name}」？這會一併刪除底下的 Page。`,
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    const remainingProjects = projects.filter(
-      (project) => project.id !== selectedProject.id,
-    );
-
-    await runMutation(async () => {
-      await deleteProject(selectedProject.id);
-      setProjects(remainingProjects);
-      setPages([]);
-      setSelectedPageId(null);
-
-      const nextProjectId = remainingProjects[0]?.id ?? null;
-      setSelectedProjectId(nextProjectId);
-      if (nextProjectId === null) {
-        setAppView('home');
-      }
+      setProjectNameDraft(updatedProject.name);
     });
   }
 
@@ -444,37 +522,6 @@ export function App() {
     });
   }
 
-  async function handleProjectDrop(
-    draggedId: string,
-    targetId: string,
-    position: DropPosition,
-  ): Promise<void> {
-    const orderedIds = buildDraggedOrder(
-      projects,
-      draggedId,
-      targetId,
-      position,
-    );
-    if (orderedIds === null) {
-      return;
-    }
-
-    const previousProjects = projects;
-    setProjects(reorderItemsByIds(projects, orderedIds));
-    setIsMutating(true);
-    setErrorMessage(null);
-
-    try {
-      const nextProjects = await reorderProjects(orderedIds);
-      setProjects(nextProjects);
-    } catch (error) {
-      setProjects(previousProjects);
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsMutating(false);
-    }
-  }
-
   async function handlePageDrop(
     draggedId: string,
     targetId: string,
@@ -520,11 +567,6 @@ export function App() {
       currentDragState.kind !== kind ||
       currentDragState.itemId === targetId
     ) {
-      return;
-    }
-
-    if (kind === 'projects') {
-      void handleProjectDrop(currentDragState.itemId, targetId, position);
       return;
     }
 
@@ -598,7 +640,7 @@ export function App() {
       <main className="app-shell">
         <aside className="sidebar">
           <section className="sidebar-header">
-            <div className="section-title-row">
+            <div className="section-title-row sidebar-title-row">
               <div>
                 <h1>Whiteboard</h1>
                 <p className="sidebar-copy">
@@ -607,114 +649,17 @@ export function App() {
                     : '回到首頁或建立新的規劃空間'}
                 </p>
               </div>
-            </div>
-            <div className="action-row">
               <button
-                className="ghost-button"
+                className="ghost-button sidebar-home-button"
+                aria-label="首頁"
                 disabled={isMutating}
-                onClick={() => setAppView('home')}
+                onClick={() => goHome()}
+                title="首頁"
               >
                 首頁
               </button>
-              <button
-                className="primary-button"
-                disabled={isMutating}
-                onClick={() => void handleCreateProject()}
-              >
-                + Project
-              </button>
             </div>
           </section>
-
-          <section className="sidebar-section">
-            <div className="section-title-row">
-              <h2>Projects</h2>
-              <span className="count-badge">{projects.length}</span>
-            </div>
-            {projects.length === 0 ? (
-              <p className="empty-copy">
-                目前還沒有 Project，先建立一個規劃空間。
-              </p>
-            ) : (
-              <div className="list-stack">
-                {projects.map((project) => {
-                  const isDragging =
-                    dragState?.kind === 'projects' &&
-                    dragState.itemId === project.id;
-                  const isDropBefore =
-                    dropState?.kind === 'projects' &&
-                    dropState.itemId === project.id &&
-                    dropState.position === 'before';
-                  const isDropAfter =
-                    dropState?.kind === 'projects' &&
-                    dropState.itemId === project.id &&
-                    dropState.position === 'after';
-
-                  return (
-                    <div
-                      key={project.id}
-                      className={`list-entry ${isDropBefore ? 'is-drop-before' : ''} ${
-                        isDropAfter ? 'is-drop-after' : ''
-                      }`}
-                      onDragOver={(event) =>
-                        handleSidebarDragOver('projects', project.id, event)
-                      }
-                      onDrop={(event) =>
-                        handleSidebarDrop('projects', project.id, event)
-                      }
-                    >
-                      <button
-                        className={`list-button ${
-                          project.id === selectedProjectId ? 'is-selected' : ''
-                        } ${isDragging ? 'is-dragging' : ''} ${
-                          projects.length > 1 ? 'is-sortable' : ''
-                        }`}
-                        draggable={!isMutating && projects.length > 1}
-                        aria-label={
-                          projects.length > 1
-                            ? `按住拖拉排序 Project ${project.name}`
-                            : undefined
-                        }
-                        title={
-                          projects.length > 1
-                            ? `按住拖拉排序 Project ${project.name}`
-                            : undefined
-                        }
-                        onDragStart={(event) =>
-                          handleSidebarDragStart('projects', project.id, event)
-                        }
-                        onDragEnd={clearDragState}
-                        onClick={() => openProject(project.id, null)}
-                      >
-                        <span>{project.name}</span>
-                        <small>{formatDate(project.updated_at)}</small>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {projects.length > 1 ? (
-              <p className="sort-hint">按住 Project 項目直接拖拉即可調整順序。</p>
-            ) : null}
-            <div className="action-row">
-              <button
-                className="ghost-button"
-                disabled={selectedProject === null || isMutating}
-                onClick={() => void handleRenameProject()}
-              >
-                重新命名
-              </button>
-              <button
-                className="ghost-button danger-button"
-                disabled={selectedProject === null || isMutating}
-                onClick={() => void handleDeleteProject()}
-              >
-                刪除
-              </button>
-            </div>
-          </section>
-
           <section className="sidebar-section">
             <div className="section-title-row">
               <h2>Pages</h2>
@@ -822,17 +767,47 @@ export function App() {
 
         <section className="workspace">
           <header className="workspace-header">
-            <div>
-              <h2>{selectedProject?.name ?? 'Select a project'}</h2>
+            <div className="workspace-project-block">
+              {selectedProject !== null ? (
+                <div className="workspace-project-name-row">
+                  <input
+                    className="workspace-project-name-input"
+                    disabled={isMutating}
+                    type="text"
+                    value={projectNameDraft}
+                    onChange={(event) => setProjectNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleSaveProjectName();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ghost-button"
+                    disabled={
+                      isMutating ||
+                      normalizedProjectNameDraft.length === 0 ||
+                      normalizedProjectNameDraft === selectedProject.name
+                    }
+                    onClick={() => void handleSaveProjectName()}
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : (
+                <h2>Select a project</h2>
+              )}
               {selectedPage !== null ? (
                 <p className="workspace-copy">{selectedPage.name}</p>
               ) : null}
             </div>
             <div className="workspace-header-actions">
               <button
+                hidden
                 className="ghost-button"
                 disabled={isMutating}
-                onClick={() => setAppView('home')}
+                onClick={() => goHome()}
               >
                 首頁
               </button>
@@ -854,7 +829,7 @@ export function App() {
                 <button
                   className="primary-button"
                   disabled={isMutating}
-                  onClick={() => setAppView('home')}
+                  onClick={() => goHome()}
                 >
                   回到首頁
                 </button>

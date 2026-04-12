@@ -2,6 +2,12 @@
 
 Local-first whiteboard planning app built with React, FastAPI, and SQLite.
 
+## Navigation Notes
+
+- Opening a `Project` from the home screen now writes a dedicated browser history entry and enters the workspace on a real `Page` immediately. If a current page is already known for that project, the app keeps it; otherwise it falls back to the first page in the project.
+- The workspace left sidebar no longer shows project controls. Project renaming now happens directly in the top workspace header.
+- The `Home` button now lives in the workspace sidebar header, to the right of the `Whiteboard` title.
+
 ## Workspace Layout
 
 - `frontend/`: React + TypeScript + Vite web UI

@@ -325,6 +325,22 @@ body {
     0 18px 36px rgba(7, 19, 32, 0.16);
 }
 
+.sidebar-title-row {
+  align-items: flex-start;
+}
+
+.sidebar-home-button {
+  flex-shrink: 0;
+  min-width: 56px;
+  font-size: 0;
+}
+
+.sidebar-home-button::after {
+  content: '首頁';
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .sidebar-section {
   display: flex;
   flex-direction: column;
@@ -698,6 +714,46 @@ button {
   gap: 2px;
 }
 
+.workspace-project-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workspace-project-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-project-name-input {
+  min-width: 0;
+  width: min(420px, 100%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.workspace-project-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.workspace-project-name-input:disabled {
+  color: var(--muted);
+  background: var(--surface-dim);
+  cursor: not-allowed;
+}
+
 .workspace-header h2 {
   font-size: 0.95rem;
   text-transform: none;
@@ -857,6 +913,15 @@ button {
   }
 
   .workspace-header-actions {
+    width: 100%;
+  }
+
+  .workspace-project-name-row {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .workspace-project-name-input {
     width: 100%;
   }
 
