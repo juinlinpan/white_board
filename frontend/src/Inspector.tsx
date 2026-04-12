@@ -1,9 +1,12 @@
 import { type BoardItem, type ConnectorLink } from './api';
 import {
+  BACKGROUND_COLOR_OPTIONS,
+  TEXT_COLOR_OPTIONS,
   parseBoardItemStyle,
   resolveBoardItemStyle,
   serializeBoardItemStyle,
   type BoardItemStyle,
+  type ColorOption,
 } from './itemStyles';
 import {
   countFilledTableCells,
@@ -71,6 +74,57 @@ function normalizeRotation(value: number): number {
   return normalized > 180 ? normalized - 360 : normalized;
 }
 
+function ColorPaletteField({
+  label,
+  options,
+  selectedValue,
+  tone,
+  onSelect,
+}: {
+  label: string;
+  options: readonly ColorOption[];
+  selectedValue: string;
+  tone: 'background' | 'text';
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="inspector-color-field">
+      <span>{label}</span>
+      <div className="inspector-palette-grid" aria-label={label}>
+        {options.map((option) => {
+          const isActive = option.value === selectedValue;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`inspector-swatch-button ${isActive ? 'is-active' : ''}`}
+              aria-label={`${label} ${option.name}`}
+              aria-pressed={isActive}
+              title={`${option.name} ${option.value}`}
+              onClick={() => onSelect(option.value)}
+            >
+              {tone === 'background' ? (
+                <span
+                  className="inspector-swatch-chip"
+                  style={{ backgroundColor: option.value }}
+                />
+              ) : (
+                <span
+                  className="inspector-swatch-letter"
+                  style={{ color: option.value }}
+                >
+                  A
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Inspector({
   item,
   connector,
@@ -114,7 +168,8 @@ export function Inspector({
             <p className="meta-label">Primary Selection</p>
             <p className="inspector-meta">
               目前主選取物件：
-              {ITEM_TYPE_LABEL[item.type as keyof typeof ITEM_TYPE_LABEL] ?? item.type}
+              {ITEM_TYPE_LABEL[item.type as keyof typeof ITEM_TYPE_LABEL] ??
+                item.type}
             </p>
           </section>
         </div>
@@ -133,7 +188,8 @@ export function Inspector({
   const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
   const hasCustomStyle =
-    selectedItem.style_json !== null && selectedItem.style_json.trim().length > 0;
+    selectedItem.style_json !== null &&
+    selectedItem.style_json.trim().length > 0;
 
   function handleNumberChange(
     field: 'x' | 'y' | 'width' | 'height',
@@ -404,7 +460,9 @@ export function Inspector({
               </div>
             ) : null}
             {selectedItem.type === ITEM_TYPE.note_paper ? (
-              <p className="inspector-meta">以 Markdown 純文字儲存，右側可直接修改。</p>
+              <p className="inspector-meta">
+                以 Markdown 純文字儲存，右側可直接修改。
+              </p>
             ) : null}
           </section>
         ) : null}
@@ -423,26 +481,22 @@ export function Inspector({
               </button>
             </div>
             <div className="inspector-color-grid">
-              <label className="inspector-color-field">
-                背景色
-                <input
-                  type="color"
-                  value={resolvedStyle.backgroundColor}
-                  onChange={(e) =>
-                    handleStyleChange({ backgroundColor: e.target.value })
-                  }
-                />
-              </label>
-              <label className="inspector-color-field">
-                文字色
-                <input
-                  type="color"
-                  value={resolvedStyle.textColor}
-                  onChange={(e) =>
-                    handleStyleChange({ textColor: e.target.value })
-                  }
-                />
-              </label>
+              <ColorPaletteField
+                label="背景色"
+                options={BACKGROUND_COLOR_OPTIONS}
+                selectedValue={resolvedStyle.backgroundColor}
+                tone="background"
+                onSelect={(value) =>
+                  handleStyleChange({ backgroundColor: value })
+                }
+              />
+              <ColorPaletteField
+                label="文字色"
+                options={TEXT_COLOR_OPTIONS}
+                selectedValue={resolvedStyle.textColor}
+                tone="text"
+                onSelect={(value) => handleStyleChange({ textColor: value })}
+              />
             </div>
             <div className="inspector-grid">
               <label>
@@ -488,7 +542,10 @@ export function Inspector({
                 斜體
               </button>
             </div>
-            <p className="inspector-meta">變更會即時套用到畫布並自動儲存。</p>
+            <p className="inspector-meta">
+              背景固定 7
+              色，文字固定高飽和色票；變更會即時套用到畫布並自動儲存。
+            </p>
           </section>
         ) : null}
 
@@ -533,7 +590,8 @@ export function Inspector({
                 value={resolvedStyle.strokeStyle}
                 onChange={(e) =>
                   handleStyleChange({
-                    strokeStyle: e.target.value as BoardItemStyle['strokeStyle'],
+                    strokeStyle: e.target
+                      .value as BoardItemStyle['strokeStyle'],
                   })
                 }
               >
