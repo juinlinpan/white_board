@@ -6,6 +6,7 @@ import { ITEM_TYPE } from '../types';
 type Props = {
   item: BoardItem;
   isSelected: boolean;
+  canTranslate: boolean;
   onMouseDown: (e: React.MouseEvent<SVGPolylineElement>) => void;
   onEndpointMouseDown: (
     e: React.MouseEvent<HTMLButtonElement>,
@@ -30,6 +31,7 @@ function getStrokeDasharray(style: 'solid' | 'dashed' | 'dotted'): string | unde
 export function SegmentShape({
   item,
   isSelected,
+  canTranslate,
   onMouseDown,
   onEndpointMouseDown,
   onWaypointMouseDown,
@@ -53,6 +55,7 @@ export function SegmentShape({
   const allLocalPoints = [points.start, ...localWaypoints, points.end];
   const polylinePoints = allLocalPoints.map((p) => `${p.x},${p.y}`).join(' ');
   const strokeDasharray = getStrokeDasharray(resolvedStyle.strokeStyle);
+  const hitStrokeWidth = Math.max(resolvedStyle.strokeWidth + 12, 14);
 
   return (
     <div className="segment-shape" aria-hidden="true">
@@ -96,7 +99,8 @@ export function SegmentShape({
         <polyline
           points={polylinePoints}
           fill="none"
-          className="segment-hit-line"
+          className={`segment-hit-line${canTranslate ? ' is-translatable' : ''}`}
+          style={{ strokeWidth: hitStrokeWidth }}
           onMouseDown={onMouseDown}
         />
       </svg>

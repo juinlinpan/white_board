@@ -117,6 +117,10 @@ export function getSegmentConnections(
   };
 }
 
+export function canTranslateSegmentItem(item: BoardItem): boolean {
+  return item.type === ITEM_TYPE.line || item.type === ITEM_TYPE.arrow;
+}
+
 function getLegacyLineLocalPoints(item: BoardItem): { start: Point; end: Point } {
   const centerX = item.width / 2;
   const centerY = item.height / 2;

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { BoardItem } from './api';
 import {
   buildSegmentGeometry,
+  canTranslateSegmentItem,
   getSegmentConnections,
   getSegmentWorldPoints,
   normalizeSegmentDraft,
@@ -127,6 +128,31 @@ describe('segmentData', () => {
     const connections = getSegmentConnections(item);
     expect(connections.startConnection).toEqual(startConn);
     expect(connections.endConnection).toEqual(endConn);
+  });
+
+  it('allows translating all segment items by body drag', () => {
+    const freeformLine = createBoardItem({
+      ...buildSegmentGeometry({ x: 100, y: 80 }, { x: 260, y: 190 }, null),
+    });
+    const legacyConnectorArrow = createBoardItem({
+      type: ITEM_TYPE.arrow,
+      category: ITEM_CATEGORY.connector,
+    });
+    const connectedArrow = createBoardItem({
+      type: ITEM_TYPE.arrow,
+      category: ITEM_CATEGORY.connector,
+      ...buildSegmentGeometry(
+        { x: 100, y: 80 },
+        { x: 260, y: 190 },
+        null,
+        { itemId: 'box-a', anchor: 'right' },
+        null,
+      ),
+    });
+
+    expect(canTranslateSegmentItem(freeformLine)).toBe(true);
+    expect(canTranslateSegmentItem(legacyConnectorArrow)).toBe(true);
+    expect(canTranslateSegmentItem(connectedArrow)).toBe(true);
   });
 
   it('preserves connections on the untouched endpoint when updating', () => {

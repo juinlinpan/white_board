@@ -11,6 +11,7 @@ import {
   type ConnectorLink,
   type ConnectorLinkPayload,
   createBoardItem,
+  deleteConnector,
   deleteBoardItem,
   getPageBoardData,
   replacePageBoardState,
@@ -50,6 +51,7 @@ import {
 import { Inspector } from './Inspector';
 import {
   buildSegmentGeometry,
+  canTranslateSegmentItem,
   getSegmentConnections,
   getSegmentWaypoints,
   getSegmentWorldPoints,
@@ -97,6 +99,8 @@ type DragState = {
   startBoundsY: number;
   itemPositions: Array<{ id: string; x: number; y: number }>;
   snapshot: BoardSnapshot;
+  detachedConnectorIds: string[];
+  hasDetachedSegments: boolean;
 };
 
 type ResizeState = {
@@ -297,6 +301,106 @@ function expandSelectionItemIds(
   }
 
   return expandedIds;
+}
+
+function getDraggableSelectionItemIds(
+  items: BoardItem[],
+  selectedIds: string[],
+): string[] {
+  return expandSelectionItemIds(items, selectedIds).filter((itemId) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return false;
+    }
+
+    return item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow
+      ? true
+      : canTranslateSegmentItem(item);
+  });
+}
+
+function detachDraggedSegments(
+  items: BoardItem[],
+  connectors: ConnectorLink[],
+  selectedItemIds: string[],
+): {
+  items: BoardItem[];
+  connectors: ConnectorLink[];
+  detachedItemIds: string[];
+  detachedConnectorIds: string[];
+} {
+  const selectedIdSet = new Set(selectedItemIds);
+  const connectorByItemId = new Map(
+    connectors.map((connector) => [connector.connector_item_id, connector] as const),
+  );
+  const detachedItemIds: string[] = [];
+  const detachedConnectorIds: string[] = [];
+
+  const nextItems = items.map((item) => {
+    if (!selectedIdSet.has(item.id)) {
+      return item;
+    }
+
+    if (item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow) {
+      return item;
+    }
+
+    if (hasStoredSegmentData(item)) {
+      const worldPoints = getSegmentWorldPoints(item);
+      if (worldPoints === null) {
+        return item;
+      }
+
+      const { startConnection, endConnection } = getSegmentConnections(item);
+      if (startConnection === null && endConnection === null) {
+        return item;
+      }
+
+      detachedItemIds.push(item.id);
+      return {
+        ...item,
+        ...buildSegmentGeometry(
+          worldPoints.start,
+          worldPoints.end,
+          getSegmentWaypoints(item).map((point) => ({
+            x: item.x + point.x,
+            y: item.y + point.y,
+          })),
+          null,
+          null,
+        ),
+      };
+    }
+
+    if (item.type !== ITEM_TYPE.arrow) {
+      return item;
+    }
+
+    const connector = connectorByItemId.get(item.id);
+    if (!connector) {
+      return item;
+    }
+
+    const connectorPoints = getConnectorPoints(connector, items);
+    if (connectorPoints === null) {
+      return item;
+    }
+
+    detachedItemIds.push(item.id);
+    detachedConnectorIds.push(connector.id);
+    return {
+      ...item,
+      ...buildSegmentGeometry(connectorPoints.fromPoint, connectorPoints.toPoint, null),
+    };
+  });
+
+  const detachedConnectorIdSet = new Set(detachedConnectorIds);
+  return {
+    items: nextItems,
+    connectors: connectors.filter((connector) => !detachedConnectorIdSet.has(connector.id)),
+    detachedItemIds,
+    detachedConnectorIds,
+  };
 }
 
 function getSelectionBounds(
@@ -1897,22 +2001,26 @@ export function Canvas({ page }: Props) {
     const nextSelectedIds = currentSelection.includes(itemId)
       ? currentSelection
       : [itemId];
-    const draggedSelectionIds = expandSelectionItemIds(
+    const draggedSelectionIds = getDraggableSelectionItemIds(
       itemsRef.current,
       nextSelectedIds,
     );
+    setSelection(nextSelectedIds);
+    setEditingId(null);
+
+    if (draggedSelectionIds.length === 0) {
+      return;
+    }
+
     const selectionBounds = getSelectionBounds(itemsRef.current, draggedSelectionIds);
     if (selectionBounds === null) {
       return;
     }
 
-    setSelection(nextSelectedIds);
-    setEditingId(null);
-
     // Segment items (line/arrow) cannot be moved by dragging the body —
     // only endpoints and waypoints are draggable.
     const isSegmentItem = item.type === ITEM_TYPE.line || item.type === ITEM_TYPE.arrow;
-    if (isSegmentItem) {
+    if (isSegmentItem && !canTranslateSegmentItem(item)) {
       return;
     }
 
@@ -1938,6 +2046,8 @@ export function Canvas({ page }: Props) {
         })
         .filter((entry): entry is { id: string; x: number; y: number } => entry !== null),
       snapshot: captureBoardSnapshot(),
+      detachedConnectorIds: [],
+      hasDetachedSegments: false,
     };
   }
 
@@ -2276,15 +2386,56 @@ export function Canvas({ page }: Props) {
       const vp = viewportRef.current;
       const dx = (e.clientX - drag.startMouseX) / vp.zoom;
       const dy = (e.clientY - drag.startMouseY) / vp.zoom;
+      let baseItems = itemsRef.current;
+
+      if (!drag.hasDetachedSegments) {
+        const detached = detachDraggedSegments(
+          baseItems,
+          connectorsRef.current,
+          drag.selectedItemIds,
+        );
+
+        if (detached.detachedItemIds.length > 0) {
+          drag.hasDetachedSegments = true;
+          drag.detachedConnectorIds.push(...detached.detachedConnectorIds);
+          baseItems = detached.items;
+          setItemsAndSync(baseItems);
+          setConnectorsAndSync(detached.connectors);
+
+          const detachedSelectionBounds = getSelectionBounds(
+            baseItems,
+            drag.selectedItemIds,
+          );
+          if (detachedSelectionBounds !== null) {
+            drag.startBoundsX = detachedSelectionBounds.x;
+            drag.startBoundsY = detachedSelectionBounds.y;
+          }
+
+          drag.itemPositions = drag.selectedItemIds
+            .map((selectedItemId) => {
+              const selectedItem = baseItems.find(
+                (candidate) => candidate.id === selectedItemId,
+              );
+              return selectedItem === undefined
+                ? null
+                : {
+                    id: selectedItem.id,
+                    x: selectedItem.x,
+                    y: selectedItem.y,
+                  };
+            })
+            .filter(
+              (entry): entry is { id: string; x: number; y: number } => entry !== null,
+            );
+        }
+      }
+
       if (drag.itemPositions.length === 0) {
         setSnapGuides([]);
         return;
       }
 
-      const selectionBounds = getSelectionBounds(
-        itemsRef.current,
-        drag.selectedItemIds,
-      );
+      const selectionBounds = getSelectionBounds(baseItems, drag.selectedItemIds);
       if (selectionBounds === null) {
         setSnapGuides([]);
         return;
@@ -2695,6 +2846,13 @@ export function Canvas({ page }: Props) {
       }
 
       persistItems(nextItems.filter((item) => changedIds.has(item.id)));
+      if (drag.detachedConnectorIds.length > 0) {
+        void Promise.all(
+          drag.detachedConnectorIds.map((connectorId) => deleteConnector(connectorId)),
+        ).catch((err) => {
+          console.error('[Canvas] Failed to delete detached connectors', err);
+        });
+      }
       syncConnectorAnchorsForItems([...changedIds]);
       syncSegmentConnectionsForItems([...changedIds]);
       triggerFrameItemAnimation(ingestedItemIds, 'ingest');
@@ -2850,6 +3008,7 @@ export function Canvas({ page }: Props) {
                       className={itemClassName}
                       isSelected={selectedIds.includes(item.id)}
                       isEditing={item.id === editingId}
+                      canTranslateSegment={canTranslateSegmentItem(item)}
                       onMouseDown={(e) => handleItemMouseDown(e, item.id)}
                       onEndpointMouseDown={(e, endpoint) =>
                         handleSegmentEndpointMouseDown(e, item.id, endpoint)
@@ -2889,6 +3048,7 @@ export function Canvas({ page }: Props) {
                   <SegmentShape
                     item={segmentDraftPreviewItem}
                     isSelected={false}
+                    canTranslate={false}
                     onMouseDown={() => {}}
                     onEndpointMouseDown={() => {}}
                     onWaypointMouseDown={() => {}}

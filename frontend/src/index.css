@@ -1440,12 +1440,18 @@ button {
 /* Segment items (line/arrow) cannot be dragged — use default cursor on the wrapper */
 .board-item-segment {
   cursor: default;
+  pointer-events: none;
 }
 
 .board-item.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.board-item-segment.is-selected {
+  outline: none;
+  box-shadow: none;
 }
 
 .board-item.is-frame-drop-target {
@@ -1505,6 +1511,7 @@ button {
   position: relative;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .segment-shape-svg {
@@ -1512,6 +1519,7 @@ button {
   width: 100%;
   height: 100%;
   overflow: visible;
+  pointer-events: none;
 }
 
 .segment-line {
@@ -1521,9 +1529,12 @@ button {
 
 .segment-hit-line {
   stroke: transparent;
-  stroke-width: 18px;
-  cursor: move;
+  cursor: default;
   pointer-events: stroke;
+}
+
+.segment-hit-line.is-translatable {
+  cursor: move;
 }
 
 .segment-marker-head {
@@ -1532,8 +1543,8 @@ button {
 
 .segment-endpoint-handle {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 2px solid #fff;
   border-radius: 999px;
@@ -1541,12 +1552,13 @@ button {
   box-shadow: var(--shadow-md);
   transform: translate(-50%, -50%);
   cursor: crosshair;
+  pointer-events: auto;
 }
 
 .segment-waypoint-handle {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: 2px solid var(--accent);
   border-radius: 999px;
@@ -1554,6 +1566,7 @@ button {
   box-shadow: var(--shadow-sm);
   transform: translate(-50%, -50%);
   cursor: grab;
+  pointer-events: auto;
 }
 
 .segment-waypoint-handle:active {
@@ -1572,7 +1585,7 @@ button {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 8px;
+  width: 10px;
   height: 2px;
   background: #fff;
   border-radius: 1px;
@@ -1588,8 +1601,8 @@ button {
 
 .segment-midpoint-handle {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: 1px solid var(--accent);
   background: rgba(37, 99, 235, 0.2);
@@ -1597,6 +1610,7 @@ button {
   cursor: pointer;
   opacity: 0.4;
   transition: opacity 0.15s ease-out;
+  pointer-events: auto;
 }
 
 .segment-midpoint-handle:hover {

@@ -107,6 +107,13 @@
 
 ### 9. `shape`
 
+- [x] 放大 `line` / `arrow` 端點、折點與中段節點的滑鼠命中範圍，降低精準點擊需求
+
+- [x] 拖曳已綁定 anchor 的 `line` / `arrow` 線身時會先 detach，再轉成 freeform segment 平移
+
+- [x] `line` / freeform `arrow` 的命中區改為沿線段計算，不再讓整個外接矩形吃掉滑鼠事件
+- [x] segment 可直接拖曳線身平移；已綁定 anchor 的 segment 在拖曳線身時會先 detach 再移動
+
 - [x] 實作 `line`
 - [x] 支援 `line` 以起點 / 終點控制長度與方向
 - [x] 支援 `line` 拖曳端點調整

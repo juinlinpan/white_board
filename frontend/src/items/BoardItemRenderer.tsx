@@ -14,6 +14,7 @@ type Props = {
   className?: string;
   isSelected: boolean;
   isEditing: boolean;
+  canTranslateSegment?: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onEndpointMouseDown: (
     e: React.MouseEvent<HTMLButtonElement>,
@@ -36,6 +37,7 @@ export function BoardItemRenderer({
   className = '',
   isSelected,
   isEditing,
+  canTranslateSegment = false,
   onMouseDown,
   onEndpointMouseDown,
   onWaypointMouseDown,
@@ -47,6 +49,7 @@ export function BoardItemRenderer({
   onUpdate,
   onEditEnd,
 }: Props) {
+  const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
     left: item.x,
@@ -55,12 +58,12 @@ export function BoardItemRenderer({
     height: item.height,
     zIndex: item.z_index,
     userSelect: 'none',
+    pointerEvents: isSegmentItem ? 'none' : undefined,
   };
 
   const wrapperClass = `board-item board-item-type-${item.type} ${
     isSelected ? 'is-selected' : ''
   } ${className}`.trim();
-  const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const resizeHandle =
     isSelected && !isEditing && !isSegmentItem ? (
       <button
@@ -82,6 +85,7 @@ export function BoardItemRenderer({
           <SegmentShape
             item={item}
             isSelected={isSelected}
+            canTranslate={canTranslateSegment}
             onMouseDown={onMouseDown as (e: React.MouseEvent<SVGPolylineElement>) => void}
             onEndpointMouseDown={onEndpointMouseDown}
             onWaypointMouseDown={onWaypointMouseDown}
