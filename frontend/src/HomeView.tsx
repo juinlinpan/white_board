@@ -1,5 +1,55 @@
 ﻿import { type Project } from './api';
 
+/* ── Logo ── */
+function WhiteboardLogo() {
+  return (
+    <div className="home-logo" aria-label="Whiteboard">
+      <svg
+        className="home-logo-icon"
+        width="68"
+        height="68"
+        viewBox="0 0 52 52"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {/* board */}
+        <rect x="4" y="6" width="44" height="36" rx="6" fill="url(#board-grad)" />
+        <rect x="4" y="6" width="44" height="36" rx="6" stroke="url(#border-grad)" strokeWidth="1.5" fill="none" />
+        {/* decorative marks on the board */}
+        <rect x="12" y="16" width="18" height="3" rx="1.5" fill="#7dd3fc" opacity="0.85" />
+        <rect x="12" y="23" width="12" height="3" rx="1.5" fill="#a78bfa" opacity="0.7" />
+        <rect x="12" y="30" width="22" height="3" rx="1.5" fill="#34d399" opacity="0.65" />
+        {/* sticky note accent */}
+        <rect x="36" y="14" width="8" height="8" rx="1.5" fill="#fbbf24" opacity="0.9" />
+        {/* pen */}
+        <g transform="translate(32, 30) rotate(-35)">
+          <rect x="0" y="0" width="4" height="18" rx="2" fill="url(#pen-grad)" />
+          <polygon points="1,18 3,18 2,22" fill="#374151" />
+        </g>
+        {/* gradients */}
+        <defs>
+          <linearGradient id="board-grad" x1="4" y1="6" x2="48" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ffffff" />
+            <stop offset="1" stopColor="#eef2ff" />
+          </linearGradient>
+          <linearGradient id="border-grad" x1="4" y1="6" x2="48" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#c7d2fe" />
+            <stop offset="1" stopColor="#93c5fd" />
+          </linearGradient>
+          <linearGradient id="pen-grad" x1="2" y1="0" x2="2" y2="18" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#6366f1" />
+            <stop offset="1" stopColor="#2563eb" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="home-logo-text">
+        <span className="home-logo-wordmark">Whiteboard</span>
+        <span className="home-logo-tagline">Think visually, plan freely</span>
+      </div>
+    </div>
+  );
+}
+
 function IconPlus() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
@@ -52,6 +102,8 @@ export function HomeView({
   return (
     <main className="home-shell">
       <div className="home-center">
+
+        <WhiteboardLogo />
 
         <div className="home-header">
           <h1 className="home-title">你的 Projects</h1>
