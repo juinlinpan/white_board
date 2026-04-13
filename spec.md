@@ -217,6 +217,15 @@ Page 至少包含：
 - 可展開 / 縮回
 - 展開時顯示內部完整內容
 - 縮回時依內部物件型別顯示摘要
+- 展開中的 `frame` 需支援拖曳吸入 `small_item`
+- 當被拖曳物件與 `frame` 的重疊比例大於 25%（以物件面積或 frame 面積任一方計算達標）時，`frame` 進入 focus mode，並顯示微幅浮起動畫
+- 在 focus mode 下放開滑鼠時，物件必須自動完整吸入 `frame`
+- 若吸入時物件過大，需先等比縮放到不超過 `frame` 寬高的 60% 再收入
+- 物件從 `frame` 內拖出時，也要有對應的退出動畫
+- 放開滑鼠後，`small_item` 的最終狀態必須明確落在 `frame` 內或 `frame` 外，不可停留在邊界中間卻仍被計為 `frame` 內容
+- `frame` 內部允許物件彼此重疊，不需要自動避讓
+- 只要物件仍屬於某個 `frame`，其可見範圍不得有任何一部分超出該 `frame` 內容區
+- 物件從 `frame` 內拖出時，只有在最終位置完整離開原本 `frame` 後才算成功移出；若未完整離開，必須自動彈回 `frame` 內
 
 ### 5.11 `arrow`
 
@@ -411,6 +420,13 @@ MVP 至少包含：
 ## 13. 驗收條件
 
 驗收至少需包含：
+
+- 展開中的 `frame` 對 `small_item` 提供 overlap-based focus mode，並在滑鼠放開時可自動吸入
+- 過大的 `small_item` 進入 `frame` 前，會先縮放到不超過 frame 寬高的 60%
+- `small_item` 進入與離開 `frame` 時，都有可辨識的短動畫回饋
+- `small_item` 從 `frame` 離開後，最終位置會被明確彈到 frame 外，不會停在邊界半內半外
+- `frame` 內的 item 可重疊，但不允許部分超出 frame 內容區
+- 從 `frame` 嘗試拖出 item 時，若未完整移出，放手後會自動彈回 frame 內
 
 1. 啟動前端後先進入首頁，且可從首頁選擇既有 Project
 2. 可建立、重新命名、刪除 Project，並可從 JSON 匯入新的 Project

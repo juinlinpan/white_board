@@ -30,9 +30,13 @@ import {
   pushUndoHistory,
 } from './boardHistory';
 import {
+  findFrameDropTarget,
   getAnchorPoint,
   getAutoAnchors,
   getConnectorPoints,
+  getFrameChildFitSize,
+  getFrameEjectPosition,
+  getFrameOverlapScore,
   getFrameChildren,
   getItemConnectorAnchors,
   findNearestConnectorAnchor,
@@ -83,7 +87,6 @@ const PASTE_OFFSET_STEP = 32;
 const MAX_HISTORY_ENTRIES = 50;
 const FRAME_LAYOUT_PADDING_X = 20;
 const FRAME_LAYOUT_PADDING_TOP = 72;
-const FRAME_LAYOUT_GAP = 16;
 
 type DragState = {
   itemId: string;
@@ -370,39 +373,121 @@ function layoutFrameChildren(
   const contentLeft = frame.x + FRAME_LAYOUT_PADDING_X;
   const contentTop = frame.y + FRAME_LAYOUT_PADDING_TOP;
   const contentWidth = Math.max(frame.width - FRAME_LAYOUT_PADDING_X * 2, 80);
+  const contentHeight = Math.max(
+    frame.height - FRAME_LAYOUT_PADDING_TOP - FRAME_LAYOUT_PADDING_X,
+    80,
+  );
   const contentRight = contentLeft + contentWidth;
-
-  let cursorX = contentLeft;
-  let cursorY = contentTop;
-  let rowHeight = 0;
+  const contentBottom = contentTop + contentHeight;
 
   for (const child of children) {
-    const minWidth = ITEM_MIN_SIZE[child.type]?.width ?? 60;
-    const nextWidth = Math.max(minWidth, Math.min(child.width, contentWidth));
-
-    if (cursorX > contentLeft && cursorX + nextWidth > contentRight) {
-      cursorX = contentLeft;
-      cursorY += rowHeight + FRAME_LAYOUT_GAP;
-      rowHeight = 0;
-    }
+    const scale = Math.min(
+      1,
+      contentWidth / Math.max(child.width, 1),
+      contentHeight / Math.max(child.height, 1),
+    );
+    const nextWidth = Math.max(1, Math.round(child.width * scale));
+    const nextHeight = Math.max(1, Math.round(child.height * scale));
+    const nextX = Math.min(
+      Math.max(child.x, contentLeft),
+      Math.max(contentLeft, contentRight - nextWidth),
+    );
+    const nextY = Math.min(
+      Math.max(child.y, contentTop),
+      Math.max(contentTop, contentBottom - nextHeight),
+    );
 
     updates.set(
       child.id,
-      child.x === cursorX && child.y === cursorY && child.width === nextWidth
+      child.x === nextX &&
+        child.y === nextY &&
+        child.width === nextWidth &&
+        child.height === nextHeight
         ? child
         : {
             ...child,
-            x: cursorX,
-            y: cursorY,
+            x: nextX,
+            y: nextY,
             width: nextWidth,
+            height: nextHeight,
           },
     );
-
-    cursorX += nextWidth + FRAME_LAYOUT_GAP;
-    rowHeight = Math.max(rowHeight, child.height);
   }
 
   return updates;
+}
+
+function getFrameContentBounds(frame: BoardItem): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+} {
+  const left = frame.x + FRAME_LAYOUT_PADDING_X;
+  const top = frame.y + FRAME_LAYOUT_PADDING_TOP;
+  const width = Math.max(frame.width - FRAME_LAYOUT_PADDING_X * 2, 80);
+  const height = Math.max(
+    frame.height - FRAME_LAYOUT_PADDING_TOP - FRAME_LAYOUT_PADDING_X,
+    80,
+  );
+
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+  };
+}
+
+function fitItemWithinBounds(
+  item: BoardItem,
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const scale = Math.min(
+    1,
+    maxWidth / Math.max(item.width, 1),
+    maxHeight / Math.max(item.height, 1),
+  );
+
+  return {
+    width: Math.max(1, Math.round(item.width * scale)),
+    height: Math.max(1, Math.round(item.height * scale)),
+  };
+}
+
+function clampItemToFrame(
+  item: BoardItem,
+  frame: BoardItem,
+  nextSize: { width: number; height: number },
+): { x: number; y: number } {
+  const bounds = getFrameContentBounds(frame);
+
+  return {
+    x: Math.min(
+      Math.max(item.x, bounds.left),
+      Math.max(bounds.left, bounds.right - nextSize.width),
+    ),
+    y: Math.min(
+      Math.max(item.y, bounds.top),
+      Math.max(bounds.top, bounds.bottom - nextSize.height),
+    ),
+  };
+}
+
+function isItemFullyOutsideFrame(item: BoardItem, frame: BoardItem): boolean {
+  const bounds = getFrameContentBounds(frame);
+
+  return (
+    item.x + item.width <= bounds.left ||
+    item.x >= bounds.right ||
+    item.y + item.height <= bounds.top ||
+    item.y >= bounds.bottom
+  );
 }
 
 function relayoutFrameItems(
@@ -494,42 +579,6 @@ function reorderItemsForLayer(
   );
 }
 
-function isPointInsideFrame(x: number, y: number, frame: BoardItem): boolean {
-  return (
-    x >= frame.x &&
-    x <= frame.x + frame.width &&
-    y >= frame.y &&
-    y <= frame.y + frame.height
-  );
-}
-
-function findContainingFrame(
-  item: BoardItem,
-  items: BoardItem[],
-): BoardItem | null {
-  const centerX = item.x + item.width / 2;
-  const centerY = item.y + item.height / 2;
-
-  const candidates = items
-    .filter(
-      (candidate) =>
-        candidate.type === ITEM_TYPE.frame &&
-        candidate.id !== item.id &&
-        isPointInsideFrame(centerX, centerY, candidate),
-    )
-    .sort((a, b) => {
-      const areaA = a.width * a.height;
-      const areaB = b.width * b.height;
-      if (areaA !== areaB) {
-        return areaA - areaB;
-      }
-
-      return b.z_index - a.z_index;
-    });
-
-  return candidates[0] ?? null;
-}
-
 export function Canvas({ page }: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
@@ -553,10 +602,15 @@ export function Canvas({ page }: Props) {
   const [anchorIndicatorItems, setAnchorIndicatorItems] = useState<BoardItem[]>([]);
   const [activeAnchorHit, setActiveAnchorHit] = useState<AnchorHit | null>(null);
   const [deletingWaypointInfo, setDeletingWaypointInfo] = useState<{ itemId: string; waypointIndex: number } | null>(null);
+  const [activeFrameDropTargetId, setActiveFrameDropTargetId] = useState<string | null>(null);
+  const [frameItemAnimations, setFrameItemAnimations] = useState<
+    Record<string, 'ingest' | 'eject'>
+  >({});
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
   const connectorsRef = useRef<ConnectorLink[]>(connectors);
+  const frameAnimationTimersRef = useRef(new Map<string, number>());
   const selectedIdsRef = useRef<string[]>(selectedIds);
   const clipboardRef = useRef<ClipboardSnapshot | null>(null);
   const pasteCountRef = useRef(0);
@@ -579,6 +633,91 @@ export function Canvas({ page }: Props) {
     connectorsRef.current = connectors;
     selectedIdsRef.current = selectedIds;
   }, [connectors, items, selectedIds, viewport]);
+
+  const triggerFrameItemAnimation = useCallback(
+    (itemIds: string[], animation: 'ingest' | 'eject') => {
+      const normalizedIds = getUniqueItemIds(itemIds);
+      if (normalizedIds.length === 0) {
+        return;
+      }
+
+      setFrameItemAnimations((current) => {
+        const next = { ...current };
+        for (const itemId of normalizedIds) {
+          next[itemId] = animation;
+        }
+        return next;
+      });
+
+      for (const itemId of normalizedIds) {
+        const currentTimer = frameAnimationTimersRef.current.get(itemId);
+        if (currentTimer !== undefined) {
+          window.clearTimeout(currentTimer);
+        }
+
+        const nextTimer = window.setTimeout(() => {
+          frameAnimationTimersRef.current.delete(itemId);
+          setFrameItemAnimations((current) => {
+            if (current[itemId] === undefined) {
+              return current;
+            }
+
+            const next = { ...current };
+            delete next[itemId];
+            return next;
+          });
+        }, 280);
+
+        frameAnimationTimersRef.current.set(itemId, nextTimer);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const animationTimers = frameAnimationTimersRef.current;
+    return () => {
+      for (const timerId of animationTimers.values()) {
+        window.clearTimeout(timerId);
+      }
+      animationTimers.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const drag = dragRef.current;
+    if (drag === null) {
+      if (activeFrameDropTargetId !== null) {
+        setActiveFrameDropTargetId(null);
+      }
+      return;
+    }
+
+    let nextTargetId: string | null = null;
+    let bestScore = 0;
+
+    for (const draggedItemId of drag.selectedItemIds) {
+      const draggedItem = items.find((candidate) => candidate.id === draggedItemId);
+      if (!draggedItem || !isSmallItem(draggedItem)) {
+        continue;
+      }
+
+      const frame = findFrameDropTarget(draggedItem, items);
+      if (!frame) {
+        continue;
+      }
+
+      const score = getFrameOverlapScore(draggedItem, frame);
+      if (score > bestScore) {
+        bestScore = score;
+        nextTargetId = frame.id;
+      }
+    }
+
+    if (nextTargetId !== activeFrameDropTargetId) {
+      setActiveFrameDropTargetId(nextTargetId);
+    }
+  }, [activeFrameDropTargetId, items]);
 
   const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
     setItems((current) => {
@@ -2277,6 +2416,7 @@ export function Canvas({ page }: Props) {
     setSnapGuides([]);
     setAnchorIndicatorItems([]);
     setActiveAnchorHit(null);
+    setActiveFrameDropTargetId(null);
 
     const waypointDrag = waypointDragRef.current;
     if (waypointDrag) {
@@ -2407,10 +2547,13 @@ export function Canvas({ page }: Props) {
     const drag = dragRef.current;
     if (drag) {
       dragRef.current = null;
+      setActiveFrameDropTargetId(null);
       let nextItems = itemsRef.current;
       const movedItemIds = getUniqueItemIds(drag.selectedItemIds);
       const changedIds = new Set<string>(movedItemIds);
       const frameIdsToRelayout = new Set<string>();
+      const ingestedItemIds: string[] = [];
+      const ejectedItemIds: string[] = [];
       const movedFrameIds = new Set(
         movedItemIds.filter((itemId) => {
           const item = nextItems.find((candidate) => candidate.id === itemId);
@@ -2431,9 +2574,68 @@ export function Canvas({ page }: Props) {
           continue;
         }
 
-        const nextParent = findContainingFrame(movedItem, nextItems);
-        const nextParentId = nextParent?.id ?? null;
-        if (nextParentId === movedItem.parent_item_id) {
+        const previousParent =
+          movedItem.parent_item_id === null
+            ? null
+            : nextItems.find((item) => item.id === movedItem.parent_item_id) ??
+              null;
+        const targetFrame = findFrameDropTarget(movedItem, nextItems);
+
+        let nextParentId = movedItem.parent_item_id;
+        let nextWidth = movedItem.width;
+        let nextHeight = movedItem.height;
+        let nextX = movedItem.x;
+        let nextY = movedItem.y;
+
+        if (targetFrame !== null) {
+          const fittedSize =
+            previousParent?.id === targetFrame.id
+              ? fitItemWithinBounds(
+                  movedItem,
+                  getFrameContentBounds(targetFrame).width,
+                  getFrameContentBounds(targetFrame).height,
+                )
+              : getFrameChildFitSize(movedItem, targetFrame);
+          const clampedPosition = clampItemToFrame(
+            movedItem,
+            targetFrame,
+            fittedSize,
+          );
+
+          nextParentId = targetFrame.id;
+          nextWidth = fittedSize.width;
+          nextHeight = fittedSize.height;
+          nextX = clampedPosition.x;
+          nextY = clampedPosition.y;
+        } else if (previousParent !== null) {
+          if (isItemFullyOutsideFrame(movedItem, previousParent)) {
+            nextParentId = null;
+          } else {
+            const fittedSize = fitItemWithinBounds(
+              movedItem,
+              getFrameContentBounds(previousParent).width,
+              getFrameContentBounds(previousParent).height,
+            );
+            const clampedPosition = clampItemToFrame(
+              movedItem,
+              previousParent,
+              fittedSize,
+            );
+
+            nextParentId = previousParent.id;
+            nextWidth = fittedSize.width;
+            nextHeight = fittedSize.height;
+            nextX = clampedPosition.x;
+            nextY = clampedPosition.y;
+          }
+        }
+
+        const parentChanged = nextParentId !== movedItem.parent_item_id;
+        const positionChanged = nextX !== movedItem.x || nextY !== movedItem.y;
+        const sizeChanged =
+          nextWidth !== movedItem.width || nextHeight !== movedItem.height;
+
+        if (!parentChanged && !positionChanged && !sizeChanged) {
           continue;
         }
 
@@ -2444,9 +2646,40 @@ export function Canvas({ page }: Props) {
           frameIdsToRelayout.add(nextParentId);
         }
 
+        if (parentChanged) {
+          if (nextParentId !== null) {
+            ingestedItemIds.push(movedItem.id);
+          } else if (movedItem.parent_item_id !== null) {
+            ejectedItemIds.push(movedItem.id);
+          }
+        } else if (previousParent !== null && positionChanged) {
+          ingestedItemIds.push(movedItem.id);
+        }
+
+        const ejectedPosition =
+          nextParentId === null && previousParent !== null
+            ? getFrameEjectPosition(
+                {
+                  ...movedItem,
+                  width: nextWidth,
+                  height: nextHeight,
+                  x: nextX,
+                  y: nextY,
+                },
+                previousParent,
+              )
+            : null;
+
         nextItems = nextItems.map((item) =>
           item.id === movedItem.id
-            ? { ...item, parent_item_id: nextParentId }
+            ? {
+                ...item,
+                parent_item_id: nextParentId,
+                x: ejectedPosition?.x ?? nextX,
+                y: ejectedPosition?.y ?? nextY,
+                width: nextWidth,
+                height: nextHeight,
+              }
             : item,
         );
       }
@@ -2464,6 +2697,8 @@ export function Canvas({ page }: Props) {
       persistItems(nextItems.filter((item) => changedIds.has(item.id)));
       syncConnectorAnchorsForItems([...changedIds]);
       syncSegmentConnectionsForItems([...changedIds]);
+      triggerFrameItemAnimation(ingestedItemIds, 'ingest');
+      triggerFrameItemAnimation(ejectedItemIds, 'eject');
       recordHistoryCheckpoint(drag.snapshot);
     }
 
@@ -2596,12 +2831,23 @@ export function Canvas({ page }: Props) {
                 const childItems = isFrame(item)
                   ? getFrameChildren(items, item.id)
                   : [];
+                const itemAnimation = frameItemAnimations[item.id];
+                const itemClassName = [
+                  isFrame(item) && activeFrameDropTargetId === item.id
+                    ? 'is-frame-drop-target'
+                    : '',
+                  itemAnimation === 'ingest' ? 'is-frame-ingest' : '',
+                  itemAnimation === 'eject' ? 'is-frame-eject' : '',
+                ]
+                  .filter((className) => className.length > 0)
+                  .join(' ');
                 return (
                     <BoardItemRenderer
                       key={item.id}
                       item={item}
                       childCount={childItems.length}
                       childSummaries={childItems.map(summarizeFrameChild)}
+                      className={itemClassName}
                       isSelected={selectedIds.includes(item.id)}
                       isEditing={item.id === editingId}
                       onMouseDown={(e) => handleItemMouseDown(e, item.id)}

@@ -11,6 +11,7 @@ type Props = {
   item: BoardItem;
   childSummaries: FrameSummaryEntry[];
   childCount: number;
+  className?: string;
   isSelected: boolean;
   isEditing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
@@ -32,6 +33,7 @@ export function BoardItemRenderer({
   item,
   childSummaries,
   childCount,
+  className = '',
   isSelected,
   isEditing,
   onMouseDown,
@@ -55,7 +57,9 @@ export function BoardItemRenderer({
     userSelect: 'none',
   };
 
-  const wrapperClass = `board-item ${isSelected ? 'is-selected' : ''}`;
+  const wrapperClass = `board-item board-item-type-${item.type} ${
+    isSelected ? 'is-selected' : ''
+  } ${className}`.trim();
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const resizeHandle =
     isSelected && !isEditing && !isSegmentItem ? (

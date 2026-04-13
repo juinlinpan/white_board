@@ -136,6 +136,12 @@
 - [x] 支援把 `small_item` 從 `frame` 移出
 - [x] 支援 frame 內物件版面更新
 - [x] 支援縮回摘要資料計算
+- [x] 支援展開中的 `frame` 在 overlap 達門檻時進入 focus mode
+- [x] 支援 oversized `small_item` 吸入前自動縮放到 `frame` 60% fit budget
+- [x] 支援 `small_item` 進出 `frame` 的短動畫回饋
+- [x] 支援 `small_item` 離開 `frame` 後自動彈到明確的 frame 外位置，避免停在邊界中間
+- [x] 支援 `frame` 內 item 可重疊，但仍強制完整留在 frame 內容區
+- [x] 支援從 `frame` 拖出 item 時，若未完整移出則自動彈回 frame 內
 
 ### 12. 縮回摘要規則
 
@@ -200,6 +206,10 @@
 - [x] 驗收物件建立 / 編輯 / 刪除
 - [x] 驗收 frame 展開 / 縮回
 - [x] 驗收縮回摘要規則
+- [x] 驗收 frame overlap focus mode / auto-ingest / auto-fit / enter-exit animation
+- [x] 驗收 item 放手後只會明確落在 frame 內或外，不會停在邊界半卡住
+- [x] 驗收 frame 內 item 可重疊但不會部分超出 frame
+- [x] 驗收 item 從 frame 拖出失敗時會自動彈回 frame 內
 - [x] 驗收 line / arrow 起終點建立與控制點調整
 - [x] 驗收 snap 對齊
 - [x] 驗收 Undo / Redo

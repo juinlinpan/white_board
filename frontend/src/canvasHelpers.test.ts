@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { BoardItem } from './api';
 import {
+  findFrameDropTarget,
+  getFrameEjectPosition,
+  getFrameChildFitSize,
   findNearestConnectorAnchor,
+  getFrameOverlapScore,
   getItemConnectorAnchors,
   getItemsNearPoint,
 } from './canvasHelpers';
@@ -126,5 +130,141 @@ describe('connector anchor helpers', () => {
 
     expect(near).toHaveLength(1);
     expect(near[0].id).toBe('box-a');
+  });
+});
+
+describe('frame drop helpers', () => {
+  it('prefers frames whose overlap exceeds 25% of the dragged item', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      x: 200,
+      y: 120,
+      width: 320,
+      height: 240,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      x: 140,
+      y: 160,
+      width: 220,
+      height: 120,
+    });
+
+    expect(getFrameOverlapScore(dragged, frame)).toBeGreaterThan(0.25);
+    expect(findFrameDropTarget(dragged, [dragged, frame])?.id).toBe('frame-1');
+  });
+
+  it('does not target frames when overlap stays below the threshold', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      x: 300,
+      y: 120,
+      width: 320,
+      height: 240,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      x: 120,
+      y: 160,
+      width: 140,
+      height: 100,
+    });
+
+    expect(getFrameOverlapScore(dragged, frame)).toBeLessThan(0.25);
+    expect(findFrameDropTarget(dragged, [dragged, frame])).toBeNull();
+  });
+
+  it('ignores collapsed frames during drop targeting', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      x: 200,
+      y: 120,
+      width: 320,
+      height: 240,
+      is_collapsed: true,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      x: 220,
+      y: 160,
+      width: 140,
+      height: 100,
+    });
+
+    expect(findFrameDropTarget(dragged, [dragged, frame])).toBeNull();
+  });
+
+  it('scales oversized items down to 60% of the frame while preserving aspect ratio', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      width: 300,
+      height: 200,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      width: 260,
+      height: 180,
+    });
+
+    expect(getFrameChildFitSize(dragged, frame)).toEqual({
+      width: 173,
+      height: 120,
+    });
+  });
+
+  it('pushes ejected items fully outside the nearest horizontal frame edge', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 240,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      x: 430,
+      y: 160,
+      width: 120,
+      height: 100,
+    });
+
+    expect(getFrameEjectPosition(dragged, frame)).toEqual({
+      x: 544,
+      y: 160,
+    });
+  });
+
+  it('pushes ejected items fully outside the nearest vertical frame edge', () => {
+    const frame = makeItem({
+      id: 'frame-1',
+      category: ITEM_CATEGORY.large_item,
+      type: ITEM_TYPE.frame,
+      x: 200,
+      y: 100,
+      width: 320,
+      height: 240,
+    });
+    const dragged = makeItem({
+      id: 'card-1',
+      x: 280,
+      y: 80,
+      width: 120,
+      height: 100,
+    });
+
+    expect(getFrameEjectPosition(dragged, frame)).toEqual({
+      x: 280,
+      y: -24,
+    });
   });
 });

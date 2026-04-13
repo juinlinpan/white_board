@@ -1387,6 +1387,56 @@ button {
   transition: box-shadow 100ms ease;
 }
 
+.board-item.is-frame-ingest,
+.board-item.is-frame-eject {
+  transition:
+    left 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+@keyframes frame-drop-target-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes frame-item-ingest-pop {
+  0% {
+    transform: scale(1.04);
+  }
+
+  55% {
+    transform: scale(0.95);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes frame-item-eject-pop {
+  0% {
+    transform: scale(0.96);
+  }
+
+  60% {
+    transform: translateY(-10px) scale(1.04);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Segment items (line/arrow) cannot be dragged — use default cursor on the wrapper */
 .board-item-segment {
   cursor: default;
@@ -1396,6 +1446,27 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.board-item.is-frame-drop-target {
+  animation: frame-drop-target-float 1s ease-in-out infinite;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.18);
+}
+
+.board-item.is-frame-drop-target .frame-display {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 4px rgba(191, 219, 254, 0.6);
+}
+
+.board-item.is-frame-ingest {
+  animation: frame-item-ingest-pop 260ms ease;
+  box-shadow: 0 18px 30px rgba(37, 99, 235, 0.18);
+}
+
+.board-item.is-frame-eject {
+  animation: frame-item-eject-pop 260ms ease;
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.14);
 }
 
 .board-item-resize-handle {

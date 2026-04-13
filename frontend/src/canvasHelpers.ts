@@ -26,8 +26,12 @@ export type AnchorHit = {
   distance: number;
 };
 
+type RectLike = Pick<BoardItem, 'x' | 'y' | 'width' | 'height'>;
+
 /** The four cardinal anchors used for connector snapping (draw.io style). */
 const CONNECTOR_ANCHORS: Anchor[] = ['top', 'right', 'bottom', 'left'];
+export const FRAME_DROP_OVERLAP_THRESHOLD = 0.25;
+export const FRAME_CHILD_MAX_RATIO = 0.6;
 
 const DIRECTIONAL_ANCHORS: Anchor[] = [
   'right',
@@ -150,6 +154,129 @@ export function getFrameChildren(items: BoardItem[], frameId: string): BoardItem
   return items
     .filter((item) => item.parent_item_id === frameId)
     .sort((a, b) => a.y - b.y || a.x - b.x || a.z_index - b.z_index);
+}
+
+function getIntersectionArea(left: RectLike, right: RectLike): number {
+  const overlapWidth =
+    Math.min(left.x + left.width, right.x + right.width) -
+    Math.max(left.x, right.x);
+  const overlapHeight =
+    Math.min(left.y + left.height, right.y + right.height) -
+    Math.max(left.y, right.y);
+
+  if (overlapWidth <= 0 || overlapHeight <= 0) {
+    return 0;
+  }
+
+  return overlapWidth * overlapHeight;
+}
+
+export function getFrameOverlapScore(item: BoardItem, frame: BoardItem): number {
+  const intersectionArea = getIntersectionArea(item, frame);
+  if (intersectionArea === 0) {
+    return 0;
+  }
+
+  const itemArea = item.width * item.height;
+  const frameArea = frame.width * frame.height;
+  if (itemArea <= 0 || frameArea <= 0) {
+    return 0;
+  }
+
+  return Math.max(intersectionArea / itemArea, intersectionArea / frameArea);
+}
+
+export function findFrameDropTarget(
+  item: BoardItem,
+  items: BoardItem[],
+  threshold = FRAME_DROP_OVERLAP_THRESHOLD,
+): BoardItem | null {
+  if (!isSmallItem(item)) {
+    return null;
+  }
+
+  const candidates = items
+    .filter(
+      (candidate) =>
+        candidate.type === ITEM_TYPE.frame &&
+        candidate.id !== item.id &&
+        !candidate.is_collapsed,
+    )
+    .map((frame) => ({
+      frame,
+      score: getFrameOverlapScore(item, frame),
+    }))
+    .filter(({ score }) => score >= threshold)
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+
+      const leftArea = left.frame.width * left.frame.height;
+      const rightArea = right.frame.width * right.frame.height;
+      if (leftArea !== rightArea) {
+        return leftArea - rightArea;
+      }
+
+      return right.frame.z_index - left.frame.z_index;
+    });
+
+  return candidates[0]?.frame ?? null;
+}
+
+export function getFrameChildFitSize(
+  item: BoardItem,
+  frame: BoardItem,
+  maxRatio = FRAME_CHILD_MAX_RATIO,
+): { width: number; height: number } {
+  const maxWidth = frame.width * maxRatio;
+  const maxHeight = frame.height * maxRatio;
+  if (item.width <= maxWidth && item.height <= maxHeight) {
+    return {
+      width: item.width,
+      height: item.height,
+    };
+  }
+
+  const scale = Math.min(maxWidth / item.width, maxHeight / item.height);
+
+  return {
+    width: Math.max(1, Math.round(item.width * scale)),
+    height: Math.max(1, Math.round(item.height * scale)),
+  };
+}
+
+export function getFrameEjectPosition(
+  item: BoardItem,
+  frame: BoardItem,
+  gap = 24,
+): { x: number; y: number } {
+  const itemCenterX = item.x + item.width / 2;
+  const itemCenterY = item.y + item.height / 2;
+  const frameCenterX = frame.x + frame.width / 2;
+  const frameCenterY = frame.y + frame.height / 2;
+  const dx = itemCenterX - frameCenterX;
+  const dy = itemCenterY - frameCenterY;
+  const horizontalWeight = Math.abs(dx) / Math.max(frame.width, 1);
+  const verticalWeight = Math.abs(dy) / Math.max(frame.height, 1);
+
+  if (horizontalWeight >= verticalWeight) {
+    return {
+      x:
+        dx >= 0
+          ? frame.x + frame.width + gap
+          : frame.x - item.width - gap,
+      y: item.y,
+    };
+  }
+
+  return {
+    x: item.x,
+    y:
+      dy >= 0
+        ? frame.y + frame.height + gap
+        : frame.y - item.height - gap,
+  };
 }
 
 export function getAutoAnchors(
