@@ -71,7 +71,7 @@ import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
 import { SegmentShape } from './items/SegmentShape';
-import { createTableData, parseTableData, serializeTableData, updateTableCell } from './tableData';
+import { createTableData, findCellByChildItemId, parseTableData, serializeTableData, updateTableCell, getRootCellAt } from './tableData';
 import {
   ITEM_CATEGORY,
   ITEM_CATEGORY_FOR_TYPE,
@@ -2838,8 +2838,91 @@ export function Canvas({ page }: Props) {
                 it.id === previousParent.id ? updatedTableItem : it,
               );
               changedIds.add(previousParent.id);
+            } else {
+              // Still within table — check if center moved to a different empty cell
+              const tData = parseTableData(previousParent.data_json);
+              const originalCellHit = findCellByChildItemId(tData, movedItem.id);
+
+              // Determine which cell the center is hovering over now
+              const localX = itemCenterX - previousParent.x;
+              const localY = itemCenterY - previousParent.y;
+              let hoverCol = -1;
+              let cumX = 0;
+              for (let c = 0; c < tData.cols; c++) {
+                const colW = (tData.colWidths[c] ?? 1 / tData.cols) * previousParent.width;
+                if (localX >= cumX && localX < cumX + colW) { hoverCol = c; break; }
+                cumX += colW;
+              }
+              let hoverRow = -1;
+              let cumY = 0;
+              for (let r = 0; r < tData.rows; r++) {
+                const rowH = (tData.rowHeights[r] ?? 1 / tData.rows) * previousParent.height;
+                if (localY >= cumY && localY < cumY + rowH) { hoverRow = r; break; }
+                cumY += rowH;
+              }
+              const hoverRoot = hoverRow >= 0 && hoverCol >= 0
+                ? getRootCellAt(tData, hoverRow, hoverCol)
+                : null;
+
+              const isDifferentEmptyCell =
+                hoverRoot !== null &&
+                originalCellHit !== null &&
+                hoverRoot.cell.id !== originalCellHit.cell.id &&
+                hoverRoot.cell.childItemId === null;
+
+              if (isDifferentEmptyCell && originalCellHit) {
+                // Move item from old cell to new cell within the same table
+                const CELL_INSET = 8;
+                const newCellBounds = getTableCellBounds(
+                  previousParent,
+                  hoverRoot!.row,
+                  hoverRoot!.col,
+                  hoverRoot!.cell.rowSpan,
+                  hoverRoot!.cell.colSpan,
+                );
+                nextParentId = previousParent.id;
+                nextX = newCellBounds.x + CELL_INSET;
+                nextY = newCellBounds.y + CELL_INSET;
+                nextWidth = Math.max(1, newCellBounds.width - CELL_INSET * 2);
+                nextHeight = Math.max(1, newCellBounds.height - CELL_INSET * 2);
+
+                // Update table data: clear old cell, set new cell
+                const updatedTData = {
+                  ...tData,
+                  cells: tData.cells.map((row) =>
+                    row.map((c) => {
+                      if (!c) return c;
+                      if (c.id === originalCellHit.cell.id) return { ...c, childItemId: null };
+                      if (c.id === hoverRoot!.cell.id) return { ...c, childItemId: movedItem.id };
+                      return c;
+                    }),
+                  ),
+                };
+                const updatedTableItem = {
+                  ...previousParent,
+                  data_json: serializeTableData(updatedTData),
+                };
+                nextItems = nextItems.map((it) =>
+                  it.id === previousParent.id ? updatedTableItem : it,
+                );
+                changedIds.add(previousParent.id);
+              } else if (originalCellHit) {
+                // Same cell or target occupied → snap back to original cell position
+                const CELL_INSET = 8;
+                const cellBounds = getTableCellBounds(
+                  previousParent,
+                  originalCellHit.row,
+                  originalCellHit.col,
+                  originalCellHit.cell.rowSpan,
+                  originalCellHit.cell.colSpan,
+                );
+                nextParentId = previousParent.id;
+                nextX = cellBounds.x + CELL_INSET;
+                nextY = cellBounds.y + CELL_INSET;
+                nextWidth = Math.max(1, cellBounds.width - CELL_INSET * 2);
+                nextHeight = Math.max(1, cellBounds.height - CELL_INSET * 2);
+              }
             }
-            // If still within table, item stays as table child (position updated)
           }
         }
 
@@ -2949,7 +3032,7 @@ export function Canvas({ page }: Props) {
           const rowSpan = cell?.rowSpan ?? 1;
           const colSpan = cell?.colSpan ?? 1;
 
-          const CELL_INSET = 4; // world px, slight inset on each side
+          const CELL_INSET = 8; // world px, inset on each side
           const cellBounds = getTableCellBounds(
             tableItem,
             tableCellHit.row,

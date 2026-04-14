@@ -281,6 +281,21 @@ export function mergeCells(data: TableData, positions: CellPosition[]): TableDat
   return { ...data, cells: nextCells };
 }
 
+// ── Find cell by child item ID ───────────────────────────────────────────
+
+export function findCellByChildItemId(
+  data: TableData,
+  childItemId: string,
+): { cell: TableCellData; row: number; col: number } | null {
+  for (let r = 0; r < data.rows; r++) {
+    for (let c = 0; c < data.cols; c++) {
+      const cell = data.cells[r]?.[c];
+      if (cell?.childItemId === childItemId) return { cell, row: r, col: c };
+    }
+  }
+  return null;
+}
+
 // ── Split cell ───────────────────────────────────────────────────────────
 
 function findCellById(
