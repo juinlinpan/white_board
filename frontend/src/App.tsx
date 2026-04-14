@@ -305,6 +305,15 @@ export function App() {
       return;
     }
 
+    if (projects.length === 0) {
+      setErrorMessage(null);
+      setSelectedProjectId(null);
+      setSelectedPageId(null);
+      syncBrowserRoute({ view: 'home' }, 'replace');
+      setAppView('home');
+      return;
+    }
+
     setErrorMessage('The requested project no longer exists.');
     syncBrowserRoute({ view: 'home' }, 'replace');
     setAppView('home');
