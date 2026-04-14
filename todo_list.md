@@ -5,6 +5,9 @@
 - [x] Opening a project from the home screen now lands on an actual page and creates a browser history entry.
 - [x] The workspace left sidebar stays focused on page navigation and no longer shows a project details panel.
 - [x] Basic project name editing now happens in the top workspace header.
+- [x] Basic page name editing now happens in the top workspace header.
+- [x] Page delete now uses a trash button on the right side of the workspace header.
+- [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
