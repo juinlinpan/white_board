@@ -6,7 +6,6 @@
 - [x] The workspace left sidebar stays focused on page navigation and no longer shows a project details panel.
 - [x] Basic project name editing now happens in the top workspace header.
 - [x] Basic page name editing now happens in the top workspace header.
-- [x] Project/page name editor rows are arranged side-by-side in the workspace header (responsive fallback to stacked).
 - [x] Page delete now uses a trash button on the right side of the workspace header.
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.

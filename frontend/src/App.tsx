@@ -749,79 +749,75 @@ export function App() {
         <section className="workspace">
           <header className="workspace-header">
             <div className="workspace-project-block">
-              {selectedProject !== null || selectedPage !== null ? (
-                <div className="workspace-name-grid">
-                  {selectedProject !== null ? (
-                    <div className="workspace-project-name-row">
-                      <label
-                        className="workspace-field-label"
-                        htmlFor="project-name-input"
-                      >
-                        project name:
-                      </label>
-                      <input
-                        id="project-name-input"
-                        className="workspace-project-name-input"
-                        disabled={isMutating}
-                        type="text"
-                        value={projectNameDraft}
-                        onChange={(event) => setProjectNameDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void handleSaveProjectName();
-                          }
-                        }}
-                      />
-                      <button
-                        className="ghost-button"
-                        disabled={
-                          isMutating ||
-                          normalizedProjectNameDraft.length === 0 ||
-                          normalizedProjectNameDraft === selectedProject.name
-                        }
-                        onClick={() => void handleSaveProjectName()}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  ) : null}
-                  {selectedPage !== null ? (
-                    <div className="workspace-page-name-row">
-                      <label className="workspace-field-label" htmlFor="page-name-input">
-                        page name:
-                      </label>
-                      <input
-                        id="page-name-input"
-                        className="workspace-page-name-input"
-                        disabled={isMutating}
-                        type="text"
-                        value={pageNameDraft}
-                        onChange={(event) => setPageNameDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void handleSavePageName();
-                          }
-                        }}
-                      />
-                      <button
-                        className="ghost-button"
-                        disabled={
-                          isMutating ||
-                          normalizedPageNameDraft.length === 0 ||
-                          normalizedPageNameDraft === selectedPage.name
-                        }
-                        onClick={() => void handleSavePageName()}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  ) : null}
+              {selectedProject !== null ? (
+                <div className="workspace-project-name-row">
+                  <label
+                    className="workspace-field-label"
+                    htmlFor="project-name-input"
+                  >
+                    project name:
+                  </label>
+                  <input
+                    id="project-name-input"
+                    className="workspace-project-name-input"
+                    disabled={isMutating}
+                    type="text"
+                    value={projectNameDraft}
+                    onChange={(event) => setProjectNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleSaveProjectName();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ghost-button"
+                    disabled={
+                      isMutating ||
+                      normalizedProjectNameDraft.length === 0 ||
+                      normalizedProjectNameDraft === selectedProject.name
+                    }
+                    onClick={() => void handleSaveProjectName()}
+                  >
+                    Save
+                  </button>
                 </div>
               ) : (
                 <h2>Select a project</h2>
               )}
+              {selectedPage !== null ? (
+                <div className="workspace-page-name-row">
+                  <label className="workspace-field-label" htmlFor="page-name-input">
+                    page name:
+                  </label>
+                  <input
+                    id="page-name-input"
+                    className="workspace-page-name-input"
+                    disabled={isMutating}
+                    type="text"
+                    value={pageNameDraft}
+                    onChange={(event) => setPageNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleSavePageName();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ghost-button"
+                    disabled={
+                      isMutating ||
+                      normalizedPageNameDraft.length === 0 ||
+                      normalizedPageNameDraft === selectedPage.name
+                    }
+                    onClick={() => void handleSavePageName()}
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="workspace-header-actions">
               <button

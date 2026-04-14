@@ -7,7 +7,6 @@
 - The workspace left sidebar should stay focused on page navigation and should not render a project details panel.
 - Basic project name editing should happen in the top workspace header.
 - Basic page name editing should happen in the top workspace header.
-- Project name and page name editing fields should be arranged side-by-side in the workspace header when space allows.
 - Page delete action should be shown as a trash button on the right side of the workspace header.
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
