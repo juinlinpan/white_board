@@ -299,8 +299,8 @@ export function findTableCellDropTarget(
     const rootHit = getRootCellAt(tableData, row, col);
     if (!rootHit) continue;
 
-    // Only accept cells with no attached child item
-    if (rootHit.cell.childItemId !== null) continue;
+    // Skip if the cell is a null span
+    if (!rootHit.cell) continue;
 
     return {
       tableId: table.id,
@@ -346,6 +346,47 @@ export function getTableCellBounds(
     width: cellWidth,
     height: cellHeight,
   };
+}
+
+/**
+ * Compute the position and size of one child item within a table cell,
+ * given how many items share the cell (1–3) and which index this item is.
+ * When multiple items share a cell, the cell is split along its longer axis.
+ */
+export function computeCellChildLayout(
+  cellBounds: { x: number; y: number; width: number; height: number },
+  childIndex: number,
+  childCount: number,
+  inset: number,
+): { x: number; y: number; width: number; height: number } {
+  if (childCount <= 1) {
+    return {
+      x: cellBounds.x + inset,
+      y: cellBounds.y + inset,
+      width: Math.max(1, cellBounds.width - inset * 2),
+      height: Math.max(1, cellBounds.height - inset * 2),
+    };
+  }
+  // N items (2 or 3): split evenly along the longer axis
+  const n = childCount;
+  const splitHorizontally = cellBounds.width >= cellBounds.height;
+  if (splitHorizontally) {
+    const sliceW = cellBounds.width / n;
+    return {
+      x: cellBounds.x + sliceW * childIndex + inset,
+      y: cellBounds.y + inset,
+      width: Math.max(1, sliceW - inset * 2),
+      height: Math.max(1, cellBounds.height - inset * 2),
+    };
+  } else {
+    const sliceH = cellBounds.height / n;
+    return {
+      x: cellBounds.x + inset,
+      y: cellBounds.y + sliceH * childIndex + inset,
+      width: Math.max(1, cellBounds.width - inset * 2),
+      height: Math.max(1, sliceH - inset * 2),
+    };
+  }
 }
 
 export function getFrameChildFitSize(

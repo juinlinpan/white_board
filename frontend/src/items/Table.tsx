@@ -324,7 +324,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
             const isSelected = selectedCells.includes(cell.id);
             const isDropTarget = dropTargetCellId === cell.id;
             const isCellEditing = editingCellId === cell.id;
-            const isOccupied = cell.childItemId !== null;
+            const isOccupied = cell.childItemIds.length > 0;
 
             return (
               <div

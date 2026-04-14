@@ -11,8 +11,8 @@ export type TableCellData = {
   rowSpan: number;       // >= 1
   colSpan: number;       // >= 1
   isCollapsed: boolean;
-  /** ID of the board item currently attached to this cell (null = empty) */
-  childItemId: string | null;
+  /** IDs of board items attached to this cell (max 2) */
+  childItemIds: string[];
 };
 
 export type TableData = {
@@ -41,7 +41,7 @@ function makeCell(): TableCellData {
     rowSpan: 1,
     colSpan: 1,
     isCollapsed: true,
-    childItemId: null,
+    childItemIds: [],
   };
 }
 
@@ -149,7 +149,11 @@ function parseNewFormat(parsed: Record<string, unknown>): TableData {
         rowSpan: typeof obj['rowSpan'] === 'number' && obj['rowSpan'] >= 1 ? obj['rowSpan'] : 1,
         colSpan: typeof obj['colSpan'] === 'number' && obj['colSpan'] >= 1 ? obj['colSpan'] : 1,
         isCollapsed: typeof obj['isCollapsed'] === 'boolean' ? obj['isCollapsed'] : true,
-        childItemId: typeof obj['childItemId'] === 'string' ? obj['childItemId'] : null,
+        childItemIds: Array.isArray(obj['childItemIds'])
+          ? (obj['childItemIds'] as unknown[]).filter((v): v is string => typeof v === 'string')
+          : typeof obj['childItemId'] === 'string'
+            ? [obj['childItemId']]
+            : [],
       };
     });
   });
@@ -212,7 +216,7 @@ export function countFilledTableCells(data: TableData): number {
     .flat()
     .filter((c) => {
       if (!c) return false;
-      if (c.childItemId) return true;
+      if (c.childItemIds.length > 0) return true;
       return c.content.trim().length > 0;
     }).length;
 }
@@ -268,7 +272,7 @@ export function mergeCells(data: TableData, positions: CellPosition[]): TableDat
     rowSpan: maxRow - minRow + 1,
     colSpan: maxCol - minCol + 1,
     isCollapsed: true,
-    embed: null,
+    childItemIds: [],
   };
 
   const nextCells = data.cells.map((row, ri) =>
@@ -290,7 +294,7 @@ export function findCellByChildItemId(
   for (let r = 0; r < data.rows; r++) {
     for (let c = 0; c < data.cols; c++) {
       const cell = data.cells[r]?.[c];
-      if (cell?.childItemId === childItemId) return { cell, row: r, col: c };
+      if (cell?.childItemIds.includes(childItemId)) return { cell, row: r, col: c };
     }
   }
   return null;
@@ -321,7 +325,7 @@ export function splitCellHorizontal(data: TableData, cellId: string): TableData 
     ...target,
     id: makeCellId(),
     content: '',
-    embed: null,
+    childItemIds: [],
     rowSpan: target.rowSpan - half,
   };
   const nextCells = data.cells.map((rowArr, ri) =>
@@ -344,7 +348,7 @@ export function splitCellVertical(data: TableData, cellId: string): TableData {
     ...target,
     id: makeCellId(),
     content: '',
-    embed: null,
+    childItemIds: [],
     colSpan: target.colSpan - half,
   };
   const nextCells = data.cells.map((rowArr, ri) =>

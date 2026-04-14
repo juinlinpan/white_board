@@ -42,6 +42,7 @@ import {
   getFrameChildren,
   getItemConnectorAnchors,
   getTableCellBounds,
+  computeCellChildLayout,
   findNearestConnectorAnchor,
   getItemsNearPoint,
   isAnchor,
@@ -2820,13 +2821,16 @@ export function Canvas({ page }: Props) {
               itemCenterY > previousParent.y + previousParent.height;
             if (isOutsideTable) {
               nextParentId = null;
-              // Clear childItemId from the table cell that referenced this item
+              // Remove this item from the cell's childItemIds
               const tData = parseTableData(previousParent.data_json);
+              const cellHit = findCellByChildItemId(tData, movedItem.id);
               const newTData = {
                 ...tData,
                 cells: tData.cells.map((row) =>
                   row.map((c) =>
-                    c?.childItemId === movedItem.id ? { ...c, childItemId: null } : c,
+                    c?.childItemIds.includes(movedItem.id)
+                      ? { ...c, childItemIds: c.childItemIds.filter((id) => id !== movedItem.id) }
+                      : c,
                   ),
                 ),
               };
@@ -2838,8 +2842,32 @@ export function Canvas({ page }: Props) {
                 it.id === previousParent.id ? updatedTableItem : it,
               );
               changedIds.add(previousParent.id);
+
+              // If the cell still has remaining children, relayout them
+              if (cellHit) {
+                const remainingIds = cellHit.cell.childItemIds.filter((id) => id !== movedItem.id);
+                if (remainingIds.length > 0) {
+                  const CELL_INSET = 8;
+                  const cellBounds = getTableCellBounds(
+                    updatedTableItem,
+                    cellHit.row,
+                    cellHit.col,
+                    cellHit.cell.rowSpan,
+                    cellHit.cell.colSpan,
+                  );
+                  remainingIds.forEach((remainingId, idx) => {
+                    const layout = computeCellChildLayout(cellBounds, idx, remainingIds.length, CELL_INSET);
+                    nextItems = nextItems.map((it) =>
+                      it.id === remainingId
+                        ? { ...it, x: layout.x, y: layout.y, width: layout.width, height: layout.height }
+                        : it,
+                    );
+                    changedIds.add(remainingId);
+                  });
+                }
+              }
             } else {
-              // Still within table — check if center moved to a different empty cell
+              // Still within table — check if center moved to a different cell
               const tData = parseTableData(previousParent.data_json);
               const originalCellHit = findCellByChildItemId(tData, movedItem.id);
 
@@ -2864,36 +2892,26 @@ export function Canvas({ page }: Props) {
                 ? getRootCellAt(tData, hoverRow, hoverCol)
                 : null;
 
-              const isDifferentEmptyCell =
+              const isDifferentCell =
                 hoverRoot !== null &&
                 originalCellHit !== null &&
-                hoverRoot.cell.id !== originalCellHit.cell.id &&
-                hoverRoot.cell.childItemId === null;
+                hoverRoot.cell.id !== originalCellHit.cell.id;
+              const canAccept = isDifferentCell;
 
-              if (isDifferentEmptyCell && originalCellHit) {
+              if (canAccept && originalCellHit) {
                 // Move item from old cell to new cell within the same table
                 const CELL_INSET = 8;
-                const newCellBounds = getTableCellBounds(
-                  previousParent,
-                  hoverRoot!.row,
-                  hoverRoot!.col,
-                  hoverRoot!.cell.rowSpan,
-                  hoverRoot!.cell.colSpan,
-                );
-                nextParentId = previousParent.id;
-                nextX = newCellBounds.x + CELL_INSET;
-                nextY = newCellBounds.y + CELL_INSET;
-                nextWidth = Math.max(1, newCellBounds.width - CELL_INSET * 2);
-                nextHeight = Math.max(1, newCellBounds.height - CELL_INSET * 2);
+                // Remove from old cell
+                const oldRemainingIds = originalCellHit.cell.childItemIds.filter((id) => id !== movedItem.id);
+                const newTargetIds = [...hoverRoot!.cell.childItemIds, movedItem.id];
 
-                // Update table data: clear old cell, set new cell
                 const updatedTData = {
                   ...tData,
                   cells: tData.cells.map((row) =>
                     row.map((c) => {
                       if (!c) return c;
-                      if (c.id === originalCellHit.cell.id) return { ...c, childItemId: null };
-                      if (c.id === hoverRoot!.cell.id) return { ...c, childItemId: movedItem.id };
+                      if (c.id === originalCellHit.cell.id) return { ...c, childItemIds: oldRemainingIds };
+                      if (c.id === hoverRoot!.cell.id) return { ...c, childItemIds: newTargetIds };
                       return c;
                     }),
                   ),
@@ -2906,8 +2924,56 @@ export function Canvas({ page }: Props) {
                   it.id === previousParent.id ? updatedTableItem : it,
                 );
                 changedIds.add(previousParent.id);
+
+                // Layout the moved item in its new cell
+                const newCellBounds = getTableCellBounds(
+                  updatedTableItem,
+                  hoverRoot!.row,
+                  hoverRoot!.col,
+                  hoverRoot!.cell.rowSpan,
+                  hoverRoot!.cell.colSpan,
+                );
+                const myIndex = newTargetIds.indexOf(movedItem.id);
+                const myLayout = computeCellChildLayout(newCellBounds, myIndex, newTargetIds.length, CELL_INSET);
+                nextParentId = previousParent.id;
+                nextX = myLayout.x;
+                nextY = myLayout.y;
+                nextWidth = myLayout.width;
+                nextHeight = myLayout.height;
+
+                // Relayout other items in the new cell
+                newTargetIds.forEach((otherId, idx) => {
+                  if (otherId === movedItem.id) return;
+                  const otherLayout = computeCellChildLayout(newCellBounds, idx, newTargetIds.length, CELL_INSET);
+                  nextItems = nextItems.map((it) =>
+                    it.id === otherId
+                      ? { ...it, x: otherLayout.x, y: otherLayout.y, width: otherLayout.width, height: otherLayout.height }
+                      : it,
+                  );
+                  changedIds.add(otherId);
+                });
+
+                // Relayout remaining items in the old cell
+                if (oldRemainingIds.length > 0) {
+                  const oldCellBounds = getTableCellBounds(
+                    updatedTableItem,
+                    originalCellHit.row,
+                    originalCellHit.col,
+                    originalCellHit.cell.rowSpan,
+                    originalCellHit.cell.colSpan,
+                  );
+                  oldRemainingIds.forEach((remainId, idx) => {
+                    const layout = computeCellChildLayout(oldCellBounds, idx, oldRemainingIds.length, CELL_INSET);
+                    nextItems = nextItems.map((it) =>
+                      it.id === remainId
+                        ? { ...it, x: layout.x, y: layout.y, width: layout.width, height: layout.height }
+                        : it,
+                    );
+                    changedIds.add(remainId);
+                  });
+                }
               } else if (originalCellHit) {
-                // Same cell or target occupied → snap back to original cell position
+                // Same cell or target full → snap back to original cell position
                 const CELL_INSET = 8;
                 const cellBounds = getTableCellBounds(
                   previousParent,
@@ -2916,11 +2982,18 @@ export function Canvas({ page }: Props) {
                   originalCellHit.cell.rowSpan,
                   originalCellHit.cell.colSpan,
                 );
+                const myIndex = originalCellHit.cell.childItemIds.indexOf(movedItem.id);
+                const myLayout = computeCellChildLayout(
+                  cellBounds,
+                  Math.max(0, myIndex),
+                  originalCellHit.cell.childItemIds.length,
+                  CELL_INSET,
+                );
                 nextParentId = previousParent.id;
-                nextX = cellBounds.x + CELL_INSET;
-                nextY = cellBounds.y + CELL_INSET;
-                nextWidth = Math.max(1, cellBounds.width - CELL_INSET * 2);
-                nextHeight = Math.max(1, cellBounds.height - CELL_INSET * 2);
+                nextX = myLayout.x;
+                nextY = myLayout.y;
+                nextWidth = myLayout.width;
+                nextHeight = myLayout.height;
               }
             }
           }
@@ -3009,14 +3082,17 @@ export function Canvas({ page }: Props) {
       triggerFrameItemAnimation(ingestedItemIds, 'ingest');
       triggerFrameItemAnimation(ejectedItemIds, 'eject');
       // ── Table cell absorption ─────────────────────────────────────────
-      // If exactly one small item is dragged and its center is over an empty
-      // table cell, absorb it: store data in the cell and delete the board item.
+      // If exactly one small item is dragged and its center is over a table
+      // cell with < 2 children, absorb it into the cell.
       const tableCellHit = (() => {
         if (drag.selectedItemIds.length !== 1) return null;
         const draggedItemId = drag.selectedItemIds[0];
         if (!draggedItemId) return null;
         const draggedItem = nextItems.find((candidate) => candidate.id === draggedItemId);
         if (!draggedItem || !isSmallItem(draggedItem)) return null;
+        // Items already parented to a table/frame were handled by the
+        // parent-handling for-loop above — skip re-absorption.
+        if (draggedItem.parent_item_id !== null) return null;
         return findTableCellDropTarget(draggedItem, nextItems);
       })();
 
@@ -3027,12 +3103,12 @@ export function Canvas({ page }: Props) {
 
         if (absorbedItem && tableItem) {
           const tableData = parseTableData(tableItem.data_json);
-          // Find the cell's rowSpan/colSpan to compute accurate bounds
           const cell = tableData.cells.flat().find((c) => c?.id === tableCellHit.cellId);
           const rowSpan = cell?.rowSpan ?? 1;
           const colSpan = cell?.colSpan ?? 1;
+          const existingChildIds = cell?.childItemIds ?? [];
 
-          const CELL_INSET = 8; // world px, inset on each side
+          const CELL_INSET = 8;
           const cellBounds = getTableCellBounds(
             tableItem,
             tableCellHit.row,
@@ -3040,27 +3116,28 @@ export function Canvas({ page }: Props) {
             rowSpan,
             colSpan,
           );
-          const nextWidth = Math.max(1, cellBounds.width - CELL_INSET * 2);
-          const nextHeight = Math.max(1, cellBounds.height - CELL_INSET * 2);
 
-          // Store cell reference in table data
+          const newChildIds = [...existingChildIds, absorbedItemId];
           const nextTableData = updateTableCell(tableData, tableCellHit.cellId, {
-            childItemId: absorbedItemId,
+            childItemIds: newChildIds,
           });
           const updatedTableItem = {
             ...tableItem,
             data_json: serializeTableData(nextTableData),
           };
 
-          // Keep the item but resize/reposition it to fill the cell, attach to table
           const maxZ =
             nextItems.length > 0 ? Math.max(...nextItems.map((it) => it.z_index)) : 0;
+
+          // Layout the absorbed item
+          const myIndex = newChildIds.indexOf(absorbedItemId);
+          const myLayout = computeCellChildLayout(cellBounds, myIndex, newChildIds.length, CELL_INSET);
           const updatedAbsorbedItem = {
             ...absorbedItem,
-            x: cellBounds.x + CELL_INSET,
-            y: cellBounds.y + CELL_INSET,
-            width: nextWidth,
-            height: nextHeight,
+            x: myLayout.x,
+            y: myLayout.y,
+            width: myLayout.width,
+            height: myLayout.height,
             parent_item_id: tableItem.id,
             z_index: maxZ + 1,
           };
@@ -3071,14 +3148,31 @@ export function Canvas({ page }: Props) {
             return it;
           });
 
+          // Relayout all existing children in the cell to accommodate the new item
+          if (existingChildIds.length > 0) {
+            existingChildIds.forEach((existingId, idx) => {
+              const layout = computeCellChildLayout(cellBounds, idx, newChildIds.length, CELL_INSET);
+              nextItems = nextItems.map((it) =>
+                it.id === existingId
+                  ? { ...it, x: layout.x, y: layout.y, width: layout.width, height: layout.height }
+                  : it,
+              );
+              changedIds.add(existingId);
+            });
+          }
+
           setItemsAndSync(nextItems);
 
-          void updateBoardItem(tableCellHit.tableId, toPayload(updatedTableItem)).catch(
-            (err) => console.error('[Canvas] Failed to update table after absorb', err),
-          );
-          void updateBoardItem(absorbedItemId, toPayload(updatedAbsorbedItem)).catch(
-            (err) => console.error('[Canvas] Failed to update absorbed item', err),
-          );
+          // Persist all changed items
+          const itemsToPersist = [tableCellHit.tableId, absorbedItemId, ...existingChildIds];
+          for (const itemId of itemsToPersist) {
+            const latestItem = nextItems.find((it) => it.id === itemId);
+            if (latestItem) {
+              void updateBoardItem(itemId, toPayload(latestItem)).catch(
+                (err) => console.error('[Canvas] Failed to update item after absorb', err),
+              );
+            }
+          }
         }
       }
       // ─────────────────────────────────────────────────────────────────
