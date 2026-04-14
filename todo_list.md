@@ -122,9 +122,17 @@
 - [x] 支援 `line` 拖曳端點調整
 - [x] 支援 `line` 樣式設定
 - [x] 實作 `table`
-- [x] 支援列數 / 欄數調整
+- [x] 支援列數 / 欄數調整（舊版 Inspector；現已改為白板內 inline 操作）
 - [x] 支援儲存 table 內容
 - [x] 支援 table 樣式設定
+- [x] **重設計 table v2**：全新資料模型 (`colWidths`/`rowHeights`/merge spans)
+- [x] 支援拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
+- [x] 支援滑鼠懸停分格線顯示新增 row / col 的 + 鈕（浮起動畫）
+- [x] 支援滑鼠框選多格並顯示「合併」按鈕
+- [x] 支援橫向 / 縱向分割已合併的儲存格
+- [x] 支援把 `small_item`（text_box、sticky_note、note_paper）拖進儲存格吸附（類 frame 邏輯）
+- [x] 支援儲存格 embedded item 展開 / 折疊預覽
+- [x] 支援向前相容解析舊版 `string[][]` 格式
 
 ### 10. `small_item`
 

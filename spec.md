@@ -198,9 +198,18 @@ Page 至少包含：
 ### 5.6 `table`
 
 - 可自由拖曳
-- 可調整列數與欄數
-- 儲存表格文字內容
-- 支援基本樣式
+- 資料模型：`TableData`，包含 `colWidths`（分欄寬度分數）、`rowHeights`（列高分數）、`cells`（`TableCellData | null` 二維陣列）
+- 儲存格支援 `rowSpan` / `colSpan`（合併後的儲存格單元）
+- 儲存格可以嵌入一個 `small_item` 快照（`embed` 欄位，含 type / content / styleJson）
+- 支援拖曳表格分格線調整列寬 / 欄高（以容器百分比分數計算，zoom-agnostic）
+- 滑鼠懸停分格線時顯示 `+` 按鈕（浮起動畫）可在該位置插入新的 row 或 col
+- 雙擊儲存格可編輯文字
+- 滑鼠框選多格後顯示「合併」按鈕，合併為單一儲存格（`rowSpan` / `colSpan` > 1）
+- 已合併儲存格可按橫向 / 縱向分割恢復
+- 可把 `small_item`（`text_box`、`sticky_note`、`note_paper`）拖進儲存格吸附（類 `frame` 吸入邏輯）：item 從畫布刪除，內容存入儲存格的 `embed` 欄位
+- 嵌入物件的儲存格支援折疊（顯示摘要）/ 展開（顯示完整內容）切換
+- 向前相容：可解析舊版 `string[][]` 格式並自動轉換為新格式
+- Inspector 顯示目前列數 / 欄數與已填格數（唯讀）；列欄操作改為白板內 inline 操作
 
 ### 5.7 `text_box`
 

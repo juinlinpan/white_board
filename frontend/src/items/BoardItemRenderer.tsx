@@ -28,6 +28,7 @@ type Props = {
   onToggleCollapse: () => void;
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
+  tableDropTargetCellId?: string | null;
 };
 
 export function BoardItemRenderer({
@@ -48,6 +49,7 @@ export function BoardItemRenderer({
   onToggleCollapse,
   onUpdate,
   onEditEnd,
+  tableDropTargetCellId,
 }: Props) {
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const baseStyle: React.CSSProperties = {
@@ -127,6 +129,7 @@ export function BoardItemRenderer({
             isEditing={isEditing}
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}
+            dropTargetCellId={tableDropTargetCellId}
           />
           {resizeHandle}
         </div>

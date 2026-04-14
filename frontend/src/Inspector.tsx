@@ -12,10 +12,6 @@ import { hasStoredSegmentData } from './segmentData';
 import {
   countFilledTableCells,
   parseTableData,
-  resizeTableData,
-  serializeTableData,
-  TABLE_MAX_DIMENSION,
-  TABLE_MIN_DIMENSION,
 } from './tableData';
 import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 
@@ -262,31 +258,6 @@ export function Inspector({
     handleStyleChange({ strokeWidth: value });
   }
 
-  function handleTableDimensionChange(
-    field: 'rows' | 'cols',
-    rawValue: string,
-  ) {
-    if (!isTable || tableData === null) {
-      return;
-    }
-
-    const value = Number(rawValue);
-    if (Number.isNaN(value)) {
-      return;
-    }
-
-    const nextTableData = resizeTableData(
-      tableData,
-      field === 'rows' ? value : tableData.rows,
-      field === 'cols' ? value : tableData.cols,
-    );
-
-    onUpdate({
-      ...selectedItem,
-      data_json: serializeTableData(nextTableData),
-    });
-  }
-
   return (
     <aside className="canvas-inspector">
       <div className="inspector-panel">
@@ -382,31 +353,16 @@ export function Inspector({
             <div className="inspector-grid">
               <label>
                 列數
-                <input
-                  type="number"
-                  min={TABLE_MIN_DIMENSION}
-                  max={TABLE_MAX_DIMENSION}
-                  value={tableData.rows}
-                  onChange={(e) =>
-                    handleTableDimensionChange('rows', e.target.value)
-                  }
-                />
+                <input type="number" readOnly value={tableData.rows} />
               </label>
               <label>
                 欄數
-                <input
-                  type="number"
-                  min={TABLE_MIN_DIMENSION}
-                  max={TABLE_MAX_DIMENSION}
-                  value={tableData.cols}
-                  onChange={(e) =>
-                    handleTableDimensionChange('cols', e.target.value)
-                  }
-                />
+                <input type="number" readOnly value={tableData.cols} />
               </label>
             </div>
             <p className="inspector-meta">
-              直接雙擊表格即可編輯儲存格。縮小列欄時會保留左上角的內容。
+              已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
+              雙擊表格可新增列 / 欄、合併、分割儲存格。
             </p>
           </section>
         ) : null}

@@ -32,6 +32,7 @@ import {
 } from './boardHistory';
 import {
   findFrameDropTarget,
+  findTableCellDropTarget,
   getAnchorPoint,
   getAutoAnchors,
   getConnectorPoints,
@@ -40,6 +41,7 @@ import {
   getFrameOverlapScore,
   getFrameChildren,
   getItemConnectorAnchors,
+  getTableCellBounds,
   findNearestConnectorAnchor,
   getItemsNearPoint,
   isAnchor,
@@ -47,6 +49,7 @@ import {
   isSmallItem,
   summarizeFrameChild,
   type AnchorHit,
+  type TableCellHit,
 } from './canvasHelpers';
 import { Inspector } from './Inspector';
 import {
@@ -68,7 +71,7 @@ import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
 import { SegmentShape } from './items/SegmentShape';
-import { createTableData, serializeTableData } from './tableData';
+import { createTableData, parseTableData, serializeTableData, updateTableCell } from './tableData';
 import {
   ITEM_CATEGORY,
   ITEM_CATEGORY_FOR_TYPE,
@@ -291,12 +294,18 @@ function expandSelectionItemIds(
     }
 
     append(item.id);
-    if (!includeFrameDescendants || !isFrame(item)) {
+    if (!includeFrameDescendants) {
       continue;
     }
-
-    for (const descendant of getDescendantItems(items, item.id)) {
-      append(descendant.id);
+    // Include descendants for frames; include direct children for tables
+    if (isFrame(item)) {
+      for (const descendant of getDescendantItems(items, item.id)) {
+        append(descendant.id);
+      }
+    } else if (item.type === ITEM_TYPE.table) {
+      for (const child of getFrameChildren(items, item.id)) {
+        append(child.id);
+      }
     }
   }
 
@@ -707,6 +716,7 @@ export function Canvas({ page }: Props) {
   const [activeAnchorHit, setActiveAnchorHit] = useState<AnchorHit | null>(null);
   const [deletingWaypointInfo, setDeletingWaypointInfo] = useState<{ itemId: string; waypointIndex: number } | null>(null);
   const [activeFrameDropTargetId, setActiveFrameDropTargetId] = useState<string | null>(null);
+  const [activeTableDropTarget, setActiveTableDropTarget] = useState<TableCellHit | null>(null);
   const [frameItemAnimations, setFrameItemAnimations] = useState<
     Record<string, 'ingest' | 'eject'>
   >({});
@@ -794,11 +804,15 @@ export function Canvas({ page }: Props) {
       if (activeFrameDropTargetId !== null) {
         setActiveFrameDropTargetId(null);
       }
+      if (activeTableDropTarget !== null) {
+        setActiveTableDropTarget(null);
+      }
       return;
     }
 
     let nextTargetId: string | null = null;
     let bestScore = 0;
+    let nextTableHit: TableCellHit | null = null;
 
     for (const draggedItemId of drag.selectedItemIds) {
       const draggedItem = items.find((candidate) => candidate.id === draggedItemId);
@@ -807,21 +821,34 @@ export function Canvas({ page }: Props) {
       }
 
       const frame = findFrameDropTarget(draggedItem, items);
-      if (!frame) {
-        continue;
+      if (frame) {
+        const score = getFrameOverlapScore(draggedItem, frame);
+        if (score > bestScore) {
+          bestScore = score;
+          nextTargetId = frame.id;
+        }
       }
 
-      const score = getFrameOverlapScore(draggedItem, frame);
-      if (score > bestScore) {
-        bestScore = score;
-        nextTargetId = frame.id;
+      // Table cell drop detection (only when no frame target)
+      if (!nextTargetId) {
+        const tableHit = findTableCellDropTarget(draggedItem, items);
+        if (tableHit) {
+          nextTableHit = tableHit;
+        }
       }
     }
 
     if (nextTargetId !== activeFrameDropTargetId) {
       setActiveFrameDropTargetId(nextTargetId);
     }
-  }, [activeFrameDropTargetId, items]);
+    const prevTableHit = activeTableDropTarget;
+    const tableHitChanged =
+      nextTableHit?.cellId !== prevTableHit?.cellId ||
+      nextTableHit?.tableId !== prevTableHit?.tableId;
+    if (tableHitChanged) {
+      setActiveTableDropTarget(nextTableHit);
+    }
+  }, [activeFrameDropTargetId, activeTableDropTarget, items]);
 
   const setItemsAndSync = useCallback((updater: ItemsUpdater) => {
     setItems((current) => {
@@ -2568,6 +2595,7 @@ export function Canvas({ page }: Props) {
     setAnchorIndicatorItems([]);
     setActiveAnchorHit(null);
     setActiveFrameDropTargetId(null);
+    setActiveTableDropTarget(null);
 
     const waypointDrag = waypointDragRef.current;
     if (waypointDrag) {
@@ -2759,25 +2787,59 @@ export function Canvas({ page }: Props) {
           nextX = clampedPosition.x;
           nextY = clampedPosition.y;
         } else if (previousParent !== null) {
-          if (isItemFullyOutsideFrame(movedItem, previousParent)) {
-            nextParentId = null;
-          } else {
-            const fittedSize = fitItemWithinBounds(
-              movedItem,
-              getFrameContentBounds(previousParent).width,
-              getFrameContentBounds(previousParent).height,
-            );
-            const clampedPosition = clampItemToFrame(
-              movedItem,
-              previousParent,
-              fittedSize,
-            );
+          if (isFrame(previousParent)) {
+            // Frame parent: eject or clamp within frame
+            if (isItemFullyOutsideFrame(movedItem, previousParent)) {
+              nextParentId = null;
+            } else {
+              const fittedSize = fitItemWithinBounds(
+                movedItem,
+                getFrameContentBounds(previousParent).width,
+                getFrameContentBounds(previousParent).height,
+              );
+              const clampedPosition = clampItemToFrame(
+                movedItem,
+                previousParent,
+                fittedSize,
+              );
 
-            nextParentId = previousParent.id;
-            nextWidth = fittedSize.width;
-            nextHeight = fittedSize.height;
-            nextX = clampedPosition.x;
-            nextY = clampedPosition.y;
+              nextParentId = previousParent.id;
+              nextWidth = fittedSize.width;
+              nextHeight = fittedSize.height;
+              nextX = clampedPosition.x;
+              nextY = clampedPosition.y;
+            }
+          } else if (previousParent.type === ITEM_TYPE.table) {
+            // Table parent: eject when center moves outside the table
+            const itemCenterX = movedItem.x + movedItem.width / 2;
+            const itemCenterY = movedItem.y + movedItem.height / 2;
+            const isOutsideTable =
+              itemCenterX < previousParent.x ||
+              itemCenterX > previousParent.x + previousParent.width ||
+              itemCenterY < previousParent.y ||
+              itemCenterY > previousParent.y + previousParent.height;
+            if (isOutsideTable) {
+              nextParentId = null;
+              // Clear childItemId from the table cell that referenced this item
+              const tData = parseTableData(previousParent.data_json);
+              const newTData = {
+                ...tData,
+                cells: tData.cells.map((row) =>
+                  row.map((c) =>
+                    c?.childItemId === movedItem.id ? { ...c, childItemId: null } : c,
+                  ),
+                ),
+              };
+              const updatedTableItem = {
+                ...previousParent,
+                data_json: serializeTableData(newTData),
+              };
+              nextItems = nextItems.map((it) =>
+                it.id === previousParent.id ? updatedTableItem : it,
+              );
+              changedIds.add(previousParent.id);
+            }
+            // If still within table, item stays as table child (position updated)
           }
         }
 
@@ -2791,10 +2853,16 @@ export function Canvas({ page }: Props) {
         }
 
         if (movedItem.parent_item_id !== null) {
-          frameIdsToRelayout.add(movedItem.parent_item_id);
+          const prevParent = nextItems.find((it) => it.id === movedItem.parent_item_id);
+          if (!prevParent || isFrame(prevParent)) {
+            frameIdsToRelayout.add(movedItem.parent_item_id);
+          }
         }
         if (nextParentId !== null) {
-          frameIdsToRelayout.add(nextParentId);
+          const nxtParent = nextItems.find((it) => it.id === nextParentId);
+          if (!nxtParent || isFrame(nxtParent)) {
+            frameIdsToRelayout.add(nextParentId);
+          }
         }
 
         if (parentChanged) {
@@ -2808,7 +2876,7 @@ export function Canvas({ page }: Props) {
         }
 
         const ejectedPosition =
-          nextParentId === null && previousParent !== null
+          nextParentId === null && previousParent !== null && isFrame(previousParent)
             ? getFrameEjectPosition(
                 {
                   ...movedItem,
@@ -2857,6 +2925,81 @@ export function Canvas({ page }: Props) {
       syncSegmentConnectionsForItems([...changedIds]);
       triggerFrameItemAnimation(ingestedItemIds, 'ingest');
       triggerFrameItemAnimation(ejectedItemIds, 'eject');
+      // ── Table cell absorption ─────────────────────────────────────────
+      // If exactly one small item is dragged and its center is over an empty
+      // table cell, absorb it: store data in the cell and delete the board item.
+      const tableCellHit = (() => {
+        if (drag.selectedItemIds.length !== 1) return null;
+        const draggedItemId = drag.selectedItemIds[0];
+        if (!draggedItemId) return null;
+        const draggedItem = nextItems.find((candidate) => candidate.id === draggedItemId);
+        if (!draggedItem || !isSmallItem(draggedItem)) return null;
+        return findTableCellDropTarget(draggedItem, nextItems);
+      })();
+
+      if (tableCellHit) {
+        const absorbedItemId = drag.selectedItemIds[0]!;
+        const absorbedItem = nextItems.find((it) => it.id === absorbedItemId);
+        const tableItem = nextItems.find((it) => it.id === tableCellHit.tableId);
+
+        if (absorbedItem && tableItem) {
+          const tableData = parseTableData(tableItem.data_json);
+          // Find the cell's rowSpan/colSpan to compute accurate bounds
+          const cell = tableData.cells.flat().find((c) => c?.id === tableCellHit.cellId);
+          const rowSpan = cell?.rowSpan ?? 1;
+          const colSpan = cell?.colSpan ?? 1;
+
+          const CELL_INSET = 4; // world px, slight inset on each side
+          const cellBounds = getTableCellBounds(
+            tableItem,
+            tableCellHit.row,
+            tableCellHit.col,
+            rowSpan,
+            colSpan,
+          );
+          const nextWidth = Math.max(1, cellBounds.width - CELL_INSET * 2);
+          const nextHeight = Math.max(1, cellBounds.height - CELL_INSET * 2);
+
+          // Store cell reference in table data
+          const nextTableData = updateTableCell(tableData, tableCellHit.cellId, {
+            childItemId: absorbedItemId,
+          });
+          const updatedTableItem = {
+            ...tableItem,
+            data_json: serializeTableData(nextTableData),
+          };
+
+          // Keep the item but resize/reposition it to fill the cell, attach to table
+          const maxZ =
+            nextItems.length > 0 ? Math.max(...nextItems.map((it) => it.z_index)) : 0;
+          const updatedAbsorbedItem = {
+            ...absorbedItem,
+            x: cellBounds.x + CELL_INSET,
+            y: cellBounds.y + CELL_INSET,
+            width: nextWidth,
+            height: nextHeight,
+            parent_item_id: tableItem.id,
+            z_index: maxZ + 1,
+          };
+
+          nextItems = nextItems.map((it) => {
+            if (it.id === absorbedItemId) return updatedAbsorbedItem;
+            if (it.id === tableCellHit.tableId) return updatedTableItem;
+            return it;
+          });
+
+          setItemsAndSync(nextItems);
+
+          void updateBoardItem(tableCellHit.tableId, toPayload(updatedTableItem)).catch(
+            (err) => console.error('[Canvas] Failed to update table after absorb', err),
+          );
+          void updateBoardItem(absorbedItemId, toPayload(updatedAbsorbedItem)).catch(
+            (err) => console.error('[Canvas] Failed to update absorbed item', err),
+          );
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
+
       recordHistoryCheckpoint(drag.snapshot);
     }
 
@@ -2990,10 +3133,14 @@ export function Canvas({ page }: Props) {
                   ? getFrameChildren(items, item.id)
                   : [];
                 const itemAnimation = frameItemAnimations[item.id];
+                const isTableDropTarget =
+                  item.type === 'table' &&
+                  activeTableDropTarget?.tableId === item.id;
                 const itemClassName = [
                   isFrame(item) && activeFrameDropTargetId === item.id
                     ? 'is-frame-drop-target'
                     : '',
+                  isTableDropTarget ? 'is-table-drop-target' : '',
                   itemAnimation === 'ingest' ? 'is-frame-ingest' : '',
                   itemAnimation === 'eject' ? 'is-frame-eject' : '',
                 ]
@@ -3029,6 +3176,9 @@ export function Canvas({ page }: Props) {
                       onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
                       onUpdate={handleItemUpdate}
                       onEditEnd={handleEditEnd}
+                      tableDropTargetCellId={
+                        isTableDropTarget ? activeTableDropTarget?.cellId ?? null : null
+                      }
                     />
                 );
               })}

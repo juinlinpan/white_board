@@ -1,5 +1,6 @@
 import type { BoardItem, ConnectorLink } from './api';
 import type { FrameSummaryEntry } from './items/Frame';
+import { parseTableData, getRootCellAt } from './tableData';
 import { ITEM_CATEGORY, ITEM_TYPE } from './types';
 
 type Anchor =
@@ -222,6 +223,129 @@ export function findFrameDropTarget(
     });
 
   return candidates[0]?.frame ?? null;
+}
+
+// ── Table cell drop target ─────────────────────────────────────────────────
+
+export type TableCellHit = {
+  tableId: string;
+  cellId: string;
+  row: number;
+  col: number;
+};
+
+/**
+ * When dragging a small item, find the table (and cell) it is hovering over,
+ * if the cell is empty (no embed). Returns null if no valid target found.
+ */
+export function findTableCellDropTarget(
+  item: BoardItem,
+  items: BoardItem[],
+): TableCellHit | null {
+  if (!isSmallItem(item)) return null;
+
+  const centerX = item.x + item.width / 2;
+  const centerY = item.y + item.height / 2;
+
+  // Check all table items sorted by z-index descending (topmost first)
+  const tables = items
+    .filter(
+      (candidate) =>
+        candidate.type === ITEM_TYPE.table && candidate.id !== item.id,
+    )
+    .sort((a, b) => b.z_index - a.z_index);
+
+  for (const table of tables) {
+    if (
+      centerX < table.x ||
+      centerX > table.x + table.width ||
+      centerY < table.y ||
+      centerY > table.y + table.height
+    ) {
+      continue;
+    }
+
+    const tableData = parseTableData(table.data_json);
+    const localX = centerX - table.x;
+    const localY = centerY - table.y;
+
+    // Find column index
+    let col = -1;
+    let cumX = 0;
+    for (let c = 0; c < tableData.cols; c++) {
+      const colW = (tableData.colWidths[c] ?? 1 / tableData.cols) * table.width;
+      if (localX >= cumX && localX < cumX + colW) {
+        col = c;
+        break;
+      }
+      cumX += colW;
+    }
+
+    // Find row index
+    let row = -1;
+    let cumY = 0;
+    for (let r = 0; r < tableData.rows; r++) {
+      const rowH = (tableData.rowHeights[r] ?? 1 / tableData.rows) * table.height;
+      if (localY >= cumY && localY < cumY + rowH) {
+        row = r;
+        break;
+      }
+      cumY += rowH;
+    }
+
+    if (col === -1 || row === -1) continue;
+
+    // Resolve to root cell (handles null spans)
+    const rootHit = getRootCellAt(tableData, row, col);
+    if (!rootHit) continue;
+
+    // Only accept cells with no attached child item
+    if (rootHit.cell.childItemId !== null) continue;
+
+    return {
+      tableId: table.id,
+      cellId: rootHit.cell.id,
+      row: rootHit.row,
+      col: rootHit.col,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Compute the world-space bounding box of a table cell (accounting for rowSpan/colSpan).
+ */
+export function getTableCellBounds(
+  table: BoardItem,
+  row: number,
+  col: number,
+  rowSpan: number,
+  colSpan: number,
+): { x: number; y: number; width: number; height: number } {
+  const parsed = parseTableData(table.data_json);
+  let cumX = 0;
+  for (let c = 0; c < col; c++) {
+    cumX += (parsed.colWidths[c] ?? 1 / parsed.cols) * table.width;
+  }
+  let cumY = 0;
+  for (let r = 0; r < row; r++) {
+    cumY += (parsed.rowHeights[r] ?? 1 / parsed.rows) * table.height;
+  }
+  let cellWidth = 0;
+  for (let c = col; c < col + colSpan; c++) {
+    cellWidth += (parsed.colWidths[c] ?? 1 / parsed.cols) * table.width;
+  }
+  let cellHeight = 0;
+  for (let r = row; r < row + rowSpan; r++) {
+    cellHeight += (parsed.rowHeights[r] ?? 1 / parsed.rows) * table.height;
+  }
+  return {
+    x: table.x + cumX,
+    y: table.y + cumY,
+    width: cellWidth,
+    height: cellHeight,
+  };
 }
 
 export function getFrameChildFitSize(
