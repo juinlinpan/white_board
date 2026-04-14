@@ -11,7 +11,6 @@ import {
   createPage,
   createProject,
   deletePage,
-  duplicatePage,
   getHealth,
   listPages,
   listProjects,
@@ -160,6 +159,7 @@ export function App() {
     initialRoute.view === 'workspace' ? initialRoute.pageId : null,
   );
   const [projectNameDraft, setProjectNameDraft] = useState('');
+  const [pageNameDraft, setPageNameDraft] = useState('');
   const [isMutating, setIsMutating] = useState(false);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
   const [dragState, setDragState] = useState<SidebarDragState | null>(null);
@@ -175,6 +175,7 @@ export function App() {
     [pages, selectedPageId],
   );
   const normalizedProjectNameDraft = projectNameDraft.trim();
+  const normalizedPageNameDraft = pageNameDraft.trim();
 
   function goHome(mode: 'push' | 'replace' = 'push'): void {
     syncBrowserRoute({ view: 'home' }, mode);
@@ -324,6 +325,10 @@ export function App() {
   }, [selectedProject]);
 
   useEffect(() => {
+    setPageNameDraft(selectedPage?.name ?? '');
+  }, [selectedPage]);
+
+  useEffect(() => {
     if (selectedProjectId === null) {
       setPages([]);
       setSelectedPageId(null);
@@ -428,23 +433,26 @@ export function App() {
     });
   }
 
-  async function handleRenamePage(): Promise<void> {
+  async function handleSavePageName(): Promise<void> {
     if (selectedPage === null) {
       return;
     }
 
-    const name = askForName('重新命名 Page', selectedPage.name);
-    if (name === null || name === selectedPage.name) {
+    if (
+      normalizedPageNameDraft.length === 0 ||
+      normalizedPageNameDraft === selectedPage.name
+    ) {
       return;
     }
 
     await runMutation(async () => {
-      const updatedPage = await updatePage(selectedPage.id, name);
+      const updatedPage = await updatePage(selectedPage.id, normalizedPageNameDraft);
       setPages((current) =>
         current.map((page) =>
           page.id === updatedPage.id ? updatedPage : page,
         ),
       );
+      setPageNameDraft(updatedPage.name);
     });
   }
 
@@ -464,19 +472,6 @@ export function App() {
       await deletePage(selectedPage.id);
       setPages(remainingPages);
       setSelectedPageId(remainingPages[0]?.id ?? null);
-    });
-  }
-
-  async function handleDuplicatePage(): Promise<void> {
-    if (selectedProject === null || selectedPage === null) {
-      return;
-    }
-
-    await runMutation(async () => {
-      const duplicatedPage = await duplicatePage(selectedPage.id);
-      const nextPages = await listPages(selectedProject.id);
-      setPages(nextPages);
-      setSelectedPageId(duplicatedPage.id);
     });
   }
 
@@ -741,36 +736,13 @@ export function App() {
             {pages.length > 1 ? (
               <p className="sort-hint">按住 Page 項目直接拖拉即可調整順序。</p>
             ) : null}
-            <div className="action-row">
-              <button
-                className="ghost-button"
-                disabled={selectedProject === null || isMutating}
-                onClick={() => void handleCreatePage()}
-              >
-                新增 Page
-              </button>
-              <button
-                className="ghost-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={() => void handleDuplicatePage()}
-              >
-                複製
-              </button>
-              <button
-                className="ghost-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={() => void handleRenamePage()}
-              >
-                重新命名
-              </button>
-              <button
-                className="ghost-button danger-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={() => void handleDeletePage()}
-              >
-                刪除
-              </button>
-            </div>
+            <button
+              className="primary-button sidebar-add-page-button"
+              disabled={selectedProject === null || isMutating}
+              onClick={() => void handleCreatePage()}
+            >
+              ＋ 新增 Page
+            </button>
           </section>
         </aside>
 
@@ -779,7 +751,14 @@ export function App() {
             <div className="workspace-project-block">
               {selectedProject !== null ? (
                 <div className="workspace-project-name-row">
+                  <label
+                    className="workspace-field-label"
+                    htmlFor="project-name-input"
+                  >
+                    project name:
+                  </label>
                   <input
+                    id="project-name-input"
                     className="workspace-project-name-input"
                     disabled={isMutating}
                     type="text"
@@ -808,17 +787,47 @@ export function App() {
                 <h2>Select a project</h2>
               )}
               {selectedPage !== null ? (
-                <p className="workspace-copy">{selectedPage.name}</p>
+                <div className="workspace-page-name-row">
+                  <label className="workspace-field-label" htmlFor="page-name-input">
+                    page name:
+                  </label>
+                  <input
+                    id="page-name-input"
+                    className="workspace-page-name-input"
+                    disabled={isMutating}
+                    type="text"
+                    value={pageNameDraft}
+                    onChange={(event) => setPageNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleSavePageName();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ghost-button"
+                    disabled={
+                      isMutating ||
+                      normalizedPageNameDraft.length === 0 ||
+                      normalizedPageNameDraft === selectedPage.name
+                    }
+                    onClick={() => void handleSavePageName()}
+                  >
+                    Save
+                  </button>
+                </div>
               ) : null}
             </div>
             <div className="workspace-header-actions">
               <button
-                hidden
-                className="ghost-button"
-                disabled={isMutating}
-                onClick={() => goHome()}
+                className="ghost-button danger-button trash-button"
+                disabled={selectedPage === null || isMutating}
+                onClick={() => void handleDeletePage()}
+                title={selectedPage !== null ? `刪除 Page「${selectedPage.name}」` : '刪除 Page'}
+                aria-label={selectedPage !== null ? `刪除 Page「${selectedPage.name}」` : '刪除 Page'}
               >
-                首頁
+                🗑
               </button>
               <div className="status-pill">
                 <span className={`status-indicator status-${healthState}`} />
