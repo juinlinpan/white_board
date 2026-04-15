@@ -389,6 +389,91 @@ export function computeCellChildLayout(
   }
 }
 
+const TABLE_CELL_INSET = 8;
+
+export function relayoutTableItems(
+  items: BoardItem[],
+  tableIds: string[],
+): { items: BoardItem[]; changedIds: string[] } {
+  let nextItems = items;
+  const changedIds = new Set<string>();
+
+  for (const tableId of new Set(tableIds)) {
+    const table = nextItems.find(
+      (item) => item.id === tableId && item.type === ITEM_TYPE.table,
+    );
+    if (!table) {
+      continue;
+    }
+
+    const tableData = parseTableData(table.data_json);
+    const itemById = new Map(nextItems.map((item) => [item.id, item] as const));
+    const updates = new Map<string, BoardItem>();
+
+    for (let row = 0; row < tableData.rows; row += 1) {
+      for (let col = 0; col < tableData.cols; col += 1) {
+        const cell = tableData.cells[row]?.[col];
+        if (!cell || cell.childItemIds.length === 0) {
+          continue;
+        }
+
+        const cellBounds = getTableCellBounds(
+          table,
+          row,
+          col,
+          cell.rowSpan,
+          cell.colSpan,
+        );
+
+        cell.childItemIds.forEach((childId, childIndex) => {
+          const child = itemById.get(childId);
+          if (!child || child.parent_item_id !== table.id) {
+            return;
+          }
+
+          const layout = computeCellChildLayout(
+            cellBounds,
+            childIndex,
+            cell.childItemIds.length,
+            TABLE_CELL_INSET,
+          );
+
+          if (
+            child.x === layout.x &&
+            child.y === layout.y &&
+            child.width === layout.width &&
+            child.height === layout.height
+          ) {
+            return;
+          }
+
+          updates.set(child.id, {
+            ...child,
+            x: layout.x,
+            y: layout.y,
+            width: layout.width,
+            height: layout.height,
+          });
+        });
+      }
+    }
+
+    if (updates.size === 0) {
+      continue;
+    }
+
+    nextItems = nextItems.map((item) => updates.get(item.id) ?? item);
+    for (const childId of updates.keys()) {
+      changedIds.add(childId);
+    }
+  }
+
+  return {
+    items: nextItems,
+    changedIds: [...changedIds],
+  };
+}
+
 export function getFrameChildFitSize(
   item: BoardItem,
   frame: BoardItem,

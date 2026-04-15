@@ -131,6 +131,7 @@
 - [x] 支援滑鼠框選多格並顯示「合併」按鈕
 - [x] 支援橫向 / 縱向分割已合併的儲存格
 - [x] 支援把 `small_item`（text_box、sticky_note、note_paper）拖進儲存格吸附（類 frame 邏輯）
+- [x] 支援 table resize 時同步 relayout 儲存格內已吸附的 `small_item`
 - [x] 支援儲存格 embedded item 展開 / 折疊預覽
 - [x] 支援向前相容解析舊版 `string[][]` 格式
 

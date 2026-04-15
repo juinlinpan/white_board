@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BoardItem } from './api';
 import {
+  computeCellChildLayout,
   findFrameDropTarget,
   getFrameEjectPosition,
   getFrameChildFitSize,
@@ -9,7 +10,9 @@ import {
   getFrameOverlapScore,
   getItemConnectorAnchors,
   getItemsNearPoint,
+  relayoutTableItems,
 } from './canvasHelpers';
+import { createTableData, serializeTableData, updateTableCell } from './tableData';
 import { ITEM_CATEGORY, ITEM_TYPE } from './types';
 
 const TS = '2026-01-01T00:00:00+00:00';
@@ -266,5 +269,49 @@ describe('frame drop helpers', () => {
       x: 280,
       y: -24,
     });
+  });
+});
+
+describe('table relayout helpers', () => {
+  it('relayouts child items when the table size changes', () => {
+    const initialTableData = createTableData(1, 2);
+    const firstCellId = initialTableData.cells[0]?.[0]?.id;
+    expect(firstCellId).toBeDefined();
+
+    const tableData = updateTableCell(initialTableData, firstCellId!, {
+      childItemIds: ['child-a'],
+    });
+    const table = makeItem({
+      id: 'table-1',
+      category: ITEM_CATEGORY.shape,
+      type: ITEM_TYPE.table,
+      x: 40,
+      y: 80,
+      width: 480,
+      height: 240,
+      data_json: serializeTableData(tableData),
+    });
+    const child = makeItem({
+      id: 'child-a',
+      parent_item_id: table.id,
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+    });
+
+    const resizedTable = { ...table, width: 640, height: 320 };
+    const result = relayoutTableItems([resizedTable, child], [resizedTable.id]);
+    const updatedChild = result.items.find((item) => item.id === child.id);
+
+    const expectedLayout = computeCellChildLayout(
+      { x: 40, y: 80, width: 320, height: 320 },
+      0,
+      1,
+      8,
+    );
+
+    expect(updatedChild).toMatchObject(expectedLayout);
+    expect(result.changedIds).toEqual([child.id]);
   });
 });

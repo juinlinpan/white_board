@@ -172,10 +172,21 @@ function parseOldFormat(parsed: Record<string, unknown>): TableData {
   const base = createTableData(rows, cols);
   const rawCells = Array.isArray(parsed['cells']) ? (parsed['cells'] as unknown[][]) : [];
   base.cells = base.cells.map((row, ri) =>
-    row.map((cell, ci) => {
+    row.map((cell, ci): TableCellData | null => {
+      if (cell === null) {
+        return null;
+      }
+
       const rawRow = rawCells[ri];
       const rawVal = Array.isArray(rawRow) ? rawRow[ci] : '';
-      return { ...cell, content: typeof rawVal === 'string' ? rawVal : '' };
+      return {
+        id: cell.id,
+        content: typeof rawVal === 'string' ? rawVal : '',
+        rowSpan: cell.rowSpan,
+        colSpan: cell.colSpan,
+        isCollapsed: cell.isCollapsed,
+        childItemIds: cell.childItemIds,
+      };
     }),
   );
   return base;

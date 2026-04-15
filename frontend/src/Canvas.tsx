@@ -43,6 +43,7 @@ import {
   getItemConnectorAnchors,
   getTableCellBounds,
   computeCellChildLayout,
+  relayoutTableItems,
   findNearestConnectorAnchor,
   getItemsNearPoint,
   isAnchor,
@@ -2393,19 +2394,23 @@ export function Canvas({ page }: Props) {
       );
       setSnapGuides(snapResult.guides);
 
-      setItemsAndSync((current) =>
-        current.map((item) => {
-          if (item.id !== resize.itemId) {
-            return item;
+      setItemsAndSync((current) => {
+        const resizedItems = current.map((currentItem) => {
+          if (currentItem.id !== resize.itemId) {
+            return currentItem;
           }
 
           return {
-            ...item,
+            ...currentItem,
             width: nextSize.width,
             height: nextSize.height,
           };
-        }),
-      );
+        });
+
+        return item.type === ITEM_TYPE.table
+          ? relayoutTableItems(resizedItems, [resize.itemId]).items
+          : resizedItems;
+      });
       return;
     }
 
@@ -2708,6 +2713,21 @@ export function Canvas({ page }: Props) {
           nextItems = relayoutResult.items;
           for (const changedId of relayoutResult.changedIds) {
             changedIds.add(changedId);
+          }
+
+          if (relayoutResult.changedIds.length > 0) {
+            setItemsAndSync(nextItems);
+          }
+        }
+
+        if (item.type === ITEM_TYPE.table) {
+          const relayoutResult = relayoutTableItems(nextItems, [item.id]);
+          nextItems = relayoutResult.items;
+          for (const changedId of relayoutResult.changedIds) {
+            changedIds.add(changedId);
+          }
+          for (const child of getFrameChildren(nextItems, item.id)) {
+            changedIds.add(child.id);
           }
 
           if (relayoutResult.changedIds.length > 0) {
