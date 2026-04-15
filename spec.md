@@ -201,8 +201,8 @@ Page 至少包含：
 - 資料模型：`TableData`，包含 `colWidths`（分欄寬度分數）、`rowHeights`（列高分數）、`cells`（`TableCellData | null` 二維陣列）
 - 儲存格支援 `rowSpan` / `colSpan`（合併後的儲存格單元）
 - 儲存格可以嵌入一個 `small_item` 快照（`embed` 欄位，含 type / content / styleJson）
-- 支援拖曳表格分格線調整列寬 / 欄高（以容器百分比分數計算，zoom-agnostic）
-- 滑鼠懸停分格線時顯示 `+` 按鈕（浮起動畫）可在該位置插入新的 row 或 col
+- 選取 table 後可拖曳表格分格線調整列寬 / 欄高（以容器百分比分數計算，zoom-agnostic）
+- 選取 table 後，滑鼠懸停分格線時顯示 `+` 按鈕（浮起動畫）可在該位置插入新的 row 或 col
 - 雙擊儲存格可編輯文字
 - 滑鼠框選多格後顯示「合併」按鈕，合併為單一儲存格（`rowSpan` / `colSpan` > 1）
 - 已合併儲存格可按橫向 / 縱向分割恢復

@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react';
 import { type BoardItem } from '../api';
-import { resolveBoardItemStyle, getBoardItemTypographyStyle } from '../itemStyles';
+import { resolveBoardItemStyle } from '../itemStyles';
 import {
   addCol,
   addRow,
@@ -35,6 +35,7 @@ type DividerDrag = {
 
 type Props = {
   item: BoardItem;
+  isSelected: boolean;
   isEditing: boolean;
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
@@ -53,10 +54,18 @@ function getCumulativePositions(fractions: number[]): number[] {
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }: Props) {
+export function Table({
+  item,
+  isSelected,
+  isEditing,
+  onUpdate,
+  onEditEnd,
+  dropTargetCellId,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tableData = useMemo(() => parseTableData(item.data_json), [item.data_json]);
   const resolvedStyle = resolveBoardItemStyle(item);
+  const showsStructureControls = isEditing || isSelected;
 
   // Selected cell IDs (for merge operation)
   const [selectedCells, setSelectedCells] = useState<string[]>([]);
@@ -189,6 +198,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
 
   const handleDividerMouseDown = useCallback(
     (e: React.MouseEvent, type: 'col' | 'row', index: number) => {
+      if (!showsStructureControls) return;
       e.preventDefault();
       e.stopPropagation();
       const container = containerRef.current;
@@ -205,7 +215,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
       };
       setIsDraggingDivider(true);
     },
-    [tableData.colWidths, tableData.rowHeights],
+    [showsStructureControls, tableData.colWidths, tableData.rowHeights],
   );
 
   useEffect(() => {
@@ -432,7 +442,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
       </div>
 
       {/* Column dividers */}
-      {isEditing &&
+      {showsStructureControls &&
         tableData.colWidths.slice(0, -1).map((_, i) => {
           const pct = (colCum[i + 1] ?? 0) * 100;
           return (
@@ -461,7 +471,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
         })}
 
       {/* Row dividers */}
-      {isEditing &&
+      {showsStructureControls &&
         tableData.rowHeights.slice(0, -1).map((_, i) => {
           const pct = (rowCum[i + 1] ?? 0) * 100;
           return (
@@ -490,7 +500,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
         })}
 
       {/* Add row at end */}
-      {isEditing && (
+      {showsStructureControls && (
         <div className="table-v2-add-row-end">
           <button
             type="button"
@@ -507,7 +517,7 @@ export function Table({ item, isEditing, onUpdate, onEditEnd, dropTargetCellId }
       )}
 
       {/* Add col at end */}
-      {isEditing && (
+      {showsStructureControls && (
         <div className="table-v2-add-col-end">
           <button
             type="button"

@@ -126,6 +126,7 @@ export function BoardItemRenderer({
         >
           <Table
             item={item}
+            isSelected={isSelected}
             isEditing={isEditing}
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}

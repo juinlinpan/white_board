@@ -126,7 +126,8 @@
 - [x] 支援儲存 table 內容
 - [x] 支援 table 樣式設定
 - [x] **重設計 table v2**：全新資料模型 (`colWidths`/`rowHeights`/merge spans)
-- [x] 支援拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
+- [x] 支援選取 table 後拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
+- [x] 支援選取 table 後在直線 / 橫線上懸停並按 `+` 新增 row / col
 - [x] 支援滑鼠懸停分格線顯示新增 row / col 的 + 鈕（浮起動畫）
 - [x] 支援滑鼠框選多格並顯示「合併」按鈕
 - [x] 支援橫向 / 縱向分割已合併的儲存格
