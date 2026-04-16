@@ -1,7 +1,15 @@
-import type { BoardItem, ConnectorLink } from './api';
+import type { BoardItem, BoardItemPayload, ConnectorLink, ConnectorLinkPayload } from './api';
 import type { FrameSummaryEntry } from './items/Frame';
+import {
+  buildSegmentGeometry,
+  canTranslateSegmentItem,
+  getSegmentConnections,
+  getSegmentWaypoints,
+  getSegmentWorldPoints,
+  hasStoredSegmentData,
+} from './segmentData';
 import { parseTableData, getRootCellAt } from './tableData';
-import { ITEM_CATEGORY, ITEM_TYPE } from './types';
+import { ITEM_CATEGORY, ITEM_MIN_SIZE, ITEM_TYPE } from './types';
 
 type Anchor =
   | 'top_left'
@@ -728,4 +736,535 @@ export function getItemsNearPoint(
     }
     return isPointNearItem(worldPoint, item, threshold);
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers moved from Canvas.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FRAME_LAYOUT_PADDING_X = 20;
+const FRAME_LAYOUT_PADDING_TOP = 72;
+
+export type LayerAction = 'bringToFront' | 'sendToBack';
+
+export function toPayload(item: BoardItem): BoardItemPayload {
+  return {
+    page_id: item.page_id,
+    parent_item_id: item.parent_item_id,
+    category: item.category,
+    type: item.type,
+    title: item.title,
+    content: item.content,
+    content_format: item.content_format,
+    x: item.x,
+    y: item.y,
+    width: item.width,
+    height: item.height,
+    rotation: item.rotation,
+    z_index: item.z_index,
+    is_collapsed: item.is_collapsed,
+    style_json: item.style_json,
+    data_json: item.data_json,
+  };
+}
+
+export function toConnectorPayload(connector: ConnectorLink): ConnectorLinkPayload {
+  return {
+    connector_item_id: connector.connector_item_id,
+    from_item_id: connector.from_item_id,
+    to_item_id: connector.to_item_id,
+    from_anchor: connector.from_anchor,
+    to_anchor: connector.to_anchor,
+  };
+}
+
+export function isFrame(item: BoardItem): boolean {
+  return item.type === ITEM_TYPE.frame;
+}
+
+export function isLegacyConnectorArrow(item: BoardItem): boolean {
+  return item.type === ITEM_TYPE.arrow && !hasStoredSegmentData(item);
+}
+
+export function isInlineEditable(item: BoardItem): boolean {
+  return (
+    item.type === ITEM_TYPE.table ||
+    item.type === ITEM_TYPE.text_box ||
+    item.type === ITEM_TYPE.sticky_note ||
+    item.type === ITEM_TYPE.note_paper
+  );
+}
+
+export function clampItemSize(
+  type: string,
+  width: number,
+  height: number,
+): { width: number; height: number } {
+  const minSize = ITEM_MIN_SIZE[type];
+  return {
+    width: Math.max(minSize?.width ?? 60, width),
+    height: Math.max(minSize?.height ?? 40, height),
+  };
+}
+
+export function getDescendantItems(items: BoardItem[], rootId: string): BoardItem[] {
+  const descendants: BoardItem[] = [];
+  const pendingParentIds = [rootId];
+
+  while (pendingParentIds.length > 0) {
+    const parentId = pendingParentIds.shift();
+    if (parentId === undefined) {
+      continue;
+    }
+
+    const children = getFrameChildren(items, parentId);
+    descendants.push(...children);
+    pendingParentIds.push(...children.map((child) => child.id));
+  }
+
+  return descendants;
+}
+
+export function getUniqueItemIds(itemIds: string[]): string[] {
+  return [...new Set(itemIds)];
+}
+
+export function getPrimarySelectionId(selectedIds: string[]): string | null {
+  return selectedIds[selectedIds.length - 1] ?? null;
+}
+
+export function expandSelectionItemIds(
+  items: BoardItem[],
+  selectedIds: string[],
+  options: {
+    includeFrameDescendants?: boolean;
+    excludeArrows?: boolean;
+  } = {},
+): string[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const expandedIds: string[] = [];
+  const seen = new Set<string>();
+  const includeFrameDescendants = options.includeFrameDescendants ?? true;
+
+  function append(itemId: string) {
+    if (seen.has(itemId)) {
+      return;
+    }
+
+    const item = byId.get(itemId);
+    if (!item) {
+      return;
+    }
+
+    if (options.excludeArrows && item.type === ITEM_TYPE.arrow) {
+      return;
+    }
+
+    seen.add(itemId);
+    expandedIds.push(itemId);
+  }
+
+  for (const itemId of selectedIds) {
+    const item = byId.get(itemId);
+    if (!item) {
+      continue;
+    }
+
+    append(item.id);
+    if (!includeFrameDescendants) {
+      continue;
+    }
+    // Include descendants for frames; include direct children for tables
+    if (isFrame(item)) {
+      for (const descendant of getDescendantItems(items, item.id)) {
+        append(descendant.id);
+      }
+    } else if (item.type === ITEM_TYPE.table) {
+      for (const child of getFrameChildren(items, item.id)) {
+        append(child.id);
+      }
+    }
+  }
+
+  return expandedIds;
+}
+
+export function getDraggableSelectionItemIds(
+  items: BoardItem[],
+  selectedIds: string[],
+): string[] {
+  return expandSelectionItemIds(items, selectedIds).filter((itemId) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return false;
+    }
+
+    return item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow
+      ? true
+      : canTranslateSegmentItem(item);
+  });
+}
+
+export function detachDraggedSegments(
+  items: BoardItem[],
+  connectors: ConnectorLink[],
+  selectedItemIds: string[],
+): {
+  items: BoardItem[];
+  connectors: ConnectorLink[];
+  detachedItemIds: string[];
+  detachedConnectorIds: string[];
+} {
+  const selectedIdSet = new Set(selectedItemIds);
+  const connectorByItemId = new Map(
+    connectors.map((connector) => [connector.connector_item_id, connector] as const),
+  );
+  const detachedItemIds: string[] = [];
+  const detachedConnectorIds: string[] = [];
+
+  const nextItems = items.map((item) => {
+    if (!selectedIdSet.has(item.id)) {
+      return item;
+    }
+
+    if (item.type !== ITEM_TYPE.line && item.type !== ITEM_TYPE.arrow) {
+      return item;
+    }
+
+    if (hasStoredSegmentData(item)) {
+      const worldPoints = getSegmentWorldPoints(item);
+      if (worldPoints === null) {
+        return item;
+      }
+
+      const { startConnection, endConnection } = getSegmentConnections(item);
+      if (startConnection === null && endConnection === null) {
+        return item;
+      }
+
+      detachedItemIds.push(item.id);
+      return {
+        ...item,
+        ...buildSegmentGeometry(
+          worldPoints.start,
+          worldPoints.end,
+          getSegmentWaypoints(item).map((point) => ({
+            x: item.x + point.x,
+            y: item.y + point.y,
+          })),
+          null,
+          null,
+        ),
+      };
+    }
+
+    if (item.type !== ITEM_TYPE.arrow) {
+      return item;
+    }
+
+    const connector = connectorByItemId.get(item.id);
+    if (!connector) {
+      return item;
+    }
+
+    const connectorPoints = getConnectorPoints(connector, items);
+    if (connectorPoints === null) {
+      return item;
+    }
+
+    detachedItemIds.push(item.id);
+    detachedConnectorIds.push(connector.id);
+    return {
+      ...item,
+      ...buildSegmentGeometry(connectorPoints.fromPoint, connectorPoints.toPoint, null),
+    };
+  });
+
+  const detachedConnectorIdSet = new Set(detachedConnectorIds);
+  return {
+    items: nextItems,
+    connectors: connectors.filter((connector) => !detachedConnectorIdSet.has(connector.id)),
+    detachedItemIds,
+    detachedConnectorIds,
+  };
+}
+
+export function getSelectionBounds(
+  items: BoardItem[],
+  selectedIds: string[],
+): { x: number; y: number; width: number; height: number } | null {
+  const selectedItems = selectedIds
+    .map((itemId) => items.find((item) => item.id === itemId))
+    .filter((item): item is BoardItem => item !== undefined);
+  if (selectedItems.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...selectedItems.map((item) => item.x));
+  const top = Math.min(...selectedItems.map((item) => item.y));
+  const right = Math.max(...selectedItems.map((item) => item.x + item.width));
+  const bottom = Math.max(...selectedItems.map((item) => item.y + item.height));
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+export function getItemDepth(
+  item: BoardItem,
+  itemById: Map<string, BoardItem>,
+): number {
+  let depth = 0;
+  let currentParentId = item.parent_item_id;
+
+  while (currentParentId !== null) {
+    const parent = itemById.get(currentParentId);
+    if (!parent) {
+      break;
+    }
+
+    depth += 1;
+    currentParentId = parent.parent_item_id;
+  }
+
+  return depth;
+}
+
+export function sortItemsForClipboard(items: BoardItem[]): BoardItem[] {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  return [...items].sort((left, right) => {
+    const depthDiff =
+      getItemDepth(left, itemById) - getItemDepth(right, itemById);
+    if (depthDiff !== 0) {
+      return depthDiff;
+    }
+
+    if (left.z_index !== right.z_index) {
+      return left.z_index - right.z_index;
+    }
+
+    return left.created_at.localeCompare(right.created_at);
+  });
+}
+
+export function getFrameContentBounds(frame: BoardItem): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+} {
+  const left = frame.x + FRAME_LAYOUT_PADDING_X;
+  const top = frame.y + FRAME_LAYOUT_PADDING_TOP;
+  const width = Math.max(frame.width - FRAME_LAYOUT_PADDING_X * 2, 80);
+  const height = Math.max(
+    frame.height - FRAME_LAYOUT_PADDING_TOP - FRAME_LAYOUT_PADDING_X,
+    80,
+  );
+
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+  };
+}
+
+export function layoutFrameChildren(
+  frame: BoardItem,
+  items: BoardItem[],
+): Map<string, BoardItem> {
+  const updates = new Map<string, BoardItem>();
+  const children = getFrameChildren(items, frame.id).filter(isSmallItem);
+  if (children.length === 0) {
+    return updates;
+  }
+
+  const contentLeft = frame.x + FRAME_LAYOUT_PADDING_X;
+  const contentTop = frame.y + FRAME_LAYOUT_PADDING_TOP;
+  const contentWidth = Math.max(frame.width - FRAME_LAYOUT_PADDING_X * 2, 80);
+  const contentHeight = Math.max(
+    frame.height - FRAME_LAYOUT_PADDING_TOP - FRAME_LAYOUT_PADDING_X,
+    80,
+  );
+  const contentRight = contentLeft + contentWidth;
+  const contentBottom = contentTop + contentHeight;
+
+  for (const child of children) {
+    const scale = Math.min(
+      1,
+      contentWidth / Math.max(child.width, 1),
+      contentHeight / Math.max(child.height, 1),
+    );
+    const nextWidth = Math.max(1, Math.round(child.width * scale));
+    const nextHeight = Math.max(1, Math.round(child.height * scale));
+    const nextX = Math.min(
+      Math.max(child.x, contentLeft),
+      Math.max(contentLeft, contentRight - nextWidth),
+    );
+    const nextY = Math.min(
+      Math.max(child.y, contentTop),
+      Math.max(contentTop, contentBottom - nextHeight),
+    );
+
+    updates.set(
+      child.id,
+      child.x === nextX &&
+        child.y === nextY &&
+        child.width === nextWidth &&
+        child.height === nextHeight
+        ? child
+        : {
+            ...child,
+            x: nextX,
+            y: nextY,
+            width: nextWidth,
+            height: nextHeight,
+          },
+    );
+  }
+
+  return updates;
+}
+
+export function fitItemWithinBounds(
+  item: BoardItem,
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const scale = Math.min(
+    1,
+    maxWidth / Math.max(item.width, 1),
+    maxHeight / Math.max(item.height, 1),
+  );
+
+  return {
+    width: Math.max(1, Math.round(item.width * scale)),
+    height: Math.max(1, Math.round(item.height * scale)),
+  };
+}
+
+export function clampItemToFrame(
+  item: BoardItem,
+  frame: BoardItem,
+  nextSize: { width: number; height: number },
+): { x: number; y: number } {
+  const bounds = getFrameContentBounds(frame);
+
+  return {
+    x: Math.min(
+      Math.max(item.x, bounds.left),
+      Math.max(bounds.left, bounds.right - nextSize.width),
+    ),
+    y: Math.min(
+      Math.max(item.y, bounds.top),
+      Math.max(bounds.top, bounds.bottom - nextSize.height),
+    ),
+  };
+}
+
+export function isItemFullyOutsideFrame(item: BoardItem, frame: BoardItem): boolean {
+  const bounds = getFrameContentBounds(frame);
+
+  return (
+    item.x + item.width <= bounds.left ||
+    item.x >= bounds.right ||
+    item.y + item.height <= bounds.top ||
+    item.y >= bounds.bottom
+  );
+}
+
+export function relayoutFrameItems(
+  items: BoardItem[],
+  frameIds: string[],
+): { items: BoardItem[]; changedIds: string[] } {
+  let nextItems = items;
+  const changedIds = new Set<string>();
+
+  for (const frameId of getUniqueItemIds(frameIds)) {
+    const frame = nextItems.find((item) => item.id === frameId);
+    if (!frame || !isFrame(frame)) {
+      continue;
+    }
+
+    const updates = layoutFrameChildren(frame, nextItems);
+    if (updates.size === 0) {
+      continue;
+    }
+
+    nextItems = nextItems.map((item) => {
+      const updated = updates.get(item.id);
+      if (!updated) {
+        return item;
+      }
+
+      if (
+        updated.x === item.x &&
+        updated.y === item.y &&
+        updated.width === item.width &&
+        updated.height === item.height
+      ) {
+        return item;
+      }
+
+      changedIds.add(item.id);
+      return updated;
+    });
+  }
+
+  return {
+    items: nextItems,
+    changedIds: [...changedIds],
+  };
+}
+
+export function getLayerBlockIds(items: BoardItem[], itemId: string): string[] {
+  const item = items.find((candidate) => candidate.id === itemId);
+  if (!item) {
+    return [];
+  }
+
+  if (!isFrame(item)) {
+    return [item.id];
+  }
+
+  return [
+    item.id,
+    ...getDescendantItems(items, item.id).map((child) => child.id),
+  ];
+}
+
+export function sortItemsByLayer(items: BoardItem[]): BoardItem[] {
+  return [...items].sort(
+    (a, b) => a.z_index - b.z_index || a.created_at.localeCompare(b.created_at),
+  );
+}
+
+export function reorderItemsForLayer(
+  items: BoardItem[],
+  selectedId: string,
+  action: LayerAction,
+): BoardItem[] {
+  const ordered = sortItemsByLayer(items);
+  const movingIds = new Set(getLayerBlockIds(ordered, selectedId));
+  if (movingIds.size === 0) {
+    return ordered;
+  }
+
+  const movingItems = ordered.filter((item) => movingIds.has(item.id));
+  const stationaryItems = ordered.filter((item) => !movingIds.has(item.id));
+  const nextOrder =
+    action === 'bringToFront'
+      ? [...stationaryItems, ...movingItems]
+      : [...movingItems, ...stationaryItems];
+
+  return nextOrder.map((item, index) =>
+    item.z_index === index ? item : { ...item, z_index: index },
+  );
 }

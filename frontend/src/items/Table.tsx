@@ -21,6 +21,7 @@ import {
   type TableCellData,
   type TableData,
   updateTableCell,
+  getRootCellAt,
 } from '../tableData';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -393,11 +394,7 @@ export function Table({
                   />
                 ) : (
                   <div className="table-v2-cell-text">
-                    {!isOccupied && (cell.content || (
-                      <span className="table-v2-cell-placeholder">
-                        {isEditing ? '點兩下編輯' : ''}
-                      </span>
-                    ))}
+                    {!isOccupied && cell.content}
                   </div>
                 )}
 
@@ -445,58 +442,76 @@ export function Table({
       {showsStructureControls &&
         tableData.colWidths.slice(0, -1).map((_, i) => {
           const pct = (colCum[i + 1] ?? 0) * 100;
-          return (
-            <div
-              key={`cdiv-${i}`}
-              className="table-v2-col-divider"
-              style={{ left: `${pct}%` }}
-              onMouseDown={(e) => handleDividerMouseDown(e, 'col', i)}
-            >
-              <div className="table-v2-divider-add">
-                <button
-                  type="button"
-                  className="table-v2-add-btn"
-                  title="在此插入欄"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddCol(i);
-                  }}
-                >
-                  +
-                </button>
+          return tableData.rowHeights.map((_, r) => {
+            const rootLeft = getRootCellAt(tableData, r, i);
+            const rootRight = getRootCellAt(tableData, r, i + 1);
+            if (rootLeft && rootRight && rootLeft.cell.id === rootRight.cell.id) {
+              return null; // Merged cell across this column border segment
+            }
+            const topPct = (rowCum[r] ?? 0) * 100;
+            const heightPct = (tableData.rowHeights[r] ?? 0) * 100;
+            return (
+              <div
+                key={`cdiv-${i}-${r}`}
+                className="table-v2-col-divider"
+                style={{ left: `${pct}%`, top: `${topPct}%`, height: `${heightPct}%`, bottom: 'auto' }}
+                onMouseDown={(e) => handleDividerMouseDown(e, 'col', i)}
+              >
+                <div className="table-v2-divider-add">
+                  <button
+                    type="button"
+                    className="table-v2-add-btn"
+                    title="在此插入欄"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddCol(i);
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          );
+            );
+          });
         })}
 
       {/* Row dividers */}
       {showsStructureControls &&
         tableData.rowHeights.slice(0, -1).map((_, i) => {
           const pct = (rowCum[i + 1] ?? 0) * 100;
-          return (
-            <div
-              key={`rdiv-${i}`}
-              className="table-v2-row-divider"
-              style={{ top: `${pct}%` }}
-              onMouseDown={(e) => handleDividerMouseDown(e, 'row', i)}
-            >
-              <div className="table-v2-divider-add">
-                <button
-                  type="button"
-                  className="table-v2-add-btn"
-                  title="在此插入列"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddRow(i);
-                  }}
-                >
-                  +
-                </button>
+          return tableData.colWidths.map((_, c) => {
+            const rootTop = getRootCellAt(tableData, i, c);
+            const rootBottom = getRootCellAt(tableData, i + 1, c);
+            if (rootTop && rootBottom && rootTop.cell.id === rootBottom.cell.id) {
+              return null; // Merged cell across this row border segment
+            }
+            const leftPct = (colCum[c] ?? 0) * 100;
+            const widthPct = (tableData.colWidths[c] ?? 0) * 100;
+            return (
+              <div
+                key={`rdiv-${i}-${c}`}
+                className="table-v2-row-divider"
+                style={{ top: `${pct}%`, left: `${leftPct}%`, width: `${widthPct}%`, right: 'auto' }}
+                onMouseDown={(e) => handleDividerMouseDown(e, 'row', i)}
+              >
+                <div className="table-v2-divider-add">
+                  <button
+                    type="button"
+                    className="table-v2-add-btn"
+                    title="在此插入列"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddRow(i);
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          );
+            );
+          });
         })}
 
       {/* Add row at end */}
