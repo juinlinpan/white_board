@@ -11,10 +11,18 @@ import {
   addCol,
   addRow,
   type CellPosition,
+  computeColSegmentGroups,
+  computeRowSegmentGroups,
+  getCellBounds,
+  getEffectiveColEdge,
+  getEffectiveRowEdge,
   mergeCells,
   parseTableData,
-  resizeColumn,
-  resizeRow,
+  preserveOuterAddColLayout,
+  preserveOuterAddRowLayout,
+  resizeColGroup,
+  resizeRowGroup,
+  type SegmentGroup,
   serializeTableData,
   splitCellHorizontal,
   splitCellVertical,
@@ -26,12 +34,11 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-type DividerDrag = {
-  type: 'col' | 'row';
-  index: number;
-  startPos: number;
-  startFractions: number[];
-  containerSize: number;
+type GroupDividerDrag = {
+  group: SegmentGroup;
+  startPos: number;       // mouse position at drag start (clientX or clientY)
+  startPosition: number;  // group's divider position fraction at drag start
+  containerSize: number;  // container width or height in pixels
 };
 
 type Props = {
@@ -42,16 +49,6 @@ type Props = {
   onEditEnd: () => void;
   dropTargetCellId?: string | null;
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function getCumulativePositions(fractions: number[]): number[] {
-  const result: number[] = [0];
-  for (const f of fractions) {
-    result.push((result[result.length - 1] ?? 0) + f);
-  }
-  return result;
-}
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -74,10 +71,12 @@ export function Table({
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
   // Drag-select state
   const dragSelectStartRef = useRef<CellPosition | null>(null);
-  // Divider resize dragging
-  const dividerDragRef = useRef<DividerDrag | null>(null);
+  // Group divider resize dragging
+  const groupDragRef = useRef<GroupDividerDrag | null>(null);
   // Track whether we have an active drag to suppress click
   const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+  // Hovered segment group key
+  const [hoveredGroupKey, setHoveredGroupKey] = useState<string | null>(null);
 
   // Stop editing when the board item leaves editing mode
   useEffect(() => {
@@ -158,13 +157,12 @@ export function Table({
       }
     }
     if (!isFinite(minRow)) return null;
-    const colCum = getCumulativePositions(tableData.colWidths);
-    const rowCum = getCumulativePositions(tableData.rowHeights);
+    const bounds = getCellBounds(tableData, minRow, minCol, maxCol - minCol + 1, maxRow - minRow + 1);
     return {
-      left: (colCum[minCol] ?? 0) * 100,
-      top: (rowCum[minRow] ?? 0) * 100,
-      right: (colCum[maxCol + 1] ?? 1) * 100,
-      bottom: (rowCum[maxRow + 1] ?? 1) * 100,
+      left: bounds.left * 100,
+      top: bounds.top * 100,
+      right: (bounds.left + bounds.width) * 100,
+      bottom: (bounds.top + bounds.height) * 100,
     };
   }, [selectedCells, tableData]);
 
@@ -195,54 +193,45 @@ export function Table({
     handleUpdate(updateTableCell(tableData, cellId, { content: value }));
   }
 
-  // ── Divider resize ───────────────────────────────────────────────────────
+  // ── Group divider drag ─────────────────────────────────────────────────
 
-  const handleDividerMouseDown = useCallback(
-    (e: React.MouseEvent, type: 'col' | 'row', index: number) => {
+  const handleGroupDividerMouseDown = useCallback(
+    (e: React.MouseEvent, group: SegmentGroup) => {
       if (!showsStructureControls) return;
       e.preventDefault();
       e.stopPropagation();
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const containerSize = type === 'col' ? rect.width : rect.height;
-      dividerDragRef.current = {
-        type,
-        index,
-        startPos: type === 'col' ? e.clientX : e.clientY,
-        startFractions:
-          type === 'col' ? [...tableData.colWidths] : [...tableData.rowHeights],
+      const containerSize = group.type === 'col' ? rect.width : rect.height;
+      groupDragRef.current = {
+        group,
+        startPos: group.type === 'col' ? e.clientX : e.clientY,
+        startPosition: group.position,
         containerSize,
       };
       setIsDraggingDivider(true);
     },
-    [showsStructureControls, tableData.colWidths, tableData.rowHeights],
+    [showsStructureControls],
   );
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
-      const drag = dividerDragRef.current;
+      const drag = groupDragRef.current;
       if (!drag) return;
-      const curPos = drag.type === 'col' ? e.clientX : e.clientY;
+      const curPos = drag.group.type === 'col' ? e.clientX : e.clientY;
       const delta = (curPos - drag.startPos) / drag.containerSize;
+      const newPosition = drag.startPosition + delta;
       const nextData =
-        drag.type === 'col'
-          ? resizeColumn(
-              { ...tableData, colWidths: [...drag.startFractions] },
-              drag.index,
-              delta,
-            )
-          : resizeRow(
-              { ...tableData, rowHeights: [...drag.startFractions] },
-              drag.index,
-              delta,
-            );
+        drag.group.type === 'col'
+          ? resizeColGroup(tableData, drag.group, newPosition)
+          : resizeRowGroup(tableData, drag.group, newPosition);
       onUpdate({ ...item, data_json: serializeTableData(nextData) });
     }
 
     function onMouseUp() {
-      if (dividerDragRef.current) {
-        dividerDragRef.current = null;
+      if (groupDragRef.current) {
+        groupDragRef.current = null;
         setTimeout(() => setIsDraggingDivider(false), 0);
       }
     }
@@ -274,15 +263,10 @@ export function Table({
     onEditEnd();
   }
 
-  // ── Cumulative positions for divider placement ───────────────────────────
+  // ── Segment groups (memoised) ──────────────────────────────────────────
 
-  const colCum = getCumulativePositions(tableData.colWidths);
-  const rowCum = getCumulativePositions(tableData.rowHeights);
-
-  // ── CSS grid template ────────────────────────────────────────────────────
-
-  const gridTemplateColumns = tableData.colWidths.map((w) => `${w}fr`).join(' ');
-  const gridTemplateRows = tableData.rowHeights.map((h) => `${h}fr`).join(' ');
+  const colGroups = useMemo(() => computeColSegmentGroups(tableData), [tableData]);
+  const rowGroups = useMemo(() => computeRowSegmentGroups(tableData), [tableData]);
 
   const containerStyle: React.CSSProperties = {
     background: resolvedStyle.backgroundColor,
@@ -299,13 +283,11 @@ export function Table({
       tabIndex={isEditing ? 0 : undefined}
       onBlur={isEditing ? handleBlurContainer : undefined}
     >
-      {/* Grid */}
+      {/* Cells (absolute positioning for per-row column independence) */}
       <div
         className="table-v2-grid"
-        style={{ gridTemplateColumns, gridTemplateRows }}
         onMouseDown={(e) => {
           if (!isEditing || isDraggingDivider) return;
-          // Start drag-select
           const target = e.target as HTMLElement;
           const cellEl = target.closest('[data-cell-id]') as HTMLElement | null;
           if (!cellEl) return;
@@ -336,6 +318,7 @@ export function Table({
             const isDropTarget = dropTargetCellId === cell.id;
             const isCellEditing = editingCellId === cell.id;
             const isOccupied = cell.childItemIds.length > 0;
+            const bounds = getCellBounds(tableData, ri, ci, cell.colSpan, cell.rowSpan);
 
             return (
               <div
@@ -348,8 +331,11 @@ export function Table({
                   isOccupied ? 'is-occupied' : '',
                 ].join(' ')}
                 style={{
-                  gridColumn: `${ci + 1} / span ${cell.colSpan}`,
-                  gridRow: `${ri + 1} / span ${cell.rowSpan}`,
+                  position: 'absolute',
+                  left: `${bounds.left * 100}%`,
+                  top: `${bounds.top * 100}%`,
+                  width: `${bounds.width * 100}%`,
+                  height: `${bounds.height * 100}%`,
                 }}
                 onMouseDown={(e) => {
                   if (!isEditing) return;
@@ -398,7 +384,7 @@ export function Table({
                   </div>
                 )}
 
-                {/* Per-cell split/action buttons (visible when selected and editing) */}
+                {/* Per-cell split/action buttons */}
                 {isEditing && isSelected && selectedCells.length === 1 && (
                   <div
                     className="table-v2-cell-actions"
@@ -438,83 +424,54 @@ export function Table({
         )}
       </div>
 
-      {/* Column dividers */}
+      {/* Column divider groups */}
       {showsStructureControls &&
-        tableData.colWidths.slice(0, -1).map((_, i) => {
-          const pct = (colCum[i + 1] ?? 0) * 100;
-          return tableData.rowHeights.map((_, r) => {
-            const rootLeft = getRootCellAt(tableData, r, i);
-            const rootRight = getRootCellAt(tableData, r, i + 1);
-            if (rootLeft && rootRight && rootLeft.cell.id === rootRight.cell.id) {
-              return null; // Merged cell across this column border segment
-            }
-            const topPct = (rowCum[r] ?? 0) * 100;
-            const heightPct = (tableData.rowHeights[r] ?? 0) * 100;
-            return (
-              <div
-                key={`cdiv-${i}-${r}`}
-                className="table-v2-col-divider"
-                style={{ left: `${pct}%`, top: `${topPct}%`, height: `${heightPct}%`, bottom: 'auto' }}
-                onMouseDown={(e) => handleDividerMouseDown(e, 'col', i)}
-              >
-                <div className="table-v2-divider-add">
-                  <button
-                    type="button"
-                    className="table-v2-add-btn"
-                    title="在此插入欄"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddCol(i);
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            );
-          });
+        colGroups.map((group) => {
+          const pct = group.position * 100;
+          const isGroupHovered = hoveredGroupKey === group.key;
+          // Compute vertical extent using effective row positions (follows moved row dividers)
+          const firstRow = group.segments[0]!;
+          const lastRow = group.segments[group.segments.length - 1]!;
+          const topPct = getEffectiveRowEdge(tableData, firstRow, group.boundaryIndex) * 100;
+          const bottomPct = getEffectiveRowEdge(tableData, lastRow + 1, group.boundaryIndex) * 100;
+          const heightPct = bottomPct - topPct;
+
+          return (
+            <div
+              key={group.key}
+              className={`table-v2-col-divider ${isGroupHovered ? 'is-group-hovered' : ''}`}
+              style={{ left: `${pct}%`, top: `${topPct}%`, height: `${heightPct}%`, bottom: 'auto' }}
+              onMouseDown={(e) => handleGroupDividerMouseDown(e, group)}
+              onMouseEnter={() => setHoveredGroupKey(group.key)}
+              onMouseLeave={() => setHoveredGroupKey((prev) => prev === group.key ? null : prev)}
+            />
+          );
         })}
 
-      {/* Row dividers */}
+      {/* Row divider groups */}
       {showsStructureControls &&
-        tableData.rowHeights.slice(0, -1).map((_, i) => {
-          const pct = (rowCum[i + 1] ?? 0) * 100;
-          return tableData.colWidths.map((_, c) => {
-            const rootTop = getRootCellAt(tableData, i, c);
-            const rootBottom = getRootCellAt(tableData, i + 1, c);
-            if (rootTop && rootBottom && rootTop.cell.id === rootBottom.cell.id) {
-              return null; // Merged cell across this row border segment
-            }
-            const leftPct = (colCum[c] ?? 0) * 100;
-            const widthPct = (tableData.colWidths[c] ?? 0) * 100;
-            return (
-              <div
-                key={`rdiv-${i}-${c}`}
-                className="table-v2-row-divider"
-                style={{ top: `${pct}%`, left: `${leftPct}%`, width: `${widthPct}%`, right: 'auto' }}
-                onMouseDown={(e) => handleDividerMouseDown(e, 'row', i)}
-              >
-                <div className="table-v2-divider-add">
-                  <button
-                    type="button"
-                    className="table-v2-add-btn"
-                    title="在此插入列"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddRow(i);
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            );
-          });
+        rowGroups.map((group) => {
+          const pct = group.position * 100;
+          const isGroupHovered = hoveredGroupKey === group.key;
+          const firstCol = group.segments[0]!;
+          const lastCol = group.segments[group.segments.length - 1]!;
+          const leftPct = getEffectiveColEdge(tableData, firstCol, group.boundaryIndex) * 100;
+          const rightPct = getEffectiveColEdge(tableData, lastCol + 1, group.boundaryIndex) * 100;
+          const widthPct = rightPct - leftPct;
+
+          return (
+            <div
+              key={group.key}
+              className={`table-v2-row-divider ${isGroupHovered ? 'is-group-hovered' : ''}`}
+              style={{ top: `${pct}%`, left: `${leftPct}%`, width: `${widthPct}%`, right: 'auto' }}
+              onMouseDown={(e) => handleGroupDividerMouseDown(e, group)}
+              onMouseEnter={() => setHoveredGroupKey(group.key)}
+              onMouseLeave={() => setHoveredGroupKey((prev) => prev === group.key ? null : prev)}
+            />
+          );
         })}
 
-      {/* Add row at end */}
+      {/* Add row at end — expands table height so existing rows keep pixel size */}
       {showsStructureControls && (
         <div className="table-v2-add-row-end">
           <button
@@ -523,7 +480,20 @@ export function Table({
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              handleAddRow(tableData.rows - 1);
+              const nextHeight = Math.round(
+                item.height * (tableData.rows + 1) / tableData.rows,
+              );
+              const nextData = preserveOuterAddRowLayout(
+                tableData,
+                addRow(tableData, tableData.rows - 1),
+                item.height,
+                nextHeight,
+              );
+              onUpdate({
+                ...item,
+                data_json: serializeTableData(nextData),
+                height: nextHeight,
+              });
             }}
           >
             + 列
@@ -531,7 +501,7 @@ export function Table({
         </div>
       )}
 
-      {/* Add col at end */}
+      {/* Add col at end — expands table width so existing cols keep pixel size */}
       {showsStructureControls && (
         <div className="table-v2-add-col-end">
           <button
@@ -540,7 +510,20 @@ export function Table({
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              handleAddCol(tableData.cols - 1);
+              const nextWidth = Math.round(
+                item.width * (tableData.cols + 1) / tableData.cols,
+              );
+              const nextData = preserveOuterAddColLayout(
+                tableData,
+                addCol(tableData, tableData.cols - 1),
+                item.width,
+                nextWidth,
+              );
+              onUpdate({
+                ...item,
+                data_json: serializeTableData(nextData),
+                width: nextWidth,
+              });
             }}
           >
             + 欄

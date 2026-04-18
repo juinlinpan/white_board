@@ -34,7 +34,7 @@ function createTableItem(overrides: Partial<BoardItem> = {}): BoardItem {
 }
 
 describe('Table', () => {
-  it('shows divider add controls when selected', () => {
+  it('shows divider controls when selected', () => {
     const markup = renderToStaticMarkup(
       <Table
         item={createTableItem()}
@@ -47,10 +47,10 @@ describe('Table', () => {
 
     expect(markup).toContain('table-v2-col-divider');
     expect(markup).toContain('table-v2-row-divider');
-    expect((markup.match(/table-v2-add-btn/g) ?? []).length).toBeGreaterThan(0);
+    expect(markup).not.toContain('table-v2-add-btn');
   });
 
-  it('hides divider add controls when not selected or editing', () => {
+  it('hides divider controls when not selected or editing', () => {
     const markup = renderToStaticMarkup(
       <Table
         item={createTableItem()}

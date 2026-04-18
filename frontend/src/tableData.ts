@@ -21,6 +21,30 @@ export type TableData = {
   colWidths: number[];   // fractions summing to ~1.0 (one entry per column)
   rowHeights: number[];  // fractions summing to ~1.0 (one entry per row)
   cells: (TableCellData | null)[][];
+  /** Per-segment column divider position overrides.
+   *  Key: "c{boundaryIdx}r{row}", Value: absolute position fraction (0-1) */
+  colDividerPositions?: Record<string, number>;
+  /** Per-segment row divider position overrides.
+   *  Key: "r{boundaryIdx}c{col}", Value: absolute position fraction (0-1) */
+  rowDividerPositions?: Record<string, number>;
+  /** Explicit continuity breaks between vertically adjacent column-divider segments.
+   *  Key: "c{boundaryIdx}r{row}" means the segments at rows r and r+1 must not auto-join. */
+  colDividerBreaks?: Record<string, true>;
+  /** Explicit continuity breaks between horizontally adjacent row-divider segments.
+   *  Key: "r{boundaryIdx}c{col}" means the segments at cols c and c+1 must not auto-join. */
+  rowDividerBreaks?: Record<string, true>;
+};
+
+/** A group of contiguous divider segments that move together. */
+export type SegmentGroup = {
+  type: 'col' | 'row';
+  boundaryIndex: number;
+  /** Row indices (for col groups) or col indices (for row groups). */
+  segments: number[];
+  /** Effective position (fraction 0-1). */
+  position: number;
+  /** Unique key for React / hover tracking. */
+  key: string;
 };
 
 // [row, col] index pair used by select / merge operations
@@ -157,7 +181,57 @@ function parseNewFormat(parsed: Record<string, unknown>): TableData {
       };
     });
   });
-  return { rows, cols, colWidths, rowHeights, cells };
+  return {
+    rows,
+    cols,
+    colWidths,
+    rowHeights,
+    cells,
+    ...parseDividerPositions(parsed),
+    ...parseDividerBreaks(parsed),
+  };
+}
+
+function parseDividerPositions(parsed: Record<string, unknown>): Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> {
+  const result: Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> = {};
+  if (parsed['colDividerPositions'] && typeof parsed['colDividerPositions'] === 'object') {
+    const raw = parsed['colDividerPositions'] as Record<string, unknown>;
+    const cleaned: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'number' && isFinite(v)) cleaned[k] = v;
+    }
+    if (Object.keys(cleaned).length > 0) result.colDividerPositions = cleaned;
+  }
+  if (parsed['rowDividerPositions'] && typeof parsed['rowDividerPositions'] === 'object') {
+    const raw = parsed['rowDividerPositions'] as Record<string, unknown>;
+    const cleaned: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'number' && isFinite(v)) cleaned[k] = v;
+    }
+    if (Object.keys(cleaned).length > 0) result.rowDividerPositions = cleaned;
+  }
+  return result;
+}
+
+function parseDividerBreaks(parsed: Record<string, unknown>): Pick<TableData, 'colDividerBreaks' | 'rowDividerBreaks'> {
+  const result: Pick<TableData, 'colDividerBreaks' | 'rowDividerBreaks'> = {};
+  if (parsed['colDividerBreaks'] && typeof parsed['colDividerBreaks'] === 'object') {
+    const raw = parsed['colDividerBreaks'] as Record<string, unknown>;
+    const cleaned: Record<string, true> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v === true) cleaned[k] = true;
+    }
+    if (Object.keys(cleaned).length > 0) result.colDividerBreaks = cleaned;
+  }
+  if (parsed['rowDividerBreaks'] && typeof parsed['rowDividerBreaks'] === 'object') {
+    const raw = parsed['rowDividerBreaks'] as Record<string, unknown>;
+    const cleaned: Record<string, true> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v === true) cleaned[k] = true;
+    }
+    if (Object.keys(cleaned).length > 0) result.rowDividerBreaks = cleaned;
+  }
+  return result;
 }
 
 function parseOldFormat(parsed: Record<string, unknown>): TableData {
@@ -293,7 +367,28 @@ export function mergeCells(data: TableData, positions: CellPosition[]): TableDat
       return cell;
     }),
   );
-  return { ...data, cells: nextCells };
+
+  // Clean up divider position overrides for boundaries now internal to the merged cell
+  let nextColPos = data.colDividerPositions ? { ...data.colDividerPositions } : undefined;
+  let nextRowPos = data.rowDividerPositions ? { ...data.rowDividerPositions } : undefined;
+  if (nextColPos) {
+    for (let b = minCol; b < maxCol; b++) {
+      for (let r = minRow; r <= maxRow; r++) {
+        delete nextColPos[`c${b}r${r}`];
+      }
+    }
+    if (Object.keys(nextColPos).length === 0) nextColPos = undefined;
+  }
+  if (nextRowPos) {
+    for (let b = minRow; b < maxRow; b++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        delete nextRowPos[`r${b}c${c}`];
+      }
+    }
+    if (Object.keys(nextRowPos).length === 0) nextRowPos = undefined;
+  }
+
+  return { ...data, cells: nextCells, colDividerPositions: nextColPos, rowDividerPositions: nextRowPos };
 }
 
 // ── Find cell by child item ID ───────────────────────────────────────────
@@ -326,11 +421,44 @@ function findCellById(
   return null;
 }
 
+function withDividerBreak(
+  breaks: Record<string, true> | undefined,
+  key: string,
+): Record<string, true> {
+  return { ...(breaks ?? {}), [key]: true };
+}
+
+function getColumnSplitPosition(
+  data: TableData,
+  row: number,
+  col: number,
+  colSpan: number,
+  splitLeftSpan: number,
+): number {
+  const left = getEffectiveColEdge(data, col, row);
+  const right = getEffectiveColEdge(data, col + colSpan, row);
+  return left + (right - left) * (splitLeftSpan / colSpan);
+}
+
+function getRowSplitPosition(
+  data: TableData,
+  row: number,
+  col: number,
+  rowSpan: number,
+  splitTopSpan: number,
+): number {
+  const top = getEffectiveRowEdge(data, row, col);
+  const bottom = getEffectiveRowEdge(data, row + rowSpan, col);
+  return top + (bottom - top) * (splitTopSpan / rowSpan);
+}
+
 export function splitCellHorizontal(data: TableData, cellId: string): TableData {
   const found = findCellById(data, cellId);
   if (!found || found.cell.rowSpan <= 1) return data;
   const { cell: target, row, col } = found;
   const half = Math.floor(target.rowSpan / 2);
+  const splitBoundaryIndex = row + half - 1;
+  const splitPosition = getRowSplitPosition(data, row, col, target.rowSpan, half);
   const topCell: TableCellData = { ...target, id: makeCellId(), rowSpan: half };
   const bottomCell: TableCellData = {
     ...target,
@@ -346,7 +474,29 @@ export function splitCellHorizontal(data: TableData, cellId: string): TableData 
       return cell;
     }),
   );
-  return { ...data, cells: nextCells };
+  const nextRowPositions = { ...(data.rowDividerPositions ?? {}) };
+  for (let c = col; c < col + target.colSpan; c += 1) {
+    nextRowPositions[`r${splitBoundaryIndex}c${c}`] = splitPosition;
+  }
+  let nextRowBreaks = data.rowDividerBreaks;
+  if (col > 0) {
+    nextRowBreaks = withDividerBreak(
+      nextRowBreaks,
+      `r${splitBoundaryIndex}c${col - 1}`,
+    );
+  }
+  if (col + target.colSpan < data.cols) {
+    nextRowBreaks = withDividerBreak(
+      nextRowBreaks,
+      `r${splitBoundaryIndex}c${col + target.colSpan - 1}`,
+    );
+  }
+  return {
+    ...data,
+    cells: nextCells,
+    rowDividerPositions: nextRowPositions,
+    rowDividerBreaks: nextRowBreaks,
+  };
 }
 
 export function splitCellVertical(data: TableData, cellId: string): TableData {
@@ -354,6 +504,8 @@ export function splitCellVertical(data: TableData, cellId: string): TableData {
   if (!found || found.cell.colSpan <= 1) return data;
   const { cell: target, row, col } = found;
   const half = Math.floor(target.colSpan / 2);
+  const splitBoundaryIndex = col + half - 1;
+  const splitPosition = getColumnSplitPosition(data, row, col, target.colSpan, half);
   const leftCell: TableCellData = { ...target, id: makeCellId(), colSpan: half };
   const rightCell: TableCellData = {
     ...target,
@@ -369,7 +521,127 @@ export function splitCellVertical(data: TableData, cellId: string): TableData {
       return cell;
     }),
   );
-  return { ...data, cells: nextCells };
+  const nextColPositions = { ...(data.colDividerPositions ?? {}) };
+  for (let r = row; r < row + target.rowSpan; r += 1) {
+    nextColPositions[`c${splitBoundaryIndex}r${r}`] = splitPosition;
+  }
+  let nextColBreaks = data.colDividerBreaks;
+  if (row > 0) {
+    nextColBreaks = withDividerBreak(
+      nextColBreaks,
+      `c${splitBoundaryIndex}r${row - 1}`,
+    );
+  }
+  if (row + target.rowSpan < data.rows) {
+    nextColBreaks = withDividerBreak(
+      nextColBreaks,
+      `c${splitBoundaryIndex}r${row + target.rowSpan - 1}`,
+    );
+  }
+  return {
+    ...data,
+    cells: nextCells,
+    colDividerPositions: nextColPositions,
+    colDividerBreaks: nextColBreaks,
+  };
+}
+
+// ── Position remapping for structural changes ────────────────────────────
+
+function remapPositionsForAddRow(
+  data: TableData,
+  insertAt: number,
+): Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> {
+  const result: Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> = {};
+  if (data.colDividerPositions) {
+    const next: Record<string, number> = {};
+    for (const [key, val] of Object.entries(data.colDividerPositions)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (r < insertAt) {
+        next[key] = val;
+      } else {
+        next[`c${b}r${r + 1}`] = val;
+      }
+    }
+    // New row inherits from row above
+    for (const [key, val] of Object.entries(data.colDividerPositions)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (r === insertAt - 1 || (r === insertAt && insertAt === 0)) {
+        next[`c${b}r${insertAt}`] = val;
+      }
+    }
+    if (Object.keys(next).length > 0) result.colDividerPositions = next;
+  }
+  if (data.rowDividerPositions) {
+    const next: Record<string, number> = {};
+    for (const [key, val] of Object.entries(data.rowDividerPositions)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (b < insertAt) {
+        next[key] = val;
+      } else {
+        next[`r${b + 1}c${c}`] = val;
+      }
+    }
+    if (Object.keys(next).length > 0) result.rowDividerPositions = next;
+  }
+  return result;
+}
+
+function remapPositionsForAddCol(
+  data: TableData,
+  insertAt: number,
+): Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> {
+  const result: Pick<TableData, 'colDividerPositions' | 'rowDividerPositions'> = {};
+  if (data.colDividerPositions) {
+    const next: Record<string, number> = {};
+    for (const [key, val] of Object.entries(data.colDividerPositions)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (b < insertAt) {
+        next[key] = val;
+      } else {
+        next[`c${b + 1}r${r}`] = val;
+      }
+    }
+    if (Object.keys(next).length > 0) result.colDividerPositions = next;
+  }
+  if (data.rowDividerPositions) {
+    const next: Record<string, number> = {};
+    for (const [key, val] of Object.entries(data.rowDividerPositions)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (c < insertAt) {
+        next[key] = val;
+      } else {
+        next[`r${b}c${c + 1}`] = val;
+      }
+    }
+    // New col inherits from col to the left
+    for (const [key, val] of Object.entries(data.rowDividerPositions)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (c === insertAt - 1 || (c === insertAt && insertAt === 0)) {
+        next[`r${b}c${insertAt}`] = val;
+      }
+    }
+    if (Object.keys(next).length > 0) result.rowDividerPositions = next;
+  }
+  return result;
 }
 
 // ── Add row / col ────────────────────────────────────────────────────────
@@ -400,7 +672,7 @@ export function addRow(data: TableData, afterRowIndex: number): TableData {
       return cell;
     }),
   );
-  return { ...data, rows: data.rows + 1, rowHeights: nextRowHeights, cells: finalCells };
+  return { ...data, rows: data.rows + 1, rowHeights: nextRowHeights, cells: finalCells, ...remapPositionsForAddRow(data, insertAt) };
 }
 
 export function addCol(data: TableData, afterColIndex: number): TableData {
@@ -427,7 +699,7 @@ export function addCol(data: TableData, afterColIndex: number): TableData {
       return cell;
     }),
   );
-  return { ...data, cols: data.cols + 1, colWidths: nextColWidths, cells: finalCells };
+  return { ...data, cols: data.cols + 1, colWidths: nextColWidths, cells: finalCells, ...remapPositionsForAddCol(data, insertAt) };
 }
 
 // ── Resize col / row (drag divider) ─────────────────────────────────────
@@ -466,4 +738,368 @@ export function resizeRow(
 
 export function resizeTableData(data: TableData, rows: number, cols: number): TableData {
   return createTableData(rows, cols);
+}
+
+export function scaleTableDividerPositions(
+  data: TableData,
+  colScale: number,
+  rowScale: number,
+): TableData {
+  const nextColPositions = data.colDividerPositions
+    ? Object.fromEntries(
+        Object.entries(data.colDividerPositions).map(([key, value]) => [
+          key,
+          value * colScale,
+        ]),
+      )
+    : undefined;
+  const nextRowPositions = data.rowDividerPositions
+    ? Object.fromEntries(
+        Object.entries(data.rowDividerPositions).map(([key, value]) => [
+          key,
+          value * rowScale,
+        ]),
+      )
+    : undefined;
+
+  return {
+    ...data,
+    colDividerPositions: nextColPositions,
+    rowDividerPositions: nextRowPositions,
+  };
+}
+
+export function preserveOuterAddColLayout(
+  previousData: TableData,
+  expandedData: TableData,
+  oldWidth: number,
+  newWidth: number,
+): TableData {
+  if (oldWidth <= 0 || newWidth <= 0 || newWidth <= oldWidth) {
+    return expandedData;
+  }
+  const oldAreaFraction = oldWidth / newWidth;
+  const nextColPositions: Record<string, number> = {
+    ...(expandedData.colDividerPositions ?? {}),
+  };
+  const nextRowPositions: Record<string, number> = {
+    ...(expandedData.rowDividerPositions ?? {}),
+  };
+
+  for (let boundary = 0; boundary < previousData.cols - 1; boundary += 1) {
+    for (let row = 0; row < previousData.rows; row += 1) {
+      nextColPositions[`c${boundary}r${row}`] =
+        getEffectiveColEdge(previousData, boundary + 1, row) * oldAreaFraction;
+    }
+  }
+
+  for (let boundary = 0; boundary < previousData.rows - 1; boundary += 1) {
+    const inheritedY = getEffectiveRowEdge(
+      previousData,
+      boundary + 1,
+      Math.max(0, previousData.cols - 1),
+    );
+    for (let col = 0; col < expandedData.cols; col += 1) {
+      const sourceCol = Math.min(col, Math.max(0, previousData.cols - 1));
+      nextRowPositions[`r${boundary}c${col}`] =
+        col < previousData.cols
+          ? getEffectiveRowEdge(previousData, boundary + 1, sourceCol)
+          : inheritedY;
+    }
+  }
+
+  return {
+    ...expandedData,
+    colDividerPositions: nextColPositions,
+    rowDividerPositions: nextRowPositions,
+    colWidths: [
+      ...previousData.colWidths.map((width) => width * oldAreaFraction),
+      1 - oldAreaFraction,
+    ],
+  };
+}
+
+export function preserveOuterAddRowLayout(
+  previousData: TableData,
+  expandedData: TableData,
+  oldHeight: number,
+  newHeight: number,
+): TableData {
+  if (oldHeight <= 0 || newHeight <= 0 || newHeight <= oldHeight) {
+    return expandedData;
+  }
+  const oldAreaFraction = oldHeight / newHeight;
+  const nextColPositions: Record<string, number> = {
+    ...(expandedData.colDividerPositions ?? {}),
+  };
+  const nextRowPositions: Record<string, number> = {
+    ...(expandedData.rowDividerPositions ?? {}),
+  };
+
+  for (let boundary = 0; boundary < previousData.cols - 1; boundary += 1) {
+    const inheritedX = getEffectiveColEdge(
+      previousData,
+      boundary + 1,
+      Math.max(0, previousData.rows - 1),
+    );
+    for (let row = 0; row < expandedData.rows; row += 1) {
+      const sourceRow = Math.min(row, Math.max(0, previousData.rows - 1));
+      nextColPositions[`c${boundary}r${row}`] =
+        row < previousData.rows
+          ? getEffectiveColEdge(previousData, boundary + 1, sourceRow)
+          : inheritedX;
+    }
+  }
+
+  for (let boundary = 0; boundary < previousData.rows - 1; boundary += 1) {
+    for (let col = 0; col < previousData.cols; col += 1) {
+      nextRowPositions[`r${boundary}c${col}`] =
+        getEffectiveRowEdge(previousData, boundary + 1, col) * oldAreaFraction;
+    }
+  }
+
+  return {
+    ...expandedData,
+    colDividerPositions: nextColPositions,
+    rowDividerPositions: nextRowPositions,
+    rowHeights: [
+      ...previousData.rowHeights.map((height) => height * oldAreaFraction),
+      1 - oldAreaFraction,
+    ],
+  };
+}
+
+// ── Cumulative position helpers ─────────────────────────────────────────
+
+export function getCumulativeColPositions(colWidths: number[]): number[] {
+  const result: number[] = [0];
+  for (const w of colWidths) result.push((result[result.length - 1] ?? 0) + w);
+  return result;
+}
+
+export function getCumulativeRowPositions(rowHeights: number[]): number[] {
+  const result: number[] = [0];
+  for (const h of rowHeights) result.push((result[result.length - 1] ?? 0) + h);
+  return result;
+}
+
+// ── Effective edge positions (supports per-segment overrides) ───────────
+
+/**
+ * Get the effective x-position of column edge `edgeIndex` at a given row.
+ * edgeIndex 0 = left table edge (always 0), edgeIndex cols = right table edge (always 1).
+ * Internal edges 1..cols-1 correspond to boundary (edgeIndex-1).
+ */
+export function getEffectiveColEdge(
+  data: TableData,
+  edgeIndex: number,
+  row: number,
+): number {
+  if (edgeIndex <= 0) return 0;
+  if (edgeIndex >= data.cols) return 1;
+  const bIdx = edgeIndex - 1; // boundary index
+  const key = `c${bIdx}r${row}`;
+  const override = data.colDividerPositions?.[key];
+  if (override !== undefined) return override;
+  const cum = getCumulativeColPositions(data.colWidths);
+  return cum[edgeIndex] ?? 0;
+}
+
+/**
+ * Get the effective y-position of row edge `edgeIndex` at a given column.
+ */
+export function getEffectiveRowEdge(
+  data: TableData,
+  edgeIndex: number,
+  col: number,
+): number {
+  if (edgeIndex <= 0) return 0;
+  if (edgeIndex >= data.rows) return 1;
+  const bIdx = edgeIndex - 1;
+  const key = `r${bIdx}c${col}`;
+  const override = data.rowDividerPositions?.[key];
+  if (override !== undefined) return override;
+  const cum = getCumulativeRowPositions(data.rowHeights);
+  return cum[edgeIndex] ?? 0;
+}
+
+// ── Cell bounds ─────────────────────────────────────────────────────────
+
+export function getCellBounds(
+  data: TableData,
+  row: number,
+  col: number,
+  colSpan: number,
+  rowSpan: number,
+): { left: number; top: number; width: number; height: number } {
+  const left = getEffectiveColEdge(data, col, row);
+  const right = getEffectiveColEdge(data, col + colSpan, row);
+  const top = getEffectiveRowEdge(data, row, col);
+  const bottom = getEffectiveRowEdge(data, row + rowSpan, col);
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+// ── Segment group computation ───────────────────────────────────────────
+
+const POS_EPSILON = 0.0001;
+
+export function computeColSegmentGroups(data: TableData): SegmentGroup[] {
+  const groups: SegmentGroup[] = [];
+  const defaultCum = getCumulativeColPositions(data.colWidths);
+
+  for (let b = 0; b < data.cols - 1; b++) {
+    // Find visible segments at this column boundary
+    const segs: { row: number; pos: number }[] = [];
+    for (let r = 0; r < data.rows; r++) {
+      const rootLeft = getRootCellAt(data, r, b);
+      const rootRight = getRootCellAt(data, r, b + 1);
+      if (rootLeft && rootRight && rootLeft.cell.id === rootRight.cell.id) continue;
+      const key = `c${b}r${r}`;
+      const pos = data.colDividerPositions?.[key] ?? defaultCum[b + 1] ?? 0;
+      segs.push({ row: r, pos });
+    }
+    if (segs.length === 0) continue;
+
+    let group: number[] = [segs[0]!.row];
+    let groupPos = segs[0]!.pos;
+
+    for (let i = 1; i < segs.length; i++) {
+      const { row: r, pos } = segs[i]!;
+      const prevR = segs[i - 1]!.row;
+      const isAdjacent = r === prevR + 1;
+
+      if (isAdjacent) {
+        // Structurally connected: a cell on either side spans across the row boundary
+        const leftAbove = getRootCellAt(data, prevR, b);
+        const leftBelow = getRootCellAt(data, r, b);
+        const rightAbove = getRootCellAt(data, prevR, b + 1);
+        const rightBelow = getRootCellAt(data, r, b + 1);
+        const structurallyConnected =
+          (leftAbove && leftBelow && leftAbove.cell.id === leftBelow.cell.id) ||
+          (rightAbove && rightBelow && rightAbove.cell.id === rightBelow.cell.id);
+        const hasExplicitBreak = data.colDividerBreaks?.[`c${b}r${prevR}`] === true;
+
+        if (
+          structurallyConnected ||
+          (!hasExplicitBreak && Math.abs(pos - groupPos) < POS_EPSILON)
+        ) {
+          group.push(r);
+          continue;
+        }
+      }
+
+      // Flush current group
+      groups.push({ type: 'col', boundaryIndex: b, segments: [...group], position: groupPos, key: `c${b}g${group[0]}` });
+      group = [r];
+      groupPos = pos;
+    }
+
+    groups.push({ type: 'col', boundaryIndex: b, segments: [...group], position: groupPos, key: `c${b}g${group[0]}` });
+  }
+
+  return groups;
+}
+
+export function computeRowSegmentGroups(data: TableData): SegmentGroup[] {
+  const groups: SegmentGroup[] = [];
+  const defaultCum = getCumulativeRowPositions(data.rowHeights);
+
+  for (let b = 0; b < data.rows - 1; b++) {
+    const segs: { col: number; pos: number }[] = [];
+    for (let c = 0; c < data.cols; c++) {
+      const rootTop = getRootCellAt(data, b, c);
+      const rootBottom = getRootCellAt(data, b + 1, c);
+      if (rootTop && rootBottom && rootTop.cell.id === rootBottom.cell.id) continue;
+      const key = `r${b}c${c}`;
+      const pos = data.rowDividerPositions?.[key] ?? defaultCum[b + 1] ?? 0;
+      segs.push({ col: c, pos });
+    }
+    if (segs.length === 0) continue;
+
+    let group: number[] = [segs[0]!.col];
+    let groupPos = segs[0]!.pos;
+
+    for (let i = 1; i < segs.length; i++) {
+      const { col: c, pos } = segs[i]!;
+      const prevC = segs[i - 1]!.col;
+      const isAdjacent = c === prevC + 1;
+
+      if (isAdjacent) {
+        const topLeft = getRootCellAt(data, b, prevC);
+        const topRight = getRootCellAt(data, b, c);
+        const bottomLeft = getRootCellAt(data, b + 1, prevC);
+        const bottomRight = getRootCellAt(data, b + 1, c);
+        const structurallyConnected =
+          (topLeft && topRight && topLeft.cell.id === topRight.cell.id) ||
+          (bottomLeft && bottomRight && bottomLeft.cell.id === bottomRight.cell.id);
+        const hasExplicitBreak = data.rowDividerBreaks?.[`r${b}c${prevC}`] === true;
+
+        if (
+          structurallyConnected ||
+          (!hasExplicitBreak && Math.abs(pos - groupPos) < POS_EPSILON)
+        ) {
+          group.push(c);
+          continue;
+        }
+      }
+
+      groups.push({ type: 'row', boundaryIndex: b, segments: [...group], position: groupPos, key: `r${b}g${group[0]}` });
+      group = [c];
+      groupPos = pos;
+    }
+
+    groups.push({ type: 'row', boundaryIndex: b, segments: [...group], position: groupPos, key: `r${b}g${group[0]}` });
+  }
+
+  return groups;
+}
+
+// ── Per-group resize ────────────────────────────────────────────────────
+
+export function resizeColGroup(
+  data: TableData,
+  group: SegmentGroup,
+  newPosition: number,
+): TableData {
+  const b = group.boundaryIndex;
+  // Clamp: boundary b sits between cols b and b+1.
+  // Left neighbor edge = edge index b, right neighbor edge = edge index b+2.
+  let minPos = 0 + MIN_FRAC;
+  let maxPos = 1 - MIN_FRAC;
+  for (const r of group.segments) {
+    const leftPos = getEffectiveColEdge(data, b, r);
+    const rightPos = getEffectiveColEdge(data, b + 2, r);
+    minPos = Math.max(minPos, leftPos + MIN_FRAC);
+    maxPos = Math.min(maxPos, rightPos - MIN_FRAC);
+  }
+  const clamped = Math.max(minPos, Math.min(maxPos, newPosition));
+
+  const nextPositions = { ...(data.colDividerPositions ?? {}) };
+  for (const r of group.segments) {
+    nextPositions[`c${b}r${r}`] = clamped;
+  }
+  return { ...data, colDividerPositions: nextPositions };
+}
+
+export function resizeRowGroup(
+  data: TableData,
+  group: SegmentGroup,
+  newPosition: number,
+): TableData {
+  const b = group.boundaryIndex;
+  let minPos = 0 + MIN_FRAC;
+  let maxPos = 1 - MIN_FRAC;
+  for (const c of group.segments) {
+    const topPos = getEffectiveRowEdge(data, b, c);
+    const bottomPos = getEffectiveRowEdge(data, b + 2, c);
+    minPos = Math.max(minPos, topPos + MIN_FRAC);
+    maxPos = Math.min(maxPos, bottomPos - MIN_FRAC);
+  }
+  const clamped = Math.max(minPos, Math.min(maxPos, newPosition));
+
+  const nextPositions = { ...(data.rowDividerPositions ?? {}) };
+  for (const c of group.segments) {
+    nextPositions[`r${b}c${c}`] = clamped;
+  }
+  return { ...data, rowDividerPositions: nextPositions };
 }

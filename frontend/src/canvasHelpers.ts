@@ -8,7 +8,7 @@ import {
   getSegmentWorldPoints,
   hasStoredSegmentData,
 } from './segmentData';
-import { parseTableData, getRootCellAt } from './tableData';
+import { parseTableData, getRootCellAt, getEffectiveColEdge, getEffectiveRowEdge, getCellBounds as getTableCellBoundsFrac } from './tableData';
 import { ITEM_CATEGORY, ITEM_MIN_SIZE, ITEM_TYPE } from './types';
 
 type Anchor =
@@ -276,29 +276,46 @@ export function findTableCellDropTarget(
     const tableData = parseTableData(table.data_json);
     const localX = centerX - table.x;
     const localY = centerY - table.y;
+    const fracX = localX / table.width;
+    const fracY = localY / table.height;
 
-    // Find column index
+    // Find column index using effective edge positions
+    // Two-pass: first find approximate row, then use it for accurate column lookup,
+    // then refine row using the found column (handles per-segment divider overrides).
     let col = -1;
-    let cumX = 0;
-    for (let c = 0; c < tableData.cols; c++) {
-      const colW = (tableData.colWidths[c] ?? 1 / tableData.cols) * table.width;
-      if (localX >= cumX && localX < cumX + colW) {
-        col = c;
-        break;
-      }
-      cumX += colW;
-    }
-
-    // Find row index
     let row = -1;
-    let cumY = 0;
+
+    // Pass 1: approximate row using col=0
     for (let r = 0; r < tableData.rows; r++) {
-      const rowH = (tableData.rowHeights[r] ?? 1 / tableData.rows) * table.height;
-      if (localY >= cumY && localY < cumY + rowH) {
+      const top = getEffectiveRowEdge(tableData, r, 0);
+      const bottom = getEffectiveRowEdge(tableData, r + 1, 0);
+      if (fracY >= top && fracY < bottom) {
         row = r;
         break;
       }
-      cumY += rowH;
+    }
+    if (row === -1) row = tableData.rows - 1; // fallback to last row
+
+    // Pass 2: find column using the found row
+    for (let c = 0; c < tableData.cols; c++) {
+      const left = getEffectiveColEdge(tableData, c, row);
+      const right = getEffectiveColEdge(tableData, c + 1, row);
+      if (fracX >= left && fracX < right) {
+        col = c;
+        break;
+      }
+    }
+
+    // Pass 3: refine row using the found column
+    if (col >= 0) {
+      for (let r = 0; r < tableData.rows; r++) {
+        const top = getEffectiveRowEdge(tableData, r, col);
+        const bottom = getEffectiveRowEdge(tableData, r + 1, col);
+        if (fracY >= top && fracY < bottom) {
+          row = r;
+          break;
+        }
+      }
     }
 
     if (col === -1 || row === -1) continue;
@@ -332,27 +349,12 @@ export function getTableCellBounds(
   colSpan: number,
 ): { x: number; y: number; width: number; height: number } {
   const parsed = parseTableData(table.data_json);
-  let cumX = 0;
-  for (let c = 0; c < col; c++) {
-    cumX += (parsed.colWidths[c] ?? 1 / parsed.cols) * table.width;
-  }
-  let cumY = 0;
-  for (let r = 0; r < row; r++) {
-    cumY += (parsed.rowHeights[r] ?? 1 / parsed.rows) * table.height;
-  }
-  let cellWidth = 0;
-  for (let c = col; c < col + colSpan; c++) {
-    cellWidth += (parsed.colWidths[c] ?? 1 / parsed.cols) * table.width;
-  }
-  let cellHeight = 0;
-  for (let r = row; r < row + rowSpan; r++) {
-    cellHeight += (parsed.rowHeights[r] ?? 1 / parsed.rows) * table.height;
-  }
+  const frac = getTableCellBoundsFrac(parsed, row, col, colSpan, rowSpan);
   return {
-    x: table.x + cumX,
-    y: table.y + cumY,
-    width: cellWidth,
-    height: cellHeight,
+    x: table.x + frac.left * table.width,
+    y: table.y + frac.top * table.height,
+    width: frac.width * table.width,
+    height: frac.height * table.height,
   };
 }
 
