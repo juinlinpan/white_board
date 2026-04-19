@@ -57,6 +57,29 @@ describe('snapMoveRect', () => {
       guides: [],
     });
   });
+
+  it('can snap move operations to the background grid', () => {
+    const result = snapMoveRect(
+      {
+        x: 22,
+        y: 47,
+        width: 60,
+        height: 40,
+      },
+      [],
+      3,
+      { gridSize: 24 },
+    );
+
+    expect(result).toEqual({
+      x: 24,
+      y: 48,
+      guides: [
+        { axis: 'x', position: 24 },
+        { axis: 'y', position: 48 },
+      ],
+    });
+  });
 });
 
 describe('snapResizeRect', () => {
@@ -85,6 +108,29 @@ describe('snapResizeRect', () => {
       guides: [
         { axis: 'x', position: 100 },
         { axis: 'y', position: 105 },
+      ],
+    });
+  });
+
+  it('can snap resize operations to the background grid', () => {
+    const result = snapResizeRect(
+      {
+        x: 0,
+        y: 0,
+        width: 46,
+        height: 71,
+      },
+      [],
+      3,
+      { gridSize: 24 },
+    );
+
+    expect(result).toEqual({
+      width: 48,
+      height: 72,
+      guides: [
+        { axis: 'x', position: 48 },
+        { axis: 'y', position: 72 },
       ],
     });
   });

@@ -1546,6 +1546,7 @@ button {
   display: flex;
   flex-direction: row;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 8px;
   background: var(--surface);
@@ -1613,11 +1614,33 @@ button {
   margin-left: auto;
 }
 
+.tool-button-compact {
+  min-width: 32px;
+  padding-inline: 0;
+}
+
 .tool-meta {
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.toolbar-zoom-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-zoom-readout {
+  min-width: 56px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-dim);
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .toolbar-divider {
@@ -2069,8 +2092,6 @@ button {
   resize: none;
   z-index: 10;
   user-select: text;
-}
-
 }
 
 /* ── Occupied cell (has attached board item) ──────────────────────── */

@@ -10,6 +10,10 @@ export type SnapGuide = {
   position: number;
 };
 
+type SnapOptions = {
+  gridSize?: number;
+};
+
 type AxisMatch = {
   delta: number;
   guidePosition: number;
@@ -57,20 +61,81 @@ function getBestAxisMatch(
   return bestMatch;
 }
 
+function getNearestGridAxisMatch(
+  featureValues: number[],
+  gridSize: number,
+  tolerance: number,
+): AxisMatch | null {
+  if (gridSize <= 0) {
+    return null;
+  }
+
+  let bestMatch: AxisMatch | null = null;
+
+  for (const featureValue of featureValues) {
+    const candidateValue = Math.round(featureValue / gridSize) * gridSize;
+    const delta = candidateValue - featureValue;
+    if (Math.abs(delta) > tolerance) {
+      continue;
+    }
+
+    if (bestMatch === null || Math.abs(delta) < Math.abs(bestMatch.delta)) {
+      bestMatch = {
+        delta,
+        guidePosition: candidateValue,
+      };
+    }
+  }
+
+  return bestMatch;
+}
+
+function pickClosestAxisMatch(
+  ...matches: Array<AxisMatch | null>
+): AxisMatch | null {
+  return matches.reduce<AxisMatch | null>((bestMatch, nextMatch) => {
+    if (nextMatch === null) {
+      return bestMatch;
+    }
+
+    if (bestMatch === null) {
+      return nextMatch;
+    }
+
+    return Math.abs(nextMatch.delta) < Math.abs(bestMatch.delta)
+      ? nextMatch
+      : bestMatch;
+  }, null);
+}
+
 export function snapMoveRect(
   rect: SnapRect,
   targets: SnapRect[],
   tolerance: number,
+  options: SnapOptions = {},
 ): { x: number; y: number; guides: SnapGuide[] } {
-  const verticalMatch = getBestAxisMatch(
-    [rect.x, rect.x + rect.width / 2, rect.x + rect.width],
-    collectVerticalPositions(targets),
-    tolerance,
+  const verticalFeatures = [rect.x, rect.x + rect.width / 2, rect.x + rect.width];
+  const horizontalFeatures = [
+    rect.y,
+    rect.y + rect.height / 2,
+    rect.y + rect.height,
+  ];
+
+  const verticalMatch = pickClosestAxisMatch(
+    getBestAxisMatch(verticalFeatures, collectVerticalPositions(targets), tolerance),
+    options.gridSize === undefined
+      ? null
+      : getNearestGridAxisMatch(verticalFeatures, options.gridSize, tolerance),
   );
-  const horizontalMatch = getBestAxisMatch(
-    [rect.y, rect.y + rect.height / 2, rect.y + rect.height],
-    collectHorizontalPositions(targets),
-    tolerance,
+  const horizontalMatch = pickClosestAxisMatch(
+    getBestAxisMatch(
+      horizontalFeatures,
+      collectHorizontalPositions(targets),
+      tolerance,
+    ),
+    options.gridSize === undefined
+      ? null
+      : getNearestGridAxisMatch(horizontalFeatures, options.gridSize, tolerance),
   );
 
   const guides: SnapGuide[] = [];
@@ -92,16 +157,26 @@ export function snapResizeRect(
   rect: SnapRect,
   targets: SnapRect[],
   tolerance: number,
+  options: SnapOptions = {},
 ): { width: number; height: number; guides: SnapGuide[] } {
-  const verticalMatch = getBestAxisMatch(
-    [rect.x + rect.width],
-    collectVerticalPositions(targets),
-    tolerance,
+  const verticalFeatures = [rect.x + rect.width];
+  const horizontalFeatures = [rect.y + rect.height];
+
+  const verticalMatch = pickClosestAxisMatch(
+    getBestAxisMatch(verticalFeatures, collectVerticalPositions(targets), tolerance),
+    options.gridSize === undefined
+      ? null
+      : getNearestGridAxisMatch(verticalFeatures, options.gridSize, tolerance),
   );
-  const horizontalMatch = getBestAxisMatch(
-    [rect.y + rect.height],
-    collectHorizontalPositions(targets),
-    tolerance,
+  const horizontalMatch = pickClosestAxisMatch(
+    getBestAxisMatch(
+      horizontalFeatures,
+      collectHorizontalPositions(targets),
+      tolerance,
+    ),
+    options.gridSize === undefined
+      ? null
+      : getNearestGridAxisMatch(horizontalFeatures, options.gridSize, tolerance),
   );
 
   const guides: SnapGuide[] = [];

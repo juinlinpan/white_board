@@ -32,6 +32,7 @@ import {
   type TableCellHit,
 } from './canvasHelpers';
 import {
+  CANVAS_GRID_SIZE,
   MIN_ZOOM,
   MAX_ZOOM,
   SNAP_TOLERANCE,
@@ -85,10 +86,12 @@ import {
   getTableInsertDimensions,
   getTableInsertItemSize,
 } from './tableInsertPreview';
+import { zoomViewportAroundPoint } from './viewport';
 
 export type UseCanvasMouseHandlersParams = {
   // Current state values (re-captured every render)
   snapEnabled: boolean;
+  magnetEnabled: boolean;
   activeTool: ActiveTool;
   segmentDraft: SegmentDraftState | null;
   editingId: string | null;
@@ -163,6 +166,7 @@ export type UseCanvasMouseHandlersParams = {
 export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   const {
     snapEnabled,
+    magnetEnabled,
     activeTool,
     segmentDraft,
     editingId,
@@ -218,13 +222,11 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     const mouseY = e.clientY - rect.top;
     const delta = -e.deltaY * 0.001;
     const vp = viewportRef.current;
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * (1 + delta)));
-    const scale = newZoom / vp.zoom;
-    const nextViewport: Viewport = {
-      x: mouseX - scale * (mouseX - vp.x),
-      y: mouseY - scale * (mouseY - vp.y),
-      zoom: newZoom,
-    };
+    const nextViewport = zoomViewportAroundPoint(
+      vp,
+      Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * (1 + delta))),
+      { x: mouseX, y: mouseY },
+    );
 
     setViewportAndSync(nextViewport);
     scheduleViewportSave(nextViewport);
@@ -558,6 +560,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
   function handleMouseMove(e: React.MouseEvent) {
     const shouldUseSnap = snapEnabled && !e.altKey;
+    const shouldUseMagnet = magnetEnabled && !e.altKey;
 
     const waypointDrag = waypointDragRef.current;
     if (waypointDrag) {
@@ -826,7 +829,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
       const rawX = drag.startBoundsX + dx;
       const rawY = drag.startBoundsY + dy;
-      const snapResult = shouldUseSnap
+      const snapResult = shouldUseSnap || shouldUseMagnet
         ? snapMoveRect(
             {
               x: rawX,
@@ -836,6 +839,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
             },
             getSnapTargetRects(drag.selectedItemIds),
             SNAP_TOLERANCE,
+            shouldUseMagnet ? { gridSize: CANVAS_GRID_SIZE } : undefined,
           )
         : { x: rawX, y: rawY, guides: [] };
       const offsetX = snapResult.x - drag.startBoundsX;

@@ -10,6 +10,12 @@
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 
+## Zoom And Alignment Update Notes
+
+- [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
+- [x] Add toolbar zoom controls for `-`, `+`, current zoom readout, and reset to `1.0x`.
+- [x] Keep `snap` for nearby-item alignment and add a separate `magnet` toggle for background-grid movement snapping.
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo

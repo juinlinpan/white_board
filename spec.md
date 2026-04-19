@@ -11,6 +11,14 @@
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
 
+## Zoom And Alignment Update Notes
+
+- The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
+- The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
+- `snap` continues to mean alignment against nearby item edges and centers.
+- `magnet` is a separate movement mode that snaps dragged items to the background grid lines.
+- Holding `Alt` while dragging should temporarily pause both `snap` and `magnet`.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。

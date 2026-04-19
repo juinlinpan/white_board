@@ -33,6 +33,7 @@ import {
   type TableCellHit,
 } from './canvasHelpers';
 import {
+  CANVAS_GRID_SIZE,
   VIEWPORT_SAVE_DELAY,
   SNAP_TOLERANCE,
   CONNECTOR_SNAP_THRESHOLD,
@@ -92,12 +93,19 @@ import {
   parseCanvasBackgroundMode,
   type CanvasBackgroundMode,
 } from './canvasBackground';
+import {
+  adjustZoomByStep,
+  getDisplayZoom,
+  getResetZoom,
+  zoomViewportAroundPoint,
+} from './viewport';
 
 type Props = {
   page: Page;
+  onViewportChange?: (viewport: Viewport) => void;
 };
 
-export function Canvas({ page }: Props) {
+export function Canvas({ page, onViewportChange }: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
     y: page.viewport_y,
@@ -120,6 +128,7 @@ export function Canvas({ page }: Props) {
     },
   );
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [magnetEnabled, setMagnetEnabled] = useState(false);
   const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraftState | null>(
@@ -737,6 +746,8 @@ export function Canvas({ page }: Props) {
   }
 
   function scheduleViewportSave(nextViewport: Viewport) {
+    onViewportChange?.(nextViewport);
+
     if (vpSaveTimer.current !== null) {
       clearTimeout(vpSaveTimer.current);
     }
@@ -748,6 +759,36 @@ export function Canvas({ page }: Props) {
         zoom: nextViewport.zoom,
       });
     }, VIEWPORT_SAVE_DELAY);
+  }
+
+  function handleViewportZoom(targetZoom: number) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const nextViewport = zoomViewportAroundPoint(
+      viewportRef.current,
+      targetZoom,
+      {
+        x: rect?.width ? rect.width / 2 : 0,
+        y: rect?.height ? rect.height / 2 : 0,
+      },
+    );
+    if (nextViewport.zoom === viewportRef.current.zoom) {
+      return;
+    }
+
+    setViewportAndSync(nextViewport);
+    scheduleViewportSave(nextViewport);
+  }
+
+  function handleZoomIn() {
+    handleViewportZoom(adjustZoomByStep(viewportRef.current.zoom, 1));
+  }
+
+  function handleZoomOut() {
+    handleViewportZoom(adjustZoomByStep(viewportRef.current.zoom, -1));
+  }
+
+  function handleResetZoom() {
+    handleViewportZoom(getResetZoom());
   }
 
   function startSegmentDraft(
@@ -801,6 +842,7 @@ export function Canvas({ page }: Props) {
     handleItemDoubleClick,
   } = useCanvasMouseHandlers({
     snapEnabled,
+    magnetEnabled,
     activeTool,
     segmentDraft,
     editingId,
@@ -891,8 +933,14 @@ export function Canvas({ page }: Props) {
         activeTool={activeTool}
         onToolChange={handleToolChange}
         onTableToolClick={handleToolbarTableClick}
+        zoom={getDisplayZoom(viewport.zoom)}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
         snapEnabled={snapEnabled}
         onToggleSnap={() => setSnapEnabled((current) => !current)}
+        magnetEnabled={magnetEnabled}
+        onToggleMagnet={() => setMagnetEnabled((current) => !current)}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={() => void handleUndo()}
@@ -1164,10 +1212,15 @@ export function Canvas({ page }: Props) {
                   ? `Snap 開啟 · ${SNAP_TOLERANCE}px · Alt 暫停`
                   : 'Snap 關閉'}
               </div>
-            </div>
-
-            <div className="canvas-status-badge">
-              {Math.round(viewport.zoom * 100)}%
+              <div
+                className={`canvas-guide-badge ${
+                  magnetEnabled ? '' : 'canvas-guide-badge-muted'
+                }`}
+              >
+                {magnetEnabled
+                  ? `Magnet 開啟 · ${CANVAS_GRID_SIZE}px 網格 · Alt 暫停`
+                  : 'Magnet 關閉'}
+              </div>
             </div>
           </div>
         </div>
