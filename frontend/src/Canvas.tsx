@@ -86,6 +86,12 @@ import {
   type ActiveTool,
   type Viewport,
 } from './types';
+import {
+  CANVAS_BACKGROUND_STORAGE_KEY,
+  DEFAULT_CANVAS_BACKGROUND_MODE,
+  parseCanvasBackgroundMode,
+  type CanvasBackgroundMode,
+} from './canvasBackground';
 
 type Props = {
   page: Page;
@@ -102,6 +108,17 @@ export function Canvas({ page }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
+  const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(
+    () => {
+      if (typeof window === 'undefined') {
+        return DEFAULT_CANVAS_BACKGROUND_MODE;
+      }
+
+      return parseCanvasBackgroundMode(
+        window.localStorage.getItem(CANVAS_BACKGROUND_STORAGE_KEY),
+      );
+    },
+  );
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
@@ -361,6 +378,17 @@ export function Canvas({ page }: Props) {
     setAnchorIndicatorItems,
     setActiveAnchorHit,
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      CANVAS_BACKGROUND_STORAGE_KEY,
+      backgroundMode,
+    );
+  }, [backgroundMode]);
 
   useEffect(() => {
     const currentOrigin = toolbarTableInsertOriginRef.current;
@@ -882,7 +910,9 @@ export function Canvas({ page }: Props) {
             onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
           >
-            <div className="canvas-dot-grid" />
+            <div
+              className={`canvas-background canvas-background-${backgroundMode}`}
+            />
 
             {activeTool === ITEM_TYPE.table && tableInsertPreview !== null ? (
               <div
@@ -1082,6 +1112,40 @@ export function Canvas({ page }: Props) {
                 </p>
               </div>
             ) : null}
+
+            <div className="canvas-top-right-stack">
+              <div
+                className="canvas-background-picker"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <span className="canvas-background-picker-label">背景</span>
+                <div className="canvas-background-picker-options">
+                  {(
+                    [
+                      ['dots', '點狀'],
+                      ['grid', '格線'],
+                    ] as const satisfies readonly [
+                      CanvasBackgroundMode,
+                      string,
+                    ][]
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`canvas-background-option ${
+                        backgroundMode === mode
+                          ? 'canvas-background-option-active'
+                          : ''
+                      }`}
+                      aria-pressed={backgroundMode === mode}
+                      onClick={() => setBackgroundMode(mode)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             <div className="canvas-corner-stack">
               {activeTool === 'line' || activeTool === 'arrow' ? (

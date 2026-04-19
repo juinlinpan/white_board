@@ -1155,17 +1155,34 @@ button {
   cursor: grabbing;
 }
 
-/* Dot-grid background */
-.canvas-dot-grid {
+/* Canvas background */
+.canvas-background {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.canvas-background-dots {
   background-image: radial-gradient(
     circle,
-    rgba(0, 0, 0, 0.1) 1px,
-    transparent 1px
+    rgba(15, 23, 42, 0.22) 1.4px,
+    transparent 1.5px
   );
   background-size: 20px 20px;
+}
+
+.canvas-background-grid {
+  background-image:
+    linear-gradient(
+      rgba(15, 23, 42, 0.12) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(15, 23, 42, 0.12) 1px,
+      transparent 1px
+    );
+  background-size: 24px 24px;
 }
 
 .canvas-snap-guide {
@@ -1255,6 +1272,67 @@ button {
   flex-direction: column;
   gap: 6px;
   pointer-events: none;
+}
+
+.canvas-top-right-stack {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 4;
+}
+
+.canvas-background-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.canvas-background-picker-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.canvas-background-picker-options {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.canvas-background-option {
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.canvas-background-option:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.canvas-background-option-active {
+  background: #ffffff;
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
 }
 
 /* ══════════════════════════════════════════
