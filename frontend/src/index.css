@@ -753,14 +753,17 @@ button {
 
 .workspace-header > div:first-child {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .workspace-project-block {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -768,6 +771,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 340px;
   min-width: 0;
 }
 
@@ -775,6 +779,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 320px;
   min-width: 0;
 }
 
@@ -786,8 +791,10 @@ button {
 }
 
 .workspace-project-name-input {
+  flex: 1 1 220px;
   min-width: 0;
-  width: min(420px, 100%);
+  width: auto;
+  max-width: 420px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   padding: 8px 12px;
@@ -800,8 +807,10 @@ button {
 }
 
 .workspace-page-name-input {
+  flex: 1 1 200px;
   min-width: 0;
-  width: min(360px, 100%);
+  width: auto;
+  max-width: 360px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   padding: 8px 12px;
@@ -1009,6 +1018,16 @@ button {
 
   .workspace-header-actions {
     width: 100%;
+  }
+
+  .workspace-header > div:first-child {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .workspace-project-block {
+    width: 100%;
+    align-items: stretch;
   }
 
   .workspace-project-name-row {
