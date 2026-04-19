@@ -47,6 +47,7 @@ type Props = {
   isEditing: boolean;
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
+  onCellInteractionStart?: () => void;
   dropTargetCellId?: string | null;
 };
 
@@ -58,6 +59,7 @@ export function Table({
   isEditing,
   onUpdate,
   onEditEnd,
+  onCellInteractionStart,
   dropTargetCellId,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +88,15 @@ export function Table({
       dragSelectStartRef.current = null;
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    function handleWindowMouseUp() {
+      dragSelectStartRef.current = null;
+    }
+
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => window.removeEventListener('mouseup', handleWindowMouseUp);
+  }, []);
 
   function handleUpdate(nextData: TableData) {
     onUpdate({ ...item, data_json: serializeTableData(nextData) });
@@ -193,6 +204,30 @@ export function Table({
     handleUpdate(updateTableCell(tableData, cellId, { content: value }));
   }
 
+  function handleCellSelectionStart(
+    cellId: string,
+    row: number,
+    col: number,
+    extendSelection: boolean,
+  ) {
+    if (!isSelected || !isEditing) {
+      onCellInteractionStart?.();
+    }
+
+    dragSelectStartRef.current = [row, col];
+
+    if (extendSelection && selectedCells.length > 0) {
+      const firstId = selectedCells[0];
+      const startPos = firstId ? getCellPosition(tableData, firstId) : null;
+      if (startPos) {
+        setSelectedCells(getRangeSelection(tableData, startPos, [row, col]));
+        return;
+      }
+    }
+
+    setSelectedCells([cellId]);
+  }
+
   // ── Group divider drag ─────────────────────────────────────────────────
 
   const handleGroupDividerMouseDown = useCallback(
@@ -286,18 +321,8 @@ export function Table({
       {/* Cells (absolute positioning for per-row column independence) */}
       <div
         className="table-v2-grid"
-        onMouseDown={(e) => {
-          if (!isEditing || isDraggingDivider) return;
-          const target = e.target as HTMLElement;
-          const cellEl = target.closest('[data-cell-id]') as HTMLElement | null;
-          if (!cellEl) return;
-          const cellId = cellEl.dataset['cellId'];
-          const pos = cellId ? getCellPosition(tableData, cellId) : null;
-          if (!pos) return;
-          dragSelectStartRef.current = pos;
-        }}
-        onMouseEnter={(e) => {
-          if (!isEditing || !dragSelectStartRef.current || !(e.buttons & 1)) return;
+        onMouseMove={(e) => {
+          if (!dragSelectStartRef.current || !(e.buttons & 1) || isDraggingDivider) return;
           const target = e.target as HTMLElement;
           const cellEl = target.closest('[data-cell-id]') as HTMLElement | null;
           if (!cellEl) return;
@@ -338,28 +363,15 @@ export function Table({
                   height: `${bounds.height * 100}%`,
                 }}
                 onMouseDown={(e) => {
-                  if (!isEditing) return;
                   e.stopPropagation();
-                  if (!dragSelectStartRef.current) {
-                    dragSelectStartRef.current = [ri, ci];
-                    if (e.shiftKey && selectedCells.length > 0) {
-                      const firstId = selectedCells[0];
-                      const startPos = firstId
-                        ? getCellPosition(tableData, firstId)
-                        : null;
-                      if (startPos) {
-                        setSelectedCells(
-                          getRangeSelection(tableData, startPos, [ri, ci]),
-                        );
-                        return;
-                      }
-                    }
-                    setSelectedCells([cell.id]);
-                  }
+                  if (isDraggingDivider) return;
+                  handleCellSelectionStart(cell.id, ri, ci, e.shiftKey);
                 }}
                 onDoubleClick={(e) => {
-                  if (!isEditing) return;
                   e.stopPropagation();
+                  if (!isEditing) {
+                    onCellInteractionStart?.();
+                  }
                   if (!isOccupied) {
                     setEditingCellId(cell.id);
                   }

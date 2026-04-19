@@ -219,6 +219,8 @@ Page 至少包含：
 - 外圍擴增語意：從表格最外圍新增 row / col 時，應擴張 table 外框，不應回頭重排既有欄列的獨立分格線結構；原有區域的像素大小、分格線位置與 cell layout 必須維持 **exact 不變**
 - 儲存格以 absolute positioning 排版，各行列的分格線位置可因群組拖曳而獨立偏移（資料模型中以 `colDividerPositions` / `rowDividerPositions` 記錄每段分格線的位置覆寫，並以 `colDividerBreaks` / `rowDividerBreaks` 記錄不得自動連續的線段斷點）
 
+- table 只允許透過最外層邊框選取整個物件與顯示移動游標；滑鼠位於表格內部時，單擊應直接反白單格，按住拖曳應可延伸為多格選取
+
 ### 5.7 `text_box`
 
 - 可自由拖曳

@@ -1001,6 +1001,7 @@ export function Canvas({ page }: Props) {
                       onToggleCollapse={() => handleToggleFrameCollapse(item.id)}
                       onUpdate={handleItemUpdate}
                       onEditEnd={handleEditEnd}
+                      onTableCellInteractionStart={() => handleItemDoubleClick(item)}
                       tableDropTargetCellId={
                         isTableDropTarget ? activeTableDropTarget?.cellId ?? null : null
                       }

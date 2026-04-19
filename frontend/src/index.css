@@ -1559,6 +1559,10 @@ button {
   transition: box-shadow 100ms ease;
 }
 
+.board-item.board-item-table {
+  cursor: default;
+}
+
 .board-item.is-frame-ingest,
 .board-item.is-frame-eject {
   transition:
@@ -1658,6 +1662,51 @@ button {
   background: var(--accent);
   box-shadow: var(--shadow-md);
   cursor: nwse-resize;
+  z-index: 8;
+}
+
+.board-item-table-edge {
+  position: absolute;
+  z-index: 7;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: move;
+}
+
+.board-item-table-edge-top,
+.board-item-table-edge-bottom {
+  left: 0;
+  width: 100%;
+  height: 8px;
+}
+
+.board-item-table-edge-top {
+  top: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.board-item-table-edge-bottom {
+  bottom: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.board-item-table-edge-left,
+.board-item-table-edge-right {
+  top: 0;
+  width: 8px;
+  height: 100%;
+}
+
+.board-item-table-edge-left {
+  left: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.board-item-table-edge-right {
+  right: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 .line-shape {
@@ -1861,6 +1910,7 @@ button {
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   user-select: none;
+  cursor: default;
 }
 
 .table-v2.is-editing {

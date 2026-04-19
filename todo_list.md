@@ -143,6 +143,8 @@
 - [x] 支援最外圍擴增 table 時保留既有欄列獨立分格線結構，且原有區域 pixel layout exact 不變
 - [x] 儲存格改為 absolute positioning 排版，支援各行列分格線獨立偏移與顯式斷點
 
+- [x] table 僅在最外層邊框提供整體選取與移動游標；點擊表格內部直接反白單格，按住拖曳可延伸為多格選取
+
 ### 10. `small_item`
 
 - [x] 實作 `text_box`
