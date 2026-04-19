@@ -53,6 +53,8 @@ import type {
   SegmentDraftState,
   SegmentDraftTool,
   SegmentEndpointDragState,
+  TableInsertDraftState,
+  TableInsertPreviewState,
   WaypointDragState,
 } from './canvasTypes';
 import {
@@ -72,12 +74,17 @@ import {
 import { snapMoveRect, snapResizeRect, type SnapGuide } from './snap';
 import {
   findCellByChildItemId,
+  createTableData,
   parseTableData,
   serializeTableData,
   updateTableCell,
   getRootCellAt,
 } from './tableData';
 import { ITEM_DEFAULT_SIZE, ITEM_TYPE, type ActiveTool, type Viewport } from './types';
+import {
+  getTableInsertDimensions,
+  getTableInsertItemSize,
+} from './tableInsertPreview';
 
 export type UseCanvasMouseHandlersParams = {
   // Current state values (re-captured every render)
@@ -99,6 +106,7 @@ export type UseCanvasMouseHandlersParams = {
   panRef: MutableRefObject<PanState | null>;
   waypointDragRef: MutableRefObject<WaypointDragState | null>;
   segmentEndpointDragRef: MutableRefObject<SegmentEndpointDragState | null>;
+  tableInsertDraftRef: MutableRefObject<TableInsertDraftState | null>;
 
   // Viewport
   setViewportAndSync: (vp: Viewport) => void;
@@ -117,6 +125,8 @@ export type UseCanvasMouseHandlersParams = {
   setDeletingWaypointInfo: (
     info: { itemId: string; waypointIndex: number } | null,
   ) => void;
+  setTableInsertPreview: (preview: TableInsertPreviewState | null) => void;
+  toolbarTableInsertPreviewActive: boolean;
 
   // Selection / editing
   setSelection: (ids: string[]) => void;
@@ -136,6 +146,7 @@ export type UseCanvasMouseHandlersParams = {
     y: number;
     width: number;
     height: number;
+    dataJson?: string | null;
   }) => Promise<void>;
   handleCreateSegmentItem: (draft: SegmentDraftState) => Promise<void>;
   triggerFrameItemAnimation: (itemIds: string[], type: 'ingest' | 'eject') => void;
@@ -167,6 +178,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     panRef,
     waypointDragRef,
     segmentEndpointDragRef,
+    tableInsertDraftRef,
     setViewportAndSync,
     scheduleViewportSave,
     setItemsAndSync,
@@ -177,6 +189,8 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     setActiveFrameDropTargetId,
     setActiveTableDropTarget,
     setDeletingWaypointInfo,
+    setTableInsertPreview,
+    toolbarTableInsertPreviewActive,
     setSelection,
     setEditingId,
     setSegmentDraft,
@@ -214,6 +228,27 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
     setViewportAndSync(nextViewport);
     scheduleViewportSave(nextViewport);
+  }
+
+  function startTableInsertDraft(clientX: number, clientY: number) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+    const worldPos = screenToWorld(clientX, clientY);
+    tableInsertDraftRef.current = {
+      startClientX: clientX,
+      startClientY: clientY,
+      startWorldX: worldPos.x,
+      startWorldY: worldPos.y,
+    };
+    setTableInsertPreview({
+      cursorX: clientX - rect.left,
+      cursorY: clientY - rect.top,
+      cols: 1,
+      rows: 1,
+      isActive: true,
+    });
   }
 
   function handleToggleFrameCollapse(frameId: string) {
@@ -272,6 +307,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
 
+    if (activeTool === 'table') {
+      if (toolbarTableInsertPreviewActive) {
+        return;
+      }
+      startTableInsertDraft(e.clientX, e.clientY);
+      return;
+    }
+
     if (activeTool !== 'select') {
       const worldPos = screenToWorld(e.clientX, e.clientY);
       const size = ITEM_DEFAULT_SIZE[activeTool] ?? { width: 200, height: 100 };
@@ -304,6 +347,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
     if (activeTool === 'line' || activeTool === 'arrow') {
       startSegmentDraft(activeTool, e.clientX, e.clientY);
+      return;
+    }
+
+    if (activeTool === 'table') {
+      if (toolbarTableInsertPreviewActive) {
+        return;
+      }
+      startTableInsertDraft(e.clientX, e.clientY);
       return;
     }
 
@@ -382,6 +433,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
     if (activeTool === 'line' || activeTool === 'arrow') {
       startSegmentDraft(activeTool, e.clientX, e.clientY);
+      return;
+    }
+
+    if (activeTool === 'table') {
+      if (toolbarTableInsertPreviewActive) {
+        return;
+      }
+      startTableInsertDraft(e.clientX, e.clientY);
       return;
     }
 
@@ -878,6 +937,39 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
 
+    if (activeTool === 'table') {
+      if (toolbarTableInsertPreviewActive) {
+        setTableInsertPreview(null);
+        return;
+      }
+      const draft = tableInsertDraftRef.current;
+      if (draft === null) {
+        setTableInsertPreview(null);
+        return;
+      }
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) {
+        setTableInsertPreview(null);
+        return;
+      }
+
+      const dims = getTableInsertDimensions(
+        e.clientX - draft.startClientX,
+        e.clientY - draft.startClientY,
+        12,
+        12,
+      );
+      setTableInsertPreview({
+        cursorX: draft.startClientX - rect.left,
+        cursorY: draft.startClientY - rect.top,
+        cols: dims.cols,
+        rows: dims.rows,
+        isActive: true,
+      });
+      return;
+    }
+
     setSnapGuides([]);
   }
 
@@ -887,6 +979,33 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     setActiveAnchorHit(null);
     setActiveFrameDropTargetId(null);
     setActiveTableDropTarget(null);
+
+    const tableInsertDraft = tableInsertDraftRef.current;
+    tableInsertDraftRef.current = null;
+    setTableInsertPreview(null);
+
+    if (tableInsertDraft !== null) {
+      const dims =
+        e === undefined
+          ? { cols: 1, rows: 1 }
+          : getTableInsertDimensions(
+              e.clientX - tableInsertDraft.startClientX,
+              e.clientY - tableInsertDraft.startClientY,
+              12,
+              12,
+            );
+      const size = getTableInsertItemSize(dims.cols, dims.rows);
+      void handleCreateItem({
+        type: ITEM_TYPE.table,
+        x: tableInsertDraft.startWorldX,
+        y: tableInsertDraft.startWorldY,
+        width: size.width,
+        height: size.height,
+        dataJson: serializeTableData(createTableData(dims.rows, dims.cols)),
+      });
+      setActiveTool('select');
+      return;
+    }
 
     const waypointDrag = waypointDragRef.current;
     if (waypointDrag) {

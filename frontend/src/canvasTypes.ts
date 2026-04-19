@@ -56,6 +56,21 @@ export type WaypointDragState = {
   snapshot: BoardSnapshot;
 };
 
+export type TableInsertDraftState = {
+  startClientX: number;
+  startClientY: number;
+  startWorldX: number;
+  startWorldY: number;
+};
+
+export type TableInsertPreviewState = {
+  cursorX: number;
+  cursorY: number;
+  cols: number;
+  rows: number;
+  isActive: boolean;
+};
+
 export type ClipboardEntry = {
   sourceId: string;
   payload: BoardItemPayload;

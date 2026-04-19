@@ -61,7 +61,7 @@ interface UseCanvasItemActionsParams {
   setConnectorsAndSync: (updater: ConnectorsUpdater) => void;
   setSelection: (ids: string[]) => void;
   setEditingId: Dispatch<SetStateAction<string | null>>;
-  setActiveTool: Dispatch<SetStateAction<ActiveTool>>;
+  setActiveTool: (tool: ActiveTool) => void;
   setAnchorIndicatorItems: Dispatch<SetStateAction<BoardItem[]>>;
   setActiveAnchorHit: Dispatch<SetStateAction<AnchorHit | null>>;
 }
@@ -324,6 +324,7 @@ export function useCanvasItemActions({
       y: number;
       width: number;
       height: number;
+      dataJson?: string | null;
     }) => {
       const snapshotBeforeCreate = captureBoardSnapshot();
       const category =
@@ -356,7 +357,9 @@ export function useCanvasItemActions({
         is_collapsed: false,
         style_json: null,
         data_json:
-          params.type === ITEM_TYPE.table
+          params.dataJson !== undefined
+            ? params.dataJson
+            : params.type === ITEM_TYPE.table
             ? serializeTableData(createTableData())
             : null,
       };

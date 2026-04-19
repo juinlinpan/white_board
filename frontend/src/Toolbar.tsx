@@ -81,6 +81,7 @@ const TOOLS: ToolDef[] = [
 type Props = {
   activeTool: ActiveTool;
   onToolChange: (tool: ActiveTool) => void;
+  onTableToolClick: (clientX: number, clientY: number) => void;
   snapEnabled: boolean;
   onToggleSnap: () => void;
   canUndo: boolean;
@@ -93,6 +94,7 @@ type Props = {
 export function Toolbar({
   activeTool,
   onToolChange,
+  onTableToolClick,
   snapEnabled,
   onToggleSnap,
   canUndo,
@@ -108,9 +110,16 @@ export function Toolbar({
           <button
             key={tool.id}
             type="button"
+            data-tool-id={tool.id}
             className={`tool-button ${activeTool === tool.id ? 'is-active' : ''}`}
             title={`${tool.label} (${tool.shortcut})`}
-            onClick={() => onToolChange(tool.id)}
+            onClick={(event) => {
+              if (tool.id === 'table') {
+                onTableToolClick(event.clientX, event.clientY);
+                return;
+              }
+              onToolChange(tool.id);
+            }}
           >
             <span className="tool-icon">{tool.icon}</span>
             <span className="tool-label">{tool.label}</span>

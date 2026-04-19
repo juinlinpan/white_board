@@ -126,6 +126,7 @@
 - [x] 支援儲存 table 內容
 - [x] 支援 table 樣式設定
 - [x] **重設計 table v2**：全新資料模型 (`colWidths`/`rowHeights`/merge spans)
+- [x] 支援點一下工具列 `table` 按鈕後，以該點為固定原點顯示 `1 × 1` 預覽，滑鼠往右 / 下移動可擴張成 `n × m`，再點一下才建立表格
 - [x] 支援選取 table 後拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
 - [x] 支援選取 table 後在直線 / 橫線上懸停並按 `+` 新增 row / col
 - [x] 支援滑鼠懸停分格線顯示新增 row / col 的 + 鈕（浮起動畫）

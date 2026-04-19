@@ -47,6 +47,8 @@ import type {
   SegmentDraftState,
   SegmentDraftTool,
   SegmentEndpointDragState,
+  TableInsertDraftState,
+  TableInsertPreviewState,
   WaypointDragState,
 } from './canvasTypes';
 
@@ -63,6 +65,15 @@ import {
   type SegmentEndpoint,
 } from './segmentData';
 import type { SnapGuide } from './snap';
+import { createTableData, serializeTableData } from './tableData';
+import {
+  TABLE_INSERT_PREVIEW_CELL_HEIGHT,
+  TABLE_INSERT_PREVIEW_CELL_WIDTH,
+  TABLE_INSERT_PREVIEW_OFFSET_X,
+  TABLE_INSERT_PREVIEW_OFFSET_Y,
+  getTableInsertDimensions,
+  getTableInsertItemSize,
+} from './tableInsertPreview';
 import { Toolbar } from './Toolbar';
 import { ArrowConnector } from './items/ArrowConnector';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
@@ -102,6 +113,8 @@ export function Canvas({ page }: Props) {
   const [deletingWaypointInfo, setDeletingWaypointInfo] = useState<{ itemId: string; waypointIndex: number } | null>(null);
   const [activeFrameDropTargetId, setActiveFrameDropTargetId] = useState<string | null>(null);
   const [activeTableDropTarget, setActiveTableDropTarget] = useState<TableCellHit | null>(null);
+  const [tableInsertPreview, setTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
+  const [toolbarTableInsertPreview, setToolbarTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -112,11 +125,13 @@ export function Canvas({ page }: Props) {
   const segmentEndpointDragRef = useRef<SegmentEndpointDragState | null>(null);
   const waypointDragRef = useRef<WaypointDragState | null>(null);
   const panRef = useRef<PanState | null>(null);
+  const tableInsertDraftRef = useRef<TableInsertDraftState | null>(null);
   const isSpaceRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const vpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSessionRef = useRef<EditSessionState | null>(null);
+  const toolbarTableInsertOriginRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   useLayoutEffect(() => {
     viewportRef.current = viewport;
@@ -217,6 +232,49 @@ export function Canvas({ page }: Props) {
     setSelectedIds([]);
   }, []);
 
+  const handleToolChange = useCallback((tool: ActiveTool) => {
+    if (tool !== ITEM_TYPE.table) {
+      tableInsertDraftRef.current = null;
+      setTableInsertPreview(null);
+      toolbarTableInsertOriginRef.current = null;
+      setToolbarTableInsertPreview(null);
+    }
+    setActiveTool(tool);
+  }, []);
+
+  const getViewportCenterWorldPoint = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const vp = viewportRef.current;
+    if (!rect) {
+      return {
+        x: -vp.x / vp.zoom,
+        y: -vp.y / vp.zoom,
+      };
+    }
+
+    return {
+      x: (rect.width / 2 - vp.x) / vp.zoom,
+      y: (rect.height / 2 - vp.y) / vp.zoom,
+    };
+  }, []);
+
+  const handleToolbarTableClick = useCallback(
+    (clientX: number, clientY: number) => {
+      tableInsertDraftRef.current = null;
+      setTableInsertPreview(null);
+      toolbarTableInsertOriginRef.current = { clientX, clientY };
+      setToolbarTableInsertPreview({
+        cursorX: clientX,
+        cursorY: clientY,
+        cols: 1,
+        rows: 1,
+        isActive: true,
+      });
+      setActiveTool(ITEM_TYPE.table);
+    },
+    [],
+  );
+
   const getSnapTargetRects = useCallback((ignoredIds: string[]) => {
     const ignoredIdSet = new Set(ignoredIds);
     return itemsRef.current
@@ -299,10 +357,82 @@ export function Canvas({ page }: Props) {
     setConnectorsAndSync,
     setSelection,
     setEditingId,
-    setActiveTool,
+    setActiveTool: handleToolChange,
     setAnchorIndicatorItems,
     setActiveAnchorHit,
   });
+
+  useEffect(() => {
+    const currentOrigin = toolbarTableInsertOriginRef.current;
+    if (currentOrigin === null || toolbarTableInsertPreview === null) {
+      return;
+    }
+    const origin = currentOrigin;
+
+    function handleWindowMouseMove(event: MouseEvent) {
+      const dims = getTableInsertDimensions(
+        event.clientX - origin.clientX,
+        event.clientY - origin.clientY,
+        12,
+        12,
+      );
+      setToolbarTableInsertPreview({
+        cursorX: origin.clientX,
+        cursorY: origin.clientY,
+        cols: dims.cols,
+        rows: dims.rows,
+        isActive: true,
+      });
+    }
+
+    function handleWindowMouseDown(event: MouseEvent) {
+      if (event.button !== 0) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest('[data-tool-id="table"]') !== null
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+
+      const dims = getTableInsertDimensions(
+        event.clientX - origin.clientX,
+        event.clientY - origin.clientY,
+        12,
+        12,
+      );
+      const size = getTableInsertItemSize(dims.cols, dims.rows);
+      const center = getViewportCenterWorldPoint();
+
+      toolbarTableInsertOriginRef.current = null;
+      setToolbarTableInsertPreview(null);
+      handleToolChange('select');
+      void handleCreateItem({
+        type: ITEM_TYPE.table,
+        x: center.x - size.width / 2,
+        y: center.y - size.height / 2,
+        width: size.width,
+        height: size.height,
+        dataJson: serializeTableData(createTableData(dims.rows, dims.cols)),
+      });
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mousedown', handleWindowMouseDown, true);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mousedown', handleWindowMouseDown, true);
+    };
+  }, [
+    getViewportCenterWorldPoint,
+    handleCreateItem,
+    handleToolChange,
+    toolbarTableInsertPreview,
+  ]);
 
   const selectedConnector = useMemo(
     () =>
@@ -492,7 +622,7 @@ export function Canvas({ page }: Props) {
         clearSelection();
         setEditingId(null);
         setSegmentDraft(null);
-        setActiveTool('select');
+        handleToolChange('select');
       }
     }
 
@@ -520,34 +650,34 @@ export function Canvas({ page }: Props) {
 
       const key = e.key.toLowerCase();
       if (key === 'v') {
-        setActiveTool('select');
+        handleToolChange('select');
       }
       if (key === 'l') {
-        setActiveTool('line');
+        handleToolChange('line');
       }
       if (key === 't') {
-        setActiveTool('table');
+        handleToolChange('table');
       }
       if (key === 'x') {
-        setActiveTool('text_box');
+        handleToolChange('text_box');
       }
       if (key === 's') {
-        setActiveTool('sticky_note');
+        handleToolChange('sticky_note');
       }
       if (key === 'n') {
-        setActiveTool('note_paper');
+        handleToolChange('note_paper');
       }
       if (key === 'f') {
-        setActiveTool('frame');
+        handleToolChange('frame');
       }
       if (key === 'a') {
-        setActiveTool('arrow');
+        handleToolChange('arrow');
       }
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [handleToolChange]);
 
   useEffect(() => {
     if (segmentDraft !== null && activeTool !== segmentDraft.type) {
@@ -658,6 +788,7 @@ export function Canvas({ page }: Props) {
     panRef,
     waypointDragRef,
     segmentEndpointDragRef,
+    tableInsertDraftRef,
     setViewportAndSync,
     scheduleViewportSave,
     setItemsAndSync,
@@ -668,10 +799,12 @@ export function Canvas({ page }: Props) {
     setActiveFrameDropTargetId,
     setActiveTableDropTarget,
     setDeletingWaypointInfo,
+    setTableInsertPreview,
+    toolbarTableInsertPreviewActive: toolbarTableInsertPreview !== null,
     setSelection,
     setEditingId,
     setSegmentDraft,
-    setActiveTool,
+    setActiveTool: handleToolChange,
     captureBoardSnapshot,
     pushUndoSnapshot,
     recordHistoryCheckpoint,
@@ -695,9 +828,41 @@ export function Canvas({ page }: Props) {
 
   return (
     <div className="canvas-root">
+      {toolbarTableInsertPreview !== null ? (
+        <div
+          className={`table-insert-preview table-insert-preview-fixed ${
+            toolbarTableInsertPreview.isActive ? 'is-dragging' : ''
+          }`}
+          style={{
+            left: toolbarTableInsertPreview.cursorX + TABLE_INSERT_PREVIEW_OFFSET_X,
+            top: toolbarTableInsertPreview.cursorY + TABLE_INSERT_PREVIEW_OFFSET_Y,
+          }}
+        >
+          <div
+            className="table-insert-preview-grid"
+            style={{
+              gridTemplateColumns: `repeat(${toolbarTableInsertPreview.cols}, ${TABLE_INSERT_PREVIEW_CELL_WIDTH}px)`,
+              gridTemplateRows: `repeat(${toolbarTableInsertPreview.rows}, ${TABLE_INSERT_PREVIEW_CELL_HEIGHT}px)`,
+            }}
+          >
+            {Array.from({
+              length:
+                toolbarTableInsertPreview.rows *
+                toolbarTableInsertPreview.cols,
+            }).map((_, index) => (
+              <span key={index} className="table-insert-preview-cell" />
+            ))}
+          </div>
+          <div className="table-insert-preview-label">
+            {toolbarTableInsertPreview.rows} × {toolbarTableInsertPreview.cols}
+          </div>
+        </div>
+      ) : null}
+
       <Toolbar
         activeTool={activeTool}
-        onToolChange={setActiveTool}
+        onToolChange={handleToolChange}
+        onTableToolClick={handleToolbarTableClick}
         snapEnabled={snapEnabled}
         onToggleSnap={() => setSnapEnabled((current) => !current)}
         canUndo={canUndo}
@@ -718,6 +883,35 @@ export function Canvas({ page }: Props) {
             onWheel={handleWheel}
           >
             <div className="canvas-dot-grid" />
+
+            {activeTool === ITEM_TYPE.table && tableInsertPreview !== null ? (
+              <div
+                className={`table-insert-preview ${
+                  tableInsertPreview.isActive ? 'is-dragging' : ''
+                }`}
+                style={{
+                  left: tableInsertPreview.cursorX + TABLE_INSERT_PREVIEW_OFFSET_X,
+                  top: tableInsertPreview.cursorY + TABLE_INSERT_PREVIEW_OFFSET_Y,
+                }}
+              >
+                <div
+                  className="table-insert-preview-grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${tableInsertPreview.cols}, ${TABLE_INSERT_PREVIEW_CELL_WIDTH}px)`,
+                    gridTemplateRows: `repeat(${tableInsertPreview.rows}, ${TABLE_INSERT_PREVIEW_CELL_HEIGHT}px)`,
+                  }}
+                >
+                  {Array.from({
+                    length: tableInsertPreview.rows * tableInsertPreview.cols,
+                  }).map((_, index) => (
+                    <span key={index} className="table-insert-preview-cell" />
+                  ))}
+                </div>
+                <div className="table-insert-preview-label">
+                  {tableInsertPreview.rows} × {tableInsertPreview.cols}
+                </div>
+              </div>
+            ) : null}
 
             {snapGuides.map((guide, index) => (
               <div
