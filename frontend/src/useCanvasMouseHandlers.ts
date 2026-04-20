@@ -16,7 +16,7 @@ import {
   getFrameContentBounds,
   getFrameEjectPosition,
   getItemsNearPoint,
-  getSelectionBounds,
+  getSelectionMagnetBounds,
   getTableCellBounds,
   computeCellChildLayout,
   getUniqueItemIds,
@@ -35,7 +35,7 @@ import {
   CANVAS_GRID_SIZE,
   MIN_ZOOM,
   MAX_ZOOM,
-  SNAP_TOLERANCE,
+  MAGNET_TOLERANCE,
   CONNECTOR_SNAP_THRESHOLD,
 } from './canvasConstants';
 import { deleteConnector, updateBoardItem } from './api';
@@ -72,7 +72,7 @@ import {
   type SegmentConnection,
   type SegmentEndpoint,
 } from './segmentData';
-import { snapMoveRect, snapResizeRect, type SnapGuide } from './snap';
+import { magnetMoveRect, magnetResizeRect } from './magnet';
 import {
   findCellByChildItemId,
   createTableData,
@@ -90,7 +90,6 @@ import { zoomViewportAroundPoint } from './viewport';
 
 export type UseCanvasMouseHandlersParams = {
   // Current state values (re-captured every render)
-  snapEnabled: boolean;
   magnetEnabled: boolean;
   activeTool: ActiveTool;
   segmentDraft: SegmentDraftState | null;
@@ -120,7 +119,6 @@ export type UseCanvasMouseHandlersParams = {
   setConnectorsAndSync: (updater: ConnectorsUpdater) => void;
 
   // UI state setters
-  setSnapGuides: (guides: SnapGuide[]) => void;
   setAnchorIndicatorItems: (items: BoardItem[]) => void;
   setActiveAnchorHit: (hit: AnchorHit | null) => void;
   setActiveFrameDropTargetId: (id: string | null) => void;
@@ -158,14 +156,10 @@ export type UseCanvasMouseHandlersParams = {
   clearSelection: () => void;
   screenToWorld: (x: number, y: number) => Point;
   startSegmentDraft: (type: SegmentDraftTool, x: number, y: number) => void;
-  getSnapTargetRects: (
-    ignoredIds: string[],
-  ) => { x: number; y: number; width: number; height: number }[];
 };
 
 export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   const {
-    snapEnabled,
     magnetEnabled,
     activeTool,
     segmentDraft,
@@ -187,7 +181,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     scheduleViewportSave,
     setItemsAndSync,
     setConnectorsAndSync,
-    setSnapGuides,
     setAnchorIndicatorItems,
     setActiveAnchorHit,
     setActiveFrameDropTargetId,
@@ -208,7 +201,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     clearSelection,
     screenToWorld,
     startSegmentDraft,
-    getSnapTargetRects,
   } = params;
 
   function handleWheel(e: React.WheelEvent) {
@@ -277,8 +269,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   }
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
-    setSnapGuides([]);
-
     if (e.button === 1) {
       e.preventDefault();
       panRef.current = {
@@ -345,7 +335,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     }
 
     e.stopPropagation();
-    setSnapGuides([]);
 
     if (activeTool === 'line' || activeTool === 'arrow') {
       startSegmentDraft(activeTool, e.clientX, e.clientY);
@@ -392,7 +381,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
 
-    const selectionBounds = getSelectionBounds(itemsRef.current, draggedSelectionIds);
+    const selectionBounds = getSelectionMagnetBounds(
+      itemsRef.current,
+      draggedSelectionIds,
+    );
     if (selectionBounds === null) {
       return;
     }
@@ -473,7 +465,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   ) {
     e.preventDefault();
     e.stopPropagation();
-    setSnapGuides([]);
     setSelection([itemId]);
     setEditingId(null);
     segmentEndpointDragRef.current = {
@@ -491,7 +482,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   ) {
     e.preventDefault();
     e.stopPropagation();
-    setSnapGuides([]);
     setSelection([itemId]);
     setEditingId(null);
     waypointDragRef.current = {
@@ -540,7 +530,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
-    setSnapGuides([]);
     const item = itemsRef.current.find((candidate) => candidate.id === itemId);
     if (!item) {
       return;
@@ -559,7 +548,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   }
 
   function handleMouseMove(e: React.MouseEvent) {
-    const shouldUseSnap = snapEnabled && !e.altKey;
     const shouldUseMagnet = magnetEnabled && !e.altKey;
 
     const waypointDrag = waypointDragRef.current;
@@ -568,7 +556,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         (candidate) => candidate.id === waypointDrag.itemId,
       );
       if (!item) {
-        setSnapGuides([]);
         return;
       }
 
@@ -600,7 +587,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         }
       }
 
-      setSnapGuides([]);
       setItemsAndSync((current) =>
         current.map((candidate) =>
           candidate.id === waypointDrag.itemId
@@ -617,7 +603,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         (candidate) => candidate.id === endpointDrag.itemId,
       );
       if (!item) {
-        setSnapGuides([]);
         setAnchorIndicatorItems([]);
         setActiveAnchorHit(null);
         return;
@@ -625,7 +610,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
       const rawPoint = screenToWorld(e.clientX, e.clientY);
 
-      // Check for connector anchor snap
+      // Check for connector anchor attachment
       const anchorHit = findNearestConnectorAnchor(
         rawPoint,
         itemsRef.current,
@@ -659,7 +644,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         return;
       }
 
-      setSnapGuides([]);
       setItemsAndSync((current) =>
         current.map((candidate) =>
           candidate.id === endpointDrag.itemId
@@ -671,10 +655,9 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     }
 
     if (segmentDraft !== null) {
-      setSnapGuides([]);
       const rawPoint = screenToWorld(e.clientX, e.clientY);
 
-      // Check for connector anchor snap on end point
+      // Check for connector anchor attachment on the end point
       const excludeIds = new Set<string>();
       if (segmentDraft.startConnection) {
         excludeIds.add(segmentDraft.startConnection.itemId);
@@ -735,7 +718,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         (candidate) => candidate.id === resize.itemId,
       );
       if (!item) {
-        setSnapGuides([]);
         return;
       }
 
@@ -745,11 +727,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         width: resize.startWidth + dx,
         height: resize.startHeight + dy,
       };
-      const snapResult = shouldUseSnap
-        ? snapResizeRect(rawRect, getSnapTargetRects([resize.itemId]), SNAP_TOLERANCE)
-        : { width: rawRect.width, height: rawRect.height, guides: [] };
-      const nextSize = clampItemSize(item.type, snapResult.width, snapResult.height);
-      setSnapGuides(snapResult.guides);
+      const magnetRect = shouldUseMagnet
+        ? magnetResizeRect(rawRect, CANVAS_GRID_SIZE, MAGNET_TOLERANCE)
+        : { width: rawRect.width, height: rawRect.height };
+      const nextSize = clampItemSize(
+        item.type,
+        magnetRect.width,
+        magnetRect.height,
+      );
 
       setItemsAndSync((current) => {
         const resizedItems = current.map((currentItem) => {
@@ -792,7 +777,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
           setItemsAndSync(baseItems);
           setConnectorsAndSync(detached.connectors);
 
-          const detachedSelectionBounds = getSelectionBounds(
+          const detachedSelectionBounds = getSelectionMagnetBounds(
             baseItems,
             drag.selectedItemIds,
           );
@@ -817,37 +802,36 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       }
 
       if (drag.itemPositions.length === 0) {
-        setSnapGuides([]);
         return;
       }
 
-      const selectionBounds = getSelectionBounds(baseItems, drag.selectedItemIds);
+      const selectionBounds = getSelectionMagnetBounds(
+        baseItems,
+        drag.selectedItemIds,
+      );
       if (selectionBounds === null) {
-        setSnapGuides([]);
         return;
       }
 
       const rawX = drag.startBoundsX + dx;
       const rawY = drag.startBoundsY + dy;
-      const snapResult = shouldUseSnap || shouldUseMagnet
-        ? snapMoveRect(
+      const nextBounds = shouldUseMagnet
+        ? magnetMoveRect(
             {
               x: rawX,
               y: rawY,
               width: selectionBounds.width,
               height: selectionBounds.height,
             },
-            getSnapTargetRects(drag.selectedItemIds),
-            SNAP_TOLERANCE,
-            shouldUseMagnet ? { gridSize: CANVAS_GRID_SIZE } : undefined,
+            CANVAS_GRID_SIZE,
+            MAGNET_TOLERANCE,
           )
-        : { x: rawX, y: rawY, guides: [] };
-      const offsetX = snapResult.x - drag.startBoundsX;
-      const offsetY = snapResult.y - drag.startBoundsY;
+        : { x: rawX, y: rawY };
+      const offsetX = nextBounds.x - drag.startBoundsX;
+      const offsetY = nextBounds.y - drag.startBoundsY;
       const itemStartMap = new Map(
         drag.itemPositions.map((entry) => [entry.id, entry] as const),
       );
-      setSnapGuides(snapResult.guides);
 
       setItemsAndSync((current) => {
         const draggedIdSet = new Set(drag.selectedItemIds);
@@ -931,7 +915,6 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
     const pan = panRef.current;
     if (pan) {
-      setSnapGuides([]);
       const nextViewport: Viewport = {
         ...viewportRef.current,
         x: pan.startVpX + (e.clientX - pan.startMouseX),
@@ -974,11 +957,9 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
 
-    setSnapGuides([]);
   }
 
   function handleMouseUp(e?: React.MouseEvent) {
-    setSnapGuides([]);
     setAnchorIndicatorItems([]);
     setActiveAnchorHit(null);
     setActiveFrameDropTargetId(null);

@@ -4,6 +4,7 @@ import {
   buildSegmentGeometry,
   canTranslateSegmentItem,
   getSegmentConnections,
+  getSegmentAllWorldPoints,
   getSegmentWaypoints,
   getSegmentWorldPoints,
   hasStoredSegmentData,
@@ -1006,6 +1007,59 @@ export function getSelectionBounds(
   const top = Math.min(...selectedItems.map((item) => item.y));
   const right = Math.max(...selectedItems.map((item) => item.x + item.width));
   const bottom = Math.max(...selectedItems.map((item) => item.y + item.height));
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+export function getItemMagnetBounds(
+  item: BoardItem,
+): { x: number; y: number; width: number; height: number } {
+  if (item.type === ITEM_TYPE.line || item.type === ITEM_TYPE.arrow) {
+    const worldPoints = getSegmentAllWorldPoints(item);
+    if (worldPoints !== null && worldPoints.length > 0) {
+      const left = Math.min(...worldPoints.map((point) => point.x));
+      const top = Math.min(...worldPoints.map((point) => point.y));
+      const right = Math.max(...worldPoints.map((point) => point.x));
+      const bottom = Math.max(...worldPoints.map((point) => point.y));
+
+      return {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+      };
+    }
+  }
+
+  return {
+    x: item.x,
+    y: item.y,
+    width: item.width,
+    height: item.height,
+  };
+}
+
+export function getSelectionMagnetBounds(
+  items: BoardItem[],
+  selectedIds: string[],
+): { x: number; y: number; width: number; height: number } | null {
+  const selectedItems = selectedIds
+    .map((itemId) => items.find((item) => item.id === itemId))
+    .filter((item): item is BoardItem => item !== undefined);
+  if (selectedItems.length === 0) {
+    return null;
+  }
+
+  const bounds = selectedItems.map(getItemMagnetBounds);
+  const left = Math.min(...bounds.map((item) => item.x));
+  const top = Math.min(...bounds.map((item) => item.y));
+  const right = Math.max(...bounds.map((item) => item.x + item.width));
+  const bottom = Math.max(...bounds.map((item) => item.y + item.height));
 
   return {
     x: left,

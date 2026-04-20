@@ -86,8 +86,6 @@ type Props = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
-  snapEnabled: boolean;
-  onToggleSnap: () => void;
   magnetEnabled: boolean;
   onToggleMagnet: () => void;
   canUndo: boolean;
@@ -105,8 +103,6 @@ export function Toolbar({
   onZoomIn,
   onZoomOut,
   onResetZoom,
-  snapEnabled,
-  onToggleSnap,
   magnetEnabled,
   onToggleMagnet,
   canUndo,
@@ -202,23 +198,9 @@ export function Toolbar({
 
       <button
         type="button"
-        aria-pressed={snapEnabled}
-        className={`tool-button ${snapEnabled ? 'is-active' : ''}`}
-        title={`Snap ${snapEnabled ? '開啟' : '關閉'}（拖曳時按住 Alt 暫停）`}
-        onClick={onToggleSnap}
-      >
-        <span className="tool-icon">
-          {icon('M12 2v7m0 0a4 4 0 1 0 4 4h6m-6-4H8')}
-        </span>
-        <span className="tool-label">Snap</span>
-        <span className="tool-meta">{snapEnabled ? 'On' : 'Off'}</span>
-      </button>
-
-      <button
-        type="button"
         aria-pressed={magnetEnabled}
         className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-        title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動時吸附背景網格）`}
+        title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動/縮放時按住 Alt 暫停）`}
         onClick={onToggleMagnet}
       >
         <span className="tool-icon">

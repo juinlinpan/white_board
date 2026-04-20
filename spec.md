@@ -11,13 +11,12 @@
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
 
-## Zoom And Alignment Update Notes
+## Zoom And Grid Update Notes
 
 - The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
 - The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
-- `snap` continues to mean alignment against nearby item edges and centers.
-- `magnet` is a separate movement mode that snaps dragged items to the background grid lines.
-- Holding `Alt` while dragging should temporarily pause both `snap` and `magnet`.
+- `magnet` snaps item edges to the background grid lines while moving or resizing.
+- Holding `Alt` while moving or resizing should temporarily pause `magnet`.
 
 ## 1. 產品定位
 
@@ -280,12 +279,13 @@ Page 至少包含：
 
 ### 5.12 對齊與磁吸
 
-白板應支援 snap：
+白板應支援 magnet：
 
 - 物件與物件對齊
 - 物件與 frame 邊界對齊
 - 顯示對齊輔助線
-- 支援可調整的 snap 容忍距離
+- 僅在 `magnet` 開啟時對齊背景網格
+- 按住 `Alt` 拖曳時可暫時停用 `magnet`
 
 ### 5.13 連接器磁性錨點（Connector Anchor）
 
@@ -293,7 +293,7 @@ Page 至少包含：
 
 - 游標靠近可連結物件時，物件四邊中點會顯示錨點指示器（小圓圈）
 - 可連結物件類型包含：`text_box`、`sticky_note`、`note_paper`、`frame`、`table`
-- 拖曳 `line` / `arrow` 的起點或終點時，靠近錨點會自動吸附（磁性 snap）
+- 拖曳 `line` / `arrow` 的起點或終點時，靠近錨點會自動吸附到 connector anchor
 - 吸附閾值為 24px
 - 錨點分為四個基本方位：`top`、`right`、`bottom`、`left`
 - 連結關係記錄於 segment 的 `data_json` 中，格式為 `{ itemId: string, anchor: string }`
@@ -399,7 +399,7 @@ Page 至少包含：
 Frontend：
 
 - 白板 UI
-- drag / resize / select / snap
+- drag / resize / select / magnet
 - Project / Page 導覽
 - API 呼叫與狀態同步
 
@@ -450,7 +450,7 @@ MVP 至少包含：
 - `text_box`、`sticky_note`、`note_paper`
 - `frame`
 - `arrow`
-- snap 對齊
+- magnet 網格吸附
 - SQLite 持久化
 - 本機前後端啟動流程
 
@@ -479,7 +479,7 @@ MVP 至少包含：
 5. 物件可拖曳、resize、選取與排序
 6. `frame` 可展開 / 縮回，且縮回摘要規則正確
 7. `line` 與 `arrow` 可像 draw.io 一樣以起點 / 終點建立，且可拖曳控制點調整
-8. snap 對齊可用
+8. magnet 網格吸附可用
 9. 資料可寫入並重讀 SQLite
 10. 前端可成功呼叫 `GET /healthz`
 11. 背景色與文字色只能從系統提供的固定色票中選擇
@@ -491,5 +491,5 @@ MVP 至少包含：
 3. Frontend app shell 與 Project / Page 導覽
 4. 白板畫布與基本互動
 5. 物件型別逐步補齊
-6. snap 與連線
+6. magnet 與連線
 7. SQLite 持久化與驗收測試

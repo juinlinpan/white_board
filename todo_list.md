@@ -10,11 +10,11 @@
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 
-## Zoom And Alignment Update Notes
+## Zoom And Grid Update Notes
 
 - [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
 - [x] Add toolbar zoom controls for `-`, `+`, current zoom readout, and reset to `1.0x`.
-- [x] Keep `snap` for nearby-item alignment and add a separate `magnet` toggle for background-grid movement snapping.
+- [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
 
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
@@ -195,18 +195,15 @@
 - [x] 支援 `arrow` 拖曳建立方向與長度
 - [x] 支援 `arrow` 拖曳端點調整
 - [x] 支援 `arrow` 基本線條樣式
-- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor snap）
+- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor）
 - [x] 支援已連結的 `arrow` / `line` 端點在物件移動時即時跟隨
 
-### 14. Snap / 對齊
+### 14. Magnet / 網格吸附
 
-- [x] 實作基礎 snap 規則
-- [x] 實作對齊輔助線
-- [x] 實作對齊到其他白板物件
-- [x] 實作對齊到 frame 邊界
-- [x] 定義 snap 容忍距離
-- [x] 支援可調整的 snap 設定
-- [x] 支援暫時停用 snap
+- [x] 實作基礎 magnet 網格吸附
+- [x] 定義 magnet 容忍距離
+- [x] 僅在 magnet 開啟時吸附背景網格
+- [x] 支援按住 `Alt` 暫時停用 magnet
 - [x] 實作 connector anchor 磁性吸附指示器（anchor indicator）
 
 ### 15. 右側編輯面板
@@ -248,7 +245,7 @@
 - [x] 驗收 frame 內 item 可重疊但不會部分超出 frame
 - [x] 驗收 item 從 frame 拖出失敗時會自動彈回 frame 內
 - [x] 驗收 line / arrow 起終點建立與控制點調整
-- [x] 驗收 snap 對齊
+- [x] 驗收 magnet 網格吸附
 - [x] 驗收 Undo / Redo
 - [x] 驗收本機持久化
 - [x] 對照 `spec.md` 驗收條件逐項確認

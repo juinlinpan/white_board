@@ -35,7 +35,6 @@ import {
 import {
   CANVAS_GRID_SIZE,
   VIEWPORT_SAVE_DELAY,
-  SNAP_TOLERANCE,
   CONNECTOR_SNAP_THRESHOLD,
 } from './canvasConstants';
 import type {
@@ -65,7 +64,6 @@ import {
   type SegmentConnection,
   type SegmentEndpoint,
 } from './segmentData';
-import type { SnapGuide } from './snap';
 import { createTableData, serializeTableData } from './tableData';
 import {
   TABLE_INSERT_PREVIEW_CELL_HEIGHT,
@@ -127,9 +125,7 @@ export function Canvas({ page, onViewportChange }: Props) {
       );
     },
   );
-  const [snapEnabled, setSnapEnabled] = useState(true);
   const [magnetEnabled, setMagnetEnabled] = useState(false);
-  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraftState | null>(
     null,
@@ -301,23 +297,6 @@ export function Canvas({ page, onViewportChange }: Props) {
     [],
   );
 
-  const getSnapTargetRects = useCallback((ignoredIds: string[]) => {
-    const ignoredIdSet = new Set(ignoredIds);
-    return itemsRef.current
-      .filter(
-        (item) =>
-          !ignoredIdSet.has(item.id) &&
-          item.type !== ITEM_TYPE.arrow &&
-          !isHiddenByCollapsedFrame(item, itemsRef.current),
-      )
-      .map((item) => ({
-        x: item.x,
-        y: item.y,
-        width: item.width,
-        height: item.height,
-      }));
-  }, []);
-
   const primarySelectedId = useMemo(
     () => getPrimarySelectionId(selectedIds),
     [selectedIds],
@@ -354,7 +333,6 @@ export function Canvas({ page, onViewportChange }: Props) {
     setSelection,
     setEditingId,
     setSegmentDraft,
-    setSnapGuides,
   });
 
   const {
@@ -721,10 +699,6 @@ export function Canvas({ page, onViewportChange }: Props) {
       setSegmentDraft(null);
     }
 
-    if (activeTool !== 'select') {
-      setSnapGuides([]);
-    }
-
     // Clear anchor indicators when switching away from line/arrow tool
     if (activeTool !== 'line' && activeTool !== 'arrow') {
       setAnchorIndicatorItems([]);
@@ -814,7 +788,6 @@ export function Canvas({ page, onViewportChange }: Props) {
 
     clearSelection();
     setEditingId(null);
-    setSnapGuides([]);
     setAnchorIndicatorItems([]);
     setActiveAnchorHit(anchorHit);
     setSegmentDraft({
@@ -841,7 +814,6 @@ export function Canvas({ page, onViewportChange }: Props) {
     handleMouseUp,
     handleItemDoubleClick,
   } = useCanvasMouseHandlers({
-    snapEnabled,
     magnetEnabled,
     activeTool,
     segmentDraft,
@@ -863,7 +835,6 @@ export function Canvas({ page, onViewportChange }: Props) {
     scheduleViewportSave,
     setItemsAndSync,
     setConnectorsAndSync,
-    setSnapGuides,
     setAnchorIndicatorItems,
     setActiveAnchorHit,
     setActiveFrameDropTargetId,
@@ -884,7 +855,6 @@ export function Canvas({ page, onViewportChange }: Props) {
     clearSelection,
     screenToWorld,
     startSegmentDraft,
-    getSnapTargetRects,
   });
 
   const cursorClass =
@@ -937,8 +907,6 @@ export function Canvas({ page, onViewportChange }: Props) {
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onResetZoom={handleResetZoom}
-        snapEnabled={snapEnabled}
-        onToggleSnap={() => setSnapEnabled((current) => !current)}
         magnetEnabled={magnetEnabled}
         onToggleMagnet={() => setMagnetEnabled((current) => !current)}
         canUndo={canUndo}
@@ -990,18 +958,6 @@ export function Canvas({ page, onViewportChange }: Props) {
                 </div>
               </div>
             ) : null}
-
-            {snapGuides.map((guide, index) => (
-              <div
-                key={`${guide.axis}-${guide.position}-${index}`}
-                className={`canvas-snap-guide canvas-snap-guide-${guide.axis}`}
-                style={
-                  guide.axis === 'x'
-                    ? { left: viewport.x + guide.position * viewport.zoom }
-                    : { top: viewport.y + guide.position * viewport.zoom }
-                }
-              />
-            ))}
 
             <div
               className="canvas-world"
@@ -1205,20 +1161,11 @@ export function Canvas({ page, onViewportChange }: Props) {
               ) : null}
               <div
                 className={`canvas-guide-badge ${
-                  snapEnabled ? '' : 'canvas-guide-badge-muted'
-                }`}
-              >
-                {snapEnabled
-                  ? `Snap 開啟 · ${SNAP_TOLERANCE}px · Alt 暫停`
-                  : 'Snap 關閉'}
-              </div>
-              <div
-                className={`canvas-guide-badge ${
                   magnetEnabled ? '' : 'canvas-guide-badge-muted'
                 }`}
               >
                 {magnetEnabled
-                  ? `Magnet 開啟 · ${CANVAS_GRID_SIZE}px 網格 · Alt 暫停`
+                  ? `Magnet 開啟 · ${CANVAS_GRID_SIZE}px 網格 · 移動/縮放時 Alt 暫停`
                   : 'Magnet 關閉'}
               </div>
             </div>

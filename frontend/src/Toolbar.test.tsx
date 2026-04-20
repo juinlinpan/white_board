@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Toolbar } from './Toolbar';
 
 describe('Toolbar', () => {
-  it('renders zoom, snap, and magnet controls together', () => {
+  it('renders zoom and magnet controls together', () => {
     const markup = renderToStaticMarkup(
       <Toolbar
         activeTool="select"
@@ -14,8 +14,6 @@ describe('Toolbar', () => {
         onZoomIn={() => {}}
         onZoomOut={() => {}}
         onResetZoom={() => {}}
-        snapEnabled
-        onToggleSnap={() => {}}
         magnetEnabled
         onToggleMagnet={() => {}}
         canUndo
@@ -28,7 +26,6 @@ describe('Toolbar', () => {
 
     expect(markup).toContain('1.7x');
     expect(markup).toContain('1.0x');
-    expect(markup).toContain('Snap');
     expect(markup).toContain('Magnet');
   });
 });

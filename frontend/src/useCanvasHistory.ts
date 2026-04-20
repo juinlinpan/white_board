@@ -27,7 +27,6 @@ import type {
   ResizeState,
   SegmentDraftState,
 } from './canvasTypes';
-import type { SnapGuide } from './snap';
 
 interface UseCanvasHistoryParams {
   pageId: string;
@@ -44,7 +43,6 @@ interface UseCanvasHistoryParams {
   setSelection: (ids: string[]) => void;
   setEditingId: Dispatch<SetStateAction<string | null>>;
   setSegmentDraft: Dispatch<SetStateAction<SegmentDraftState | null>>;
-  setSnapGuides: Dispatch<SetStateAction<SnapGuide[]>>;
 }
 
 export function useCanvasHistory({
@@ -62,7 +60,6 @@ export function useCanvasHistory({
   setSelection,
   setEditingId,
   setSegmentDraft,
-  setSnapGuides,
 }: UseCanvasHistoryParams) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -147,7 +144,6 @@ export function useCanvasHistory({
         );
         setEditingId(null);
         setSegmentDraft(null);
-        setSnapGuides([]);
         return true;
       } catch (err) {
         console.error('[Canvas] Failed to restore board snapshot', err);
@@ -165,7 +161,6 @@ export function useCanvasHistory({
       setItemsAndSync,
       setSegmentDraft,
       setSelection,
-      setSnapGuides,
       syncHistoryState,
     ],
   );
