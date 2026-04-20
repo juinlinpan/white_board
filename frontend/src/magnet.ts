@@ -5,6 +5,11 @@ export type MagnetRect = {
   height: number;
 };
 
+export type MagnetPoint = {
+  x: number;
+  y: number;
+};
+
 type AxisMatch = {
   delta: number;
 };
@@ -33,6 +38,24 @@ function getNearestGridMatch(
   }
 
   return bestMatch;
+}
+
+export function snapValueToGrid(value: number, gridSize: number): number {
+  if (gridSize <= 0) {
+    return value;
+  }
+
+  return Math.round(value / gridSize) * gridSize;
+}
+
+export function snapPointToGrid(
+  point: MagnetPoint,
+  gridSize: number,
+): MagnetPoint {
+  return {
+    x: snapValueToGrid(point.x, gridSize),
+    y: snapValueToGrid(point.y, gridSize),
+  };
 }
 
 export function magnetMoveRect(

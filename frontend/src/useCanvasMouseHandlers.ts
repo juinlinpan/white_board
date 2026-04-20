@@ -72,7 +72,12 @@ import {
   type SegmentConnection,
   type SegmentEndpoint,
 } from './segmentData';
-import { magnetMoveRect, magnetResizeRect } from './magnet';
+import {
+  magnetMoveRect,
+  magnetResizeRect,
+  snapPointToGrid,
+  snapValueToGrid,
+} from './magnet';
 import {
   findCellByChildItemId,
   createTableData,
@@ -203,6 +208,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     startSegmentDraft,
   } = params;
 
+  function getSnappedPoint(point: Point, shouldSnap: boolean): Point {
+    return shouldSnap ? snapPointToGrid(point, CANVAS_GRID_SIZE) : point;
+  }
+
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
@@ -230,11 +239,12 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
     const worldPos = screenToWorld(clientX, clientY);
+    const snappedWorldPos = getSnappedPoint(worldPos, magnetEnabled);
     tableInsertDraftRef.current = {
       startClientX: clientX,
       startClientY: clientY,
-      startWorldX: worldPos.x,
-      startWorldY: worldPos.y,
+      startWorldX: snappedWorldPos.x,
+      startWorldY: snappedWorldPos.y,
     };
     setTableInsertPreview({
       cursorX: clientX - rect.left,
@@ -310,10 +320,12 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     if (activeTool !== 'select') {
       const worldPos = screenToWorld(e.clientX, e.clientY);
       const size = ITEM_DEFAULT_SIZE[activeTool] ?? { width: 200, height: 100 };
+      const rawX = worldPos.x - size.width / 2;
+      const rawY = worldPos.y - size.height / 2;
       void handleCreateItem({
         type: activeTool,
-        x: worldPos.x - size.width / 2,
-        y: worldPos.y - size.height / 2,
+        x: magnetEnabled ? snapValueToGrid(rawX, CANVAS_GRID_SIZE) : rawX,
+        y: magnetEnabled ? snapValueToGrid(rawY, CANVAS_GRID_SIZE) : rawY,
         ...size,
       });
       setActiveTool('select');
@@ -560,7 +572,12 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       }
 
       const rawPoint = screenToWorld(e.clientX, e.clientY);
-      const nextGeometry = moveWaypointAt(item, waypointDrag.waypointIndex, rawPoint);
+      const nextPoint = getSnappedPoint(rawPoint, shouldUseMagnet);
+      const nextGeometry = moveWaypointAt(
+        item,
+        waypointDrag.waypointIndex,
+        nextPoint,
+      );
       if (nextGeometry === null) {
         return;
       }
@@ -609,6 +626,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       }
 
       const rawPoint = screenToWorld(e.clientX, e.clientY);
+      const snappedPoint = getSnappedPoint(rawPoint, shouldUseMagnet);
 
       // Check for connector anchor attachment
       const anchorHit = findNearestConnectorAnchor(
@@ -617,7 +635,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         new Set([endpointDrag.itemId]),
         CONNECTOR_SNAP_THRESHOLD,
       );
-      const nextPoint = anchorHit ? anchorHit.point : rawPoint;
+      const nextPoint = anchorHit ? anchorHit.point : snappedPoint;
       const nextConn: SegmentConnection | null = anchorHit
         ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
         : null;
@@ -656,6 +674,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
     if (segmentDraft !== null) {
       const rawPoint = screenToWorld(e.clientX, e.clientY);
+      const snappedPoint = getSnappedPoint(rawPoint, shouldUseMagnet);
 
       // Check for connector anchor attachment on the end point
       const excludeIds = new Set<string>();
@@ -668,7 +687,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         excludeIds,
         CONNECTOR_SNAP_THRESHOLD,
       );
-      const nextPoint = anchorHit ? anchorHit.point : rawPoint;
+      const nextPoint = anchorHit ? anchorHit.point : snappedPoint;
       const nextConn: SegmentConnection | null = anchorHit
         ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
         : null;
@@ -1068,6 +1087,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       let finalEndConn = pendingSegmentDraft.endConnection;
       if (e !== undefined) {
         const rawEnd = screenToWorld(e.clientX, e.clientY);
+        const snappedEnd = getSnappedPoint(
+          rawEnd,
+          magnetEnabled && !e.altKey,
+        );
         const excludeIds = new Set<string>();
         if (pendingSegmentDraft.startConnection) {
           excludeIds.add(pendingSegmentDraft.startConnection.itemId);
@@ -1078,7 +1101,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
           excludeIds,
           CONNECTOR_SNAP_THRESHOLD,
         );
-        finalEnd = anchorHit ? anchorHit.point : rawEnd;
+        finalEnd = anchorHit ? anchorHit.point : snappedEnd;
         finalEndConn = anchorHit
           ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
           : null;

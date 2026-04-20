@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { magnetMoveRect, magnetResizeRect } from './magnet';
+import {
+  magnetMoveRect,
+  magnetResizeRect,
+  snapPointToGrid,
+  snapValueToGrid,
+} from './magnet';
 
 describe('magnetMoveRect', () => {
   it('snaps move operations to the background grid', () => {
@@ -92,6 +97,28 @@ describe('magnetResizeRect', () => {
     expect(result).toEqual({
       width: 41,
       height: 65,
+    });
+  });
+});
+
+describe('grid helpers', () => {
+  it('snaps scalar values to the nearest grid line', () => {
+    expect(snapValueToGrid(35, 24)).toBe(24);
+    expect(snapValueToGrid(37, 24)).toBe(48);
+  });
+
+  it('snaps freeform points to the background grid', () => {
+    expect(
+      snapPointToGrid(
+        {
+          x: 35,
+          y: 61,
+        },
+        24,
+      ),
+    ).toEqual({
+      x: 24,
+      y: 72,
     });
   });
 });

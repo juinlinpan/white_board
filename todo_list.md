@@ -15,6 +15,7 @@
 - [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
 - [x] Add toolbar zoom controls for `-`, `+`, current zoom readout, and reset to `1.0x`.
 - [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
+- [x] Snap newly created items and freeform `line` / `arrow` points to the background grid when `magnet` is enabled.
 
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 

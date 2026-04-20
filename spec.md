@@ -16,6 +16,7 @@
 - The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
 - The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
 - `magnet` snaps item edges to the background grid lines while moving or resizing.
+- When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.
 - Holding `Alt` while moving or resizing should temporarily pause `magnet`.
 
 ## 1. 產品定位

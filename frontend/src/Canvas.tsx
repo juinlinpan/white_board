@@ -37,6 +37,7 @@ import {
   VIEWPORT_SAVE_DELAY,
   CONNECTOR_SNAP_THRESHOLD,
 } from './canvasConstants';
+import { snapPointToGrid } from './magnet';
 import type {
   ConnectorsUpdater,
   DragState,
@@ -771,6 +772,9 @@ export function Canvas({ page, onViewportChange }: Props) {
     clientY: number,
   ) {
     const worldPos = screenToWorld(clientX, clientY);
+    const snappedWorldPos = magnetEnabled
+      ? snapPointToGrid(worldPos, CANVAS_GRID_SIZE)
+      : worldPos;
     const snapshot = captureBoardSnapshot();
 
     // Check if starting near an anchor point
@@ -781,7 +785,7 @@ export function Canvas({ page, onViewportChange }: Props) {
       CONNECTOR_SNAP_THRESHOLD,
     );
 
-    const startPoint = anchorHit ? anchorHit.point : worldPos;
+    const startPoint = anchorHit ? anchorHit.point : snappedWorldPos;
     const startConn: SegmentConnection | null = anchorHit
       ? { itemId: anchorHit.itemId, anchor: anchorHit.anchor }
       : null;
@@ -928,6 +932,10 @@ export function Canvas({ page, onViewportChange }: Props) {
           >
             <div
               className={`canvas-background canvas-background-${backgroundMode}`}
+              style={{
+                backgroundSize: `${CANVAS_GRID_SIZE * viewport.zoom}px ${CANVAS_GRID_SIZE * viewport.zoom}px`,
+                backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+              }}
             />
 
             {activeTool === ITEM_TYPE.table && tableInsertPreview !== null ? (

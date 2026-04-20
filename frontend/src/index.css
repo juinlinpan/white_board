@@ -1168,7 +1168,6 @@ button {
     rgba(15, 23, 42, 0.22) 1.4px,
     transparent 1.5px
   );
-  background-size: 20px 20px;
 }
 
 .canvas-background-grid {
@@ -1182,7 +1181,6 @@ button {
       rgba(15, 23, 42, 0.12) 1px,
       transparent 1px
     );
-  background-size: 24px 24px;
 }
 
 /* World layer */
