@@ -1,7 +1,7 @@
 type MarkdownPreviewProps = {
   content: string | null;
   className?: string;
-  maxBlocks?: number;
+  maxBlocks?: number | null;
   omitFirstHeading?: boolean;
 };
 
@@ -210,7 +210,8 @@ export function MarkdownPreview({
     blocks = blocks.slice(1);
   }
 
-  const visibleBlocks = blocks.slice(0, maxBlocks);
+  const visibleBlocks =
+    maxBlocks === null ? blocks : blocks.slice(0, maxBlocks);
   if (visibleBlocks.length === 0) {
     return null;
   }

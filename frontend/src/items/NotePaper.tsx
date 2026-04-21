@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { type BoardItem } from '../api';
-import { getMarkdownH1 } from '../canvasHelpers';
+import { getFirstNonEmptyLine, getMarkdownH1 } from '../canvasHelpers';
 import {
   getBoardItemTypographyStyle,
   resolveBoardItemStyle,
@@ -25,10 +25,15 @@ function hasPreviewBody(content: string | null): boolean {
   });
 }
 
+function shouldPrioritizeTitle(item: Pick<BoardItem, 'width' | 'height'>): boolean {
+  return item.width < 210 || item.height < 150;
+}
+
 export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const title = getMarkdownH1(item.content);
+  const title = getMarkdownH1(item.content) ?? getFirstNonEmptyLine(item.content);
   const previewable = hasPreviewBody(item.content);
+  const prioritizeTitle = shouldPrioritizeTitle(item);
   const resolvedStyle = resolveBoardItemStyle(item);
   const typographyStyle = getBoardItemTypographyStyle(item);
   const cardStyle = {
@@ -65,16 +70,19 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
   }
 
   return (
-    <div className="note-paper-display" style={cardStyle}>
+    <div
+      className={`note-paper-display ${prioritizeTitle ? 'is-title-priority' : ''}`}
+      style={cardStyle}
+    >
       <div className="note-paper-header">
-        <span className="markdown-badge">Markdown</span>
-        <strong>{title ?? 'Untitled note'}</strong>
+        <strong className="note-paper-title">{title ?? 'Untitled note'}</strong>
       </div>
-      {previewable ? (
+      {previewable && !prioritizeTitle ? (
         <MarkdownPreview
           content={item.content}
           omitFirstHeading={true}
           className="note-paper-body"
+          maxBlocks={null}
         />
       ) : null}
     </div>

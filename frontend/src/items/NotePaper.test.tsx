@@ -63,6 +63,28 @@ const done = true;
     expect(markup).toContain('<blockquote class="markdown-quote">');
     expect(markup).toContain('<pre class="markdown-code-block">');
     expect(markup).toContain('const done = true;');
+    expect(markup).not.toContain('Markdown</span>');
+  });
+
+  it('prioritizes the title when the note paper is too small for the body preview', () => {
+    const markup = renderToStaticMarkup(
+      <NotePaper
+        item={createNotePaperItem({
+          width: 180,
+          height: 120,
+          content: `# Sprint Plan
+
+- API sync
+- Frame polish`,
+        })}
+        isEditing={false}
+        onUpdate={() => {}}
+        onEditEnd={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('Sprint Plan');
+    expect(markup).not.toContain('markdown-list');
   });
 
   it('renders the editor in edit mode', () => {

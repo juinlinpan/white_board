@@ -20,6 +20,13 @@
 - When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.
 - Holding `Alt` while moving or resizing should temporarily pause `magnet`.
 
+## Item Content Display Update Notes
+
+- `note_paper` read mode should not show a dedicated `Markdown` badge above the content.
+- When a `text_box` becomes too small to show all text, it should keep showing as much text as fits without introducing a scrollbar.
+- When a `note_paper` becomes too small to show all markdown content, the body area should scroll instead of clipping the whole note.
+- When a `note_paper` has very limited space, the read view should prioritize the first Markdown `#` heading before showing lower-priority body blocks.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。

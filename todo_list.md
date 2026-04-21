@@ -18,6 +18,13 @@
 - [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
 - [x] Snap newly created items and freeform `line` / `arrow` points to the background grid when `magnet` is enabled.
 
+## Item Content Display Update Notes
+
+- [x] Remove the `Markdown` badge from `note_paper` read mode.
+- [x] Keep `text_box` read mode scrollbar-free and let it show as much text as the current size allows.
+- [x] Make `note_paper` read mode scroll its body when markdown content overflows.
+- [x] Prioritize the first Markdown `#` heading when a `note_paper` is too small to show both title and body comfortably.
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo

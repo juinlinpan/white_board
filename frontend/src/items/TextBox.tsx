@@ -47,7 +47,9 @@ export function TextBox({ item, isEditing, onUpdate, onEditEnd }: Props) {
 
   return (
     <div className="text-box-display" style={contentStyle}>
-      {item.content ? <span className="text-box-content">{item.content}</span> : null}
+      {item.content ? (
+        <span className="text-box-content">{item.content}</span>
+      ) : null}
     </div>
   );
 }
