@@ -16,12 +16,14 @@ import {
   getFrameContentBounds,
   getFrameEjectPosition,
   getItemsNearPoint,
+  getItemMagnetBounds,
   getSelectionMagnetBounds,
   getTableCellBounds,
   computeCellChildLayout,
   getUniqueItemIds,
   isAnchor,
   isFrame,
+  isHiddenByCollapsedFrame,
   isInlineEditable,
   isItemFullyOutsideFrame,
   isSmallItem,
@@ -56,6 +58,7 @@ import type {
   SegmentEndpointDragState,
   TableInsertDraftState,
   TableInsertPreviewState,
+  MarqueeSelectionState,
   WaypointDragState,
 } from './canvasTypes';
 import {
@@ -114,6 +117,12 @@ export type UseCanvasMouseHandlersParams = {
   waypointDragRef: MutableRefObject<WaypointDragState | null>;
   segmentEndpointDragRef: MutableRefObject<SegmentEndpointDragState | null>;
   tableInsertDraftRef: MutableRefObject<TableInsertDraftState | null>;
+  marqueeSelectionRef: MutableRefObject<{
+    startClientX: number;
+    startClientY: number;
+    appendToSelection: boolean;
+    baseSelectionIds: string[];
+  } | null>;
 
   // Viewport
   setViewportAndSync: (vp: Viewport) => void;
@@ -132,6 +141,7 @@ export type UseCanvasMouseHandlersParams = {
     info: { itemId: string; waypointIndex: number } | null,
   ) => void;
   setTableInsertPreview: (preview: TableInsertPreviewState | null) => void;
+  setMarqueeSelection: (selection: MarqueeSelectionState | null) => void;
   toolbarTableInsertPreviewActive: boolean;
 
   // Selection / editing
@@ -182,6 +192,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     waypointDragRef,
     segmentEndpointDragRef,
     tableInsertDraftRef,
+    marqueeSelectionRef,
     setViewportAndSync,
     scheduleViewportSave,
     setItemsAndSync,
@@ -192,6 +203,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     setActiveTableDropTarget,
     setDeletingWaypointInfo,
     setTableInsertPreview,
+    setMarqueeSelection,
     toolbarTableInsertPreviewActive,
     setSelection,
     setEditingId,
@@ -332,12 +344,16 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       return;
     }
 
-    if (e.shiftKey || e.ctrlKey || e.metaKey) {
-      return;
-    }
-
-    clearSelection();
     setEditingId(null);
+    marqueeSelectionRef.current = {
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      appendToSelection: e.shiftKey || e.ctrlKey || e.metaKey,
+      baseSelectionIds: selectedIdsRef.current,
+    };
+    if (!(e.shiftKey || e.ctrlKey || e.metaKey)) {
+      clearSelection();
+    }
   }
 
   function handleItemMouseDown(e: React.MouseEvent, itemId: string) {
@@ -561,6 +577,49 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
 
   function handleMouseMove(e: React.MouseEvent) {
     const shouldUseMagnet = magnetEnabled && !e.altKey;
+    const marqueeSelection = marqueeSelectionRef.current;
+    if (marqueeSelection !== null) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      const left = Math.min(marqueeSelection.startClientX, e.clientX) - rect.left;
+      const top = Math.min(marqueeSelection.startClientY, e.clientY) - rect.top;
+      const width = Math.abs(e.clientX - marqueeSelection.startClientX);
+      const height = Math.abs(e.clientY - marqueeSelection.startClientY);
+      setMarqueeSelection({ left, top, width, height });
+
+      const startWorld = screenToWorld(
+        marqueeSelection.startClientX,
+        marqueeSelection.startClientY,
+      );
+      const endWorld = screenToWorld(e.clientX, e.clientY);
+      const selectionRect = {
+        left: Math.min(startWorld.x, endWorld.x),
+        top: Math.min(startWorld.y, endWorld.y),
+        right: Math.max(startWorld.x, endWorld.x),
+        bottom: Math.max(startWorld.y, endWorld.y),
+      };
+      const enclosedIds = itemsRef.current
+        .filter((item) => !isHiddenByCollapsedFrame(item, itemsRef.current))
+        .filter((item) => {
+          const bounds = getItemMagnetBounds(item);
+          return (
+            bounds.x >= selectionRect.left &&
+            bounds.y >= selectionRect.top &&
+            bounds.x + bounds.width <= selectionRect.right &&
+            bounds.y + bounds.height <= selectionRect.bottom
+          );
+        })
+        .map((item) => item.id);
+      setSelection(
+        marqueeSelection.appendToSelection
+          ? getUniqueItemIds([...marqueeSelection.baseSelectionIds, ...enclosedIds])
+          : enclosedIds,
+      );
+      return;
+    }
 
     const waypointDrag = waypointDragRef.current;
     if (waypointDrag) {
@@ -987,6 +1046,8 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     const tableInsertDraft = tableInsertDraftRef.current;
     tableInsertDraftRef.current = null;
     setTableInsertPreview(null);
+    marqueeSelectionRef.current = null;
+    setMarqueeSelection(null);
 
     if (tableInsertDraft !== null) {
       const dims =

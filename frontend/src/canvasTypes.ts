@@ -71,6 +71,13 @@ export type TableInsertPreviewState = {
   isActive: boolean;
 };
 
+export type MarqueeSelectionState = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 export type ClipboardEntry = {
   sourceId: string;
   payload: BoardItemPayload;

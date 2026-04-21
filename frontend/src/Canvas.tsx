@@ -50,6 +50,7 @@ import type {
   SegmentEndpointDragState,
   TableInsertDraftState,
   TableInsertPreviewState,
+  MarqueeSelectionState,
   WaypointDragState,
 } from './canvasTypes';
 
@@ -138,6 +139,7 @@ export function Canvas({ page, onViewportChange }: Props) {
   const [activeTableDropTarget, setActiveTableDropTarget] = useState<TableCellHit | null>(null);
   const [tableInsertPreview, setTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
   const [toolbarTableInsertPreview, setToolbarTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
+  const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelectionState | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -149,6 +151,12 @@ export function Canvas({ page, onViewportChange }: Props) {
   const waypointDragRef = useRef<WaypointDragState | null>(null);
   const panRef = useRef<PanState | null>(null);
   const tableInsertDraftRef = useRef<TableInsertDraftState | null>(null);
+  const marqueeSelectionRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    appendToSelection: boolean;
+    baseSelectionIds: string[];
+  } | null>(null);
   const isSpaceRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const vpSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -835,6 +843,7 @@ export function Canvas({ page, onViewportChange }: Props) {
     waypointDragRef,
     segmentEndpointDragRef,
     tableInsertDraftRef,
+    marqueeSelectionRef,
     setViewportAndSync,
     scheduleViewportSave,
     setItemsAndSync,
@@ -845,6 +854,7 @@ export function Canvas({ page, onViewportChange }: Props) {
     setActiveTableDropTarget,
     setDeletingWaypointInfo,
     setTableInsertPreview,
+    setMarqueeSelection,
     toolbarTableInsertPreviewActive: toolbarTableInsertPreview !== null,
     setSelection,
     setEditingId,
@@ -965,6 +975,17 @@ export function Canvas({ page, onViewportChange }: Props) {
                   {tableInsertPreview.rows} × {tableInsertPreview.cols}
                 </div>
               </div>
+            ) : null}
+            {activeTool === 'select' && marqueeSelection !== null ? (
+              <div
+                className="canvas-marquee-selection"
+                style={{
+                  left: marqueeSelection.left,
+                  top: marqueeSelection.top,
+                  width: marqueeSelection.width,
+                  height: marqueeSelection.height,
+                }}
+              />
             ) : null}
 
             <div
