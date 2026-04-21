@@ -88,11 +88,12 @@ import {
   serializeTableData,
   updateTableCell,
   getRootCellAt,
+  TABLE_MAX_DIMENSION,
 } from './tableData';
 import { ITEM_DEFAULT_SIZE, ITEM_TYPE, type ActiveTool, type Viewport } from './types';
 import {
-  getTableInsertDimensions,
-  getTableInsertItemSize,
+  getTableInsertCanvasDimensions,
+  getTableInsertCanvasSize,
 } from './tableInsertPreview';
 import { zoomViewportAroundPoint } from './viewport';
 
@@ -264,6 +265,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       cols: 1,
       rows: 1,
       isActive: true,
+      worldX: snappedWorldPos.x,
+      worldY: snappedWorldPos.y,
+      width: getTableInsertCanvasSize(0, 0).width,
+      height: getTableInsertCanvasSize(0, 0).height,
     });
   }
 
@@ -812,6 +817,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         item.type,
         magnetRect.width,
         magnetRect.height,
+        item.data_json,
       );
 
       setItemsAndSync((current) => {
@@ -1019,11 +1025,23 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         return;
       }
 
-      const dims = getTableInsertDimensions(
-        e.clientX - draft.startClientX,
-        e.clientY - draft.startClientY,
-        12,
-        12,
+      const worldPos = getSnappedPoint(
+        screenToWorld(e.clientX, e.clientY),
+        magnetEnabled,
+      );
+      const deltaWorldX = worldPos.x - draft.startWorldX;
+      const deltaWorldY = worldPos.y - draft.startWorldY;
+      const dims = getTableInsertCanvasDimensions(
+        deltaWorldX,
+        deltaWorldY,
+        TABLE_MAX_DIMENSION,
+        TABLE_MAX_DIMENSION,
+      );
+      const size = getTableInsertCanvasSize(
+        deltaWorldX,
+        deltaWorldY,
+        dims.rows,
+        dims.cols,
       );
       setTableInsertPreview({
         cursorX: draft.startClientX - rect.left,
@@ -1031,6 +1049,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
         cols: dims.cols,
         rows: dims.rows,
         isActive: true,
+        worldX: draft.startWorldX,
+        worldY: draft.startWorldY,
+        width: size.width,
+        height: size.height,
       });
       return;
     }
@@ -1050,16 +1072,31 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     setMarqueeSelection(null);
 
     if (tableInsertDraft !== null) {
-      const dims =
+      const worldPos =
         e === undefined
-          ? { cols: 1, rows: 1 }
-          : getTableInsertDimensions(
-              e.clientX - tableInsertDraft.startClientX,
-              e.clientY - tableInsertDraft.startClientY,
-              12,
-              12,
-            );
-      const size = getTableInsertItemSize(dims.cols, dims.rows);
+          ? {
+              x:
+                tableInsertDraft.startWorldX +
+                ITEM_DEFAULT_SIZE[ITEM_TYPE.table].width,
+              y:
+                tableInsertDraft.startWorldY +
+                ITEM_DEFAULT_SIZE[ITEM_TYPE.table].height,
+            }
+          : getSnappedPoint(screenToWorld(e.clientX, e.clientY), magnetEnabled);
+      const deltaWorldX = worldPos.x - tableInsertDraft.startWorldX;
+      const deltaWorldY = worldPos.y - tableInsertDraft.startWorldY;
+      const dims = getTableInsertCanvasDimensions(
+        deltaWorldX,
+        deltaWorldY,
+        TABLE_MAX_DIMENSION,
+        TABLE_MAX_DIMENSION,
+      );
+      const size = getTableInsertCanvasSize(
+        deltaWorldX,
+        deltaWorldY,
+        dims.rows,
+        dims.cols,
+      );
       void handleCreateItem({
         type: ITEM_TYPE.table,
         x: tableInsertDraft.startWorldX,

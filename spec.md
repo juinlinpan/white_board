@@ -27,6 +27,12 @@
 - When a `note_paper` becomes too small to show all markdown content, the body area should scroll instead of clipping the whole note.
 - When a `note_paper` has very limited space, the read view should prioritize the first Markdown `#` heading before showing lower-priority body blocks.
 
+## Table And Small-Item Sizing Update Notes
+
+- `table` must support up to `20 x 20` cells.
+- Every `table` cell must stay at least as large as the minimum `text_box` size.
+- The minimum `text_box` width should be reduced by two grid columns so it aligns with `sticky_note` width.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。

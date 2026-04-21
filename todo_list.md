@@ -25,6 +25,12 @@
 - [x] Make `note_paper` read mode scroll its body when markdown content overflows.
 - [x] Prioritize the first Markdown `#` heading when a `note_paper` is too small to show both title and body comfortably.
 
+## Table And Small-Item Sizing Update Notes
+
+- [x] Raise the `table` dimension cap from `12 x 12` to `20 x 20`.
+- [x] Make every `table` cell respect the minimum `text_box` size.
+- [x] Reduce the minimum `text_box` width by two grid columns so it aligns with `sticky_note`.
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo

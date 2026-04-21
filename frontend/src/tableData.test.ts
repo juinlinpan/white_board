@@ -6,11 +6,14 @@ import {
   computeColSegmentGroups,
   computeRowSegmentGroups,
   createTableData,
+  getTableMinSize,
   getEffectiveColEdge,
   getEffectiveRowEdge,
   mergeCells,
   preserveOuterAddColLayout,
   preserveOuterAddRowLayout,
+  resizeColGroup,
+  resizeRowGroup,
   scaleTableDividerPositions,
   splitCellHorizontal,
   splitCellVertical,
@@ -227,5 +230,37 @@ describe('tableData merge and split semantics', () => {
         ).toBeCloseTo(baseline.get(`c${edge}r${row}`)!, 5);
       }
     }
+  });
+
+  it('caps created tables at 20 by 20', () => {
+    const data = createTableData(99, 99);
+
+    expect(data.rows).toBe(20);
+    expect(data.cols).toBe(20);
+  });
+
+  it('uses text box minimum size as the minimum size of each table cell', () => {
+    expect(getTableMinSize(1, 1)).toEqual({ width: 120, height: 72 });
+    expect(getTableMinSize(4, 5)).toEqual({ width: 600, height: 288 });
+  });
+
+  it('keeps resized column groups above the requested minimum fraction', () => {
+    const data = createTableData(2, 2);
+    const group = computeColSegmentGroups(data)[0]!;
+
+    const next = resizeColGroup(data, group, 0.05, 0.2);
+
+    expect(next.colDividerPositions?.['c0r0']).toBeCloseTo(0.2, 5);
+    expect(next.colDividerPositions?.['c0r1']).toBeCloseTo(0.2, 5);
+  });
+
+  it('keeps resized row groups above the requested minimum fraction', () => {
+    const data = createTableData(2, 2);
+    const group = computeRowSegmentGroups(data)[0]!;
+
+    const next = resizeRowGroup(data, group, 0.05, 0.25);
+
+    expect(next.rowDividerPositions?.['r0c0']).toBeCloseTo(0.25, 5);
+    expect(next.rowDividerPositions?.['r0c1']).toBeCloseTo(0.25, 5);
   });
 });

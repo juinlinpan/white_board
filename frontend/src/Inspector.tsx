@@ -11,6 +11,7 @@ import {
 import { hasStoredSegmentData } from './segmentData';
 import {
   countFilledTableCells,
+  getTableMinSizeFromDataJson,
   parseTableData,
 } from './tableData';
 import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
@@ -32,7 +33,10 @@ function clampDimension(
   field: 'width' | 'height',
   value: number,
 ): number {
-  const minSize = ITEM_MIN_SIZE[item.type];
+  const minSize =
+    item.type === ITEM_TYPE.table
+      ? getTableMinSizeFromDataJson(item.data_json)
+      : ITEM_MIN_SIZE[item.type];
   if (field === 'width') {
     return Math.max(minSize?.width ?? 60, value);
   }

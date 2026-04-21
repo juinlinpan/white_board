@@ -69,6 +69,10 @@ export type TableInsertPreviewState = {
   cols: number;
   rows: number;
   isActive: boolean;
+  worldX?: number;
+  worldY?: number;
+  width?: number;
+  height?: number;
 };
 
 export type MarqueeSelectionState = {

@@ -1,8 +1,12 @@
+import { ITEM_MIN_SIZE, ITEM_TYPE } from './types';
+
 const DEFAULT_TABLE_ROWS = 3;
 const DEFAULT_TABLE_COLS = 3;
 
 export const TABLE_MIN_DIMENSION = 1;
-export const TABLE_MAX_DIMENSION = 12;
+export const TABLE_MAX_DIMENSION = 20;
+export const TABLE_CELL_MIN_WIDTH = ITEM_MIN_SIZE[ITEM_TYPE.text_box].width;
+export const TABLE_CELL_MIN_HEIGHT = ITEM_MIN_SIZE[ITEM_TYPE.text_box].height;
 
 // null = position is covered by a spanning cell from another grid location
 export type TableCellData = {
@@ -72,6 +76,26 @@ function makeCell(): TableCellData {
 function clampDim(value: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(TABLE_MAX_DIMENSION, Math.max(TABLE_MIN_DIMENSION, Math.round(value)));
+}
+
+export function getTableMinSize(
+  rows: number,
+  cols: number,
+): { width: number; height: number } {
+  const safeRows = clampDim(rows, TABLE_MIN_DIMENSION);
+  const safeCols = clampDim(cols, TABLE_MIN_DIMENSION);
+
+  return {
+    width: safeCols * TABLE_CELL_MIN_WIDTH,
+    height: safeRows * TABLE_CELL_MIN_HEIGHT,
+  };
+}
+
+export function getTableMinSizeFromDataJson(
+  dataJson: string | null,
+): { width: number; height: number } {
+  const tableData = parseTableData(dataJson);
+  return getTableMinSize(tableData.rows, tableData.cols);
 }
 
 function normalizeFractions(fracs: number[]): number[] {
@@ -1060,17 +1084,18 @@ export function resizeColGroup(
   data: TableData,
   group: SegmentGroup,
   newPosition: number,
+  minFraction = MIN_FRAC,
 ): TableData {
   const b = group.boundaryIndex;
   // Clamp: boundary b sits between cols b and b+1.
   // Left neighbor edge = edge index b, right neighbor edge = edge index b+2.
-  let minPos = 0 + MIN_FRAC;
-  let maxPos = 1 - MIN_FRAC;
+  let minPos = 0 + minFraction;
+  let maxPos = 1 - minFraction;
   for (const r of group.segments) {
     const leftPos = getEffectiveColEdge(data, b, r);
     const rightPos = getEffectiveColEdge(data, b + 2, r);
-    minPos = Math.max(minPos, leftPos + MIN_FRAC);
-    maxPos = Math.min(maxPos, rightPos - MIN_FRAC);
+    minPos = Math.max(minPos, leftPos + minFraction);
+    maxPos = Math.min(maxPos, rightPos - minFraction);
   }
   const clamped = Math.max(minPos, Math.min(maxPos, newPosition));
 
@@ -1085,15 +1110,16 @@ export function resizeRowGroup(
   data: TableData,
   group: SegmentGroup,
   newPosition: number,
+  minFraction = MIN_FRAC,
 ): TableData {
   const b = group.boundaryIndex;
-  let minPos = 0 + MIN_FRAC;
-  let maxPos = 1 - MIN_FRAC;
+  let minPos = 0 + minFraction;
+  let maxPos = 1 - minFraction;
   for (const c of group.segments) {
     const topPos = getEffectiveRowEdge(data, b, c);
     const bottomPos = getEffectiveRowEdge(data, b + 2, c);
-    minPos = Math.max(minPos, topPos + MIN_FRAC);
-    maxPos = Math.min(maxPos, bottomPos - MIN_FRAC);
+    minPos = Math.max(minPos, topPos + minFraction);
+    maxPos = Math.min(maxPos, bottomPos - minFraction);
   }
   const clamped = Math.max(minPos, Math.min(maxPos, newPosition));
 

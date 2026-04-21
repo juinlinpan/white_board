@@ -22,6 +22,8 @@ import {
   preserveOuterAddRowLayout,
   resizeColGroup,
   resizeRowGroup,
+  TABLE_CELL_MIN_HEIGHT,
+  TABLE_CELL_MIN_WIDTH,
   type SegmentGroup,
   serializeTableData,
   splitCellHorizontal,
@@ -257,10 +259,14 @@ export function Table({
       const curPos = drag.group.type === 'col' ? e.clientX : e.clientY;
       const delta = (curPos - drag.startPos) / drag.containerSize;
       const newPosition = drag.startPosition + delta;
+      const minFraction =
+        drag.group.type === 'col'
+          ? Math.min(0.5, TABLE_CELL_MIN_WIDTH / Math.max(item.width, 1))
+          : Math.min(0.5, TABLE_CELL_MIN_HEIGHT / Math.max(item.height, 1));
       const nextData =
         drag.group.type === 'col'
-          ? resizeColGroup(tableData, drag.group, newPosition)
-          : resizeRowGroup(tableData, drag.group, newPosition);
+          ? resizeColGroup(tableData, drag.group, newPosition, minFraction)
+          : resizeRowGroup(tableData, drag.group, newPosition, minFraction);
       onUpdate({ ...item, data_json: serializeTableData(nextData) });
     }
 

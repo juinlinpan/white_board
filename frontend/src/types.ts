@@ -65,11 +65,11 @@ export const ITEM_DEFAULT_SIZE: Record<
 export const ITEM_MIN_SIZE: Record<string, { width: number; height: number }> =
   {
     [ITEM_TYPE.line]: { width: 96, height: 24 },
-    [ITEM_TYPE.text_box]: { width: 168, height: 72 },
+    [ITEM_TYPE.text_box]: { width: 120, height: 72 },
     [ITEM_TYPE.sticky_note]: { width: 120, height: 120 },
     [ITEM_TYPE.note_paper]: { width: 240, height: 168 },
     [ITEM_TYPE.frame]: { width: 288, height: 216 },
-    [ITEM_TYPE.table]: { width: 240, height: 144 },
+    [ITEM_TYPE.table]: { width: 120, height: 72 },
     [ITEM_TYPE.arrow]: { width: 120, height: 24 },
   };
 

@@ -9,7 +9,14 @@ import {
   getSegmentWorldPoints,
   hasStoredSegmentData,
 } from './segmentData';
-import { parseTableData, getRootCellAt, getEffectiveColEdge, getEffectiveRowEdge, getCellBounds as getTableCellBoundsFrac } from './tableData';
+import {
+  parseTableData,
+  getRootCellAt,
+  getEffectiveColEdge,
+  getEffectiveRowEdge,
+  getCellBounds as getTableCellBoundsFrac,
+  getTableMinSizeFromDataJson,
+} from './tableData';
 import { ITEM_CATEGORY, ITEM_MIN_SIZE, ITEM_TYPE } from './types';
 
 type Anchor =
@@ -802,8 +809,12 @@ export function clampItemSize(
   type: string,
   width: number,
   height: number,
+  dataJson?: string | null,
 ): { width: number; height: number } {
-  const minSize = ITEM_MIN_SIZE[type];
+  const minSize =
+    type === ITEM_TYPE.table
+      ? getTableMinSizeFromDataJson(dataJson ?? null)
+      : ITEM_MIN_SIZE[type];
   return {
     width: Math.max(minSize?.width ?? 60, width),
     height: Math.max(minSize?.height ?? 40, height),

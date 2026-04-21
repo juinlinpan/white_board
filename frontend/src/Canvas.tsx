@@ -66,7 +66,11 @@ import {
   type SegmentConnection,
   type SegmentEndpoint,
 } from './segmentData';
-import { createTableData, serializeTableData } from './tableData';
+import {
+  createTableData,
+  serializeTableData,
+  TABLE_MAX_DIMENSION,
+} from './tableData';
 import {
   TABLE_INSERT_PREVIEW_CELL_HEIGHT,
   TABLE_INSERT_PREVIEW_CELL_WIDTH,
@@ -397,8 +401,8 @@ export function Canvas({ page, onViewportChange }: Props) {
       const dims = getTableInsertDimensions(
         event.clientX - origin.clientX,
         event.clientY - origin.clientY,
-        12,
-        12,
+        TABLE_MAX_DIMENSION,
+        TABLE_MAX_DIMENSION,
       );
       setToolbarTableInsertPreview({
         cursorX: origin.clientX,
@@ -426,8 +430,8 @@ export function Canvas({ page, onViewportChange }: Props) {
       const dims = getTableInsertDimensions(
         event.clientX - origin.clientX,
         event.clientY - origin.clientY,
-        12,
-        12,
+        TABLE_MAX_DIMENSION,
+        TABLE_MAX_DIMENSION,
       );
       const size = getTableInsertItemSize(dims.cols, dims.rows);
       const center = getViewportCenterWorldPoint();
@@ -973,6 +977,41 @@ export function Canvas({ page, onViewportChange }: Props) {
                 </div>
                 <div className="table-insert-preview-label">
                   {tableInsertPreview.rows} × {tableInsertPreview.cols}
+                </div>
+              </div>
+            ) : null}
+            {activeTool === ITEM_TYPE.table &&
+            tableInsertPreview !== null &&
+            tableInsertPreview.worldX !== undefined &&
+            tableInsertPreview.worldY !== undefined &&
+            tableInsertPreview.width !== undefined &&
+            tableInsertPreview.height !== undefined ? (
+              <div
+                className="table-insert-canvas-preview"
+                style={{
+                  left:
+                    viewport.x + tableInsertPreview.worldX * viewport.zoom,
+                  top:
+                    viewport.y + tableInsertPreview.worldY * viewport.zoom,
+                  width: tableInsertPreview.width * viewport.zoom,
+                  height: tableInsertPreview.height * viewport.zoom,
+                }}
+              >
+                <div
+                  className="table-insert-canvas-preview-grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${tableInsertPreview.cols}, minmax(0, 1fr))`,
+                    gridTemplateRows: `repeat(${tableInsertPreview.rows}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {Array.from({
+                    length: tableInsertPreview.rows * tableInsertPreview.cols,
+                  }).map((_, index) => (
+                    <span
+                      key={`table-insert-preview-${index}`}
+                      className="table-insert-canvas-preview-cell"
+                    />
+                  ))}
                 </div>
               </div>
             ) : null}

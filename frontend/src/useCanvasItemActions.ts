@@ -332,7 +332,12 @@ export function useCanvasItemActions({
       const zIndexes = itemsRef.current.map((item) => item.z_index);
       const maxZ = zIndexes.length > 0 ? Math.max(...zIndexes) : 0;
       const minZ = zIndexes.length > 0 ? Math.min(...zIndexes) : 0;
-      const size = clampItemSize(params.type, params.width, params.height);
+      const size = clampItemSize(
+        params.type,
+        params.width,
+        params.height,
+        params.dataJson,
+      );
 
       const payload: BoardItemPayload = {
         page_id: pageId,
