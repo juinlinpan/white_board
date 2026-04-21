@@ -109,6 +109,26 @@ type Props = {
   onViewportChange?: (viewport: Viewport) => void;
 };
 
+const INSPECTOR_COLLAPSED_STORAGE_KEY =
+  'whiteboard.canvasInspectorCollapsed';
+
+function readStoredBoolean(key: string, fallbackValue: boolean): boolean {
+  if (typeof window === 'undefined') {
+    return fallbackValue;
+  }
+
+  const storedValue = window.localStorage.getItem(key);
+  if (storedValue === 'true') {
+    return true;
+  }
+
+  if (storedValue === 'false') {
+    return false;
+  }
+
+  return fallbackValue;
+}
+
 export function Canvas({ page, onViewportChange }: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
@@ -144,6 +164,9 @@ export function Canvas({ page, onViewportChange }: Props) {
   const [tableInsertPreview, setTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
   const [toolbarTableInsertPreview, setToolbarTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelectionState | null>(null);
+  const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(() =>
+    readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
+  );
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -389,6 +412,17 @@ export function Canvas({ page, onViewportChange }: Props) {
       backgroundMode,
     );
   }, [backgroundMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      INSPECTOR_COLLAPSED_STORAGE_KEY,
+      String(isInspectorCollapsed),
+    );
+  }, [isInspectorCollapsed]);
 
   useEffect(() => {
     const currentOrigin = toolbarTableInsertOriginRef.current;
@@ -933,7 +967,9 @@ export function Canvas({ page, onViewportChange }: Props) {
         onRedo={() => void handleRedo()}
         historyBusy={isHistorySyncing}
       />
-      <div className="canvas-content">
+      <div
+        className={`canvas-content ${isInspectorCollapsed ? 'is-inspector-collapsed' : ''}`}
+      >
         <div className="canvas-stage">
           <div
             ref={containerRef}
@@ -1218,8 +1254,12 @@ export function Canvas({ page, onViewportChange }: Props) {
           connector={selectedConnector}
           selectionCount={selectedIds.length}
           childCount={selectedChildCount}
+          isCollapsed={isInspectorCollapsed}
           onUpdate={handleItemUpdate}
           onDelete={() => void handleDeleteSelection()}
+          onToggleInspector={() =>
+            setIsInspectorCollapsed((current) => !current)
+          }
           onToggleCollapse={() => {
             if (selectedItem?.type === ITEM_TYPE.frame) {
               handleToggleFrameCollapse(selectedItem.id);

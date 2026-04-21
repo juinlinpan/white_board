@@ -2,6 +2,7 @@
 
 ## Navigation Update Notes
 
+- The workspace left page sidebar and right inspector must both support collapse / expand toggles while keeping a visible restore handle.
 - Opening a `Project` from the dedicated home screen must create a browser history entry and enter a concrete `Page` immediately.
 - If the target project is already loaded in memory, the workspace should keep the current page when possible and otherwise fall back to that project's first page.
 - The workspace left sidebar should stay focused on page navigation and should not render a project details panel.

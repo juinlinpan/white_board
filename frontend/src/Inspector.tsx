@@ -21,8 +21,10 @@ type Props = {
   connector: ConnectorLink | null;
   selectionCount: number;
   childCount: number;
+  isCollapsed: boolean;
   onUpdate: (item: BoardItem) => void;
   onDelete: () => void;
+  onToggleInspector: () => void;
   onToggleCollapse: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
@@ -131,17 +133,49 @@ export function Inspector({
   connector,
   selectionCount,
   childCount,
+  isCollapsed,
   onUpdate,
   onDelete,
+  onToggleInspector,
   onToggleCollapse,
   onBringToFront,
   onSendToBack,
 }: Props) {
+  if (isCollapsed) {
+    return (
+      <aside className="canvas-inspector is-collapsed">
+        <div className="inspector-collapsed">
+          <button
+            type="button"
+            className="ghost-button inspector-toggle-button"
+            aria-label="Expand inspector"
+            onClick={onToggleInspector}
+            title="Expand inspector"
+          >
+            &lt;
+          </button>
+          <span className="inspector-collapsed-label">Inspector</span>
+        </div>
+      </aside>
+    );
+  }
+
   if (item === null) {
     return (
       <aside className="canvas-inspector">
         <div className="inspector-empty">
-          <p className="eyebrow">Inspector</p>
+          <div className="inspector-header-row">
+            <p className="eyebrow">Inspector</p>
+            <button
+              type="button"
+              className="ghost-button inspector-toggle-button"
+              aria-label="Collapse inspector"
+              onClick={onToggleInspector}
+              title="Collapse inspector"
+            >
+              &gt;
+            </button>
+          </div>
           <p>選取物件以檢視屬性</p>
         </div>
       </aside>
@@ -152,7 +186,18 @@ export function Inspector({
     return (
       <aside className="canvas-inspector">
         <div className="inspector-panel">
-          <p className="eyebrow">Inspector</p>
+          <div className="inspector-header-row">
+            <p className="eyebrow">Inspector</p>
+            <button
+              type="button"
+              className="ghost-button inspector-toggle-button"
+              aria-label="Collapse inspector"
+              onClick={onToggleInspector}
+              title="Collapse inspector"
+            >
+              &gt;
+            </button>
+          </div>
           <div className="inspector-title-row">
             <div>
               <h3>已選取 {selectionCount} 個物件</h3>
@@ -265,7 +310,18 @@ export function Inspector({
   return (
     <aside className="canvas-inspector">
       <div className="inspector-panel">
-        <p className="eyebrow">Inspector</p>
+        <div className="inspector-header-row">
+          <p className="eyebrow">Inspector</p>
+          <button
+            type="button"
+            className="ghost-button inspector-toggle-button"
+            aria-label="Collapse inspector"
+            onClick={onToggleInspector}
+            title="Collapse inspector"
+          >
+            &gt;
+          </button>
+        </div>
         <div className="inspector-title-row">
           <div>
             <h3>

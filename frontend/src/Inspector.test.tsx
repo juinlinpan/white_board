@@ -34,6 +34,28 @@ function createBoardItem(overrides: Partial<BoardItem> = {}): BoardItem {
 }
 
 describe('Inspector style palette', () => {
+  it('renders a compact restore rail when the inspector is collapsed', () => {
+    const markup = renderToStaticMarkup(
+      <Inspector
+        item={createBoardItem()}
+        connector={null}
+        selectionCount={1}
+        childCount={0}
+        isCollapsed
+        onUpdate={() => {}}
+        onDelete={() => {}}
+        onToggleInspector={() => {}}
+        onToggleCollapse={() => {}}
+        onBringToFront={() => {}}
+        onSendToBack={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('inspector-collapsed');
+    expect(markup).toContain('Expand inspector');
+    expect(markup).not.toContain('Line Style');
+  });
+
   it('renders fixed swatch buttons instead of freeform color inputs for text items', () => {
     const markup = renderToStaticMarkup(
       <Inspector
@@ -41,8 +63,10 @@ describe('Inspector style palette', () => {
         connector={null}
         selectionCount={1}
         childCount={0}
+        isCollapsed={false}
         onUpdate={() => {}}
         onDelete={() => {}}
+        onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
         onBringToFront={() => {}}
         onSendToBack={() => {}}
@@ -75,8 +99,10 @@ describe('Inspector style palette', () => {
         connector={null}
         selectionCount={1}
         childCount={0}
+        isCollapsed={false}
         onUpdate={() => {}}
         onDelete={() => {}}
+        onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
         onBringToFront={() => {}}
         onSendToBack={() => {}}

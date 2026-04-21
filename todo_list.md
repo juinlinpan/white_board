@@ -2,6 +2,7 @@
 
 ## Navigation Update Notes
 
+- [x] Make the workspace left page sidebar and right inspector collapsible with a persistent restore handle.
 - [x] Opening a project from the home screen now lands on an actual page and creates a browser history entry.
 - [x] The workspace left sidebar stays focused on page navigation and no longer shows a project details panel.
 - [x] Basic project name editing now happens in the top workspace header.

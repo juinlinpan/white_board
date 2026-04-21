@@ -43,6 +43,9 @@ type SidebarDropState = SidebarDragState & {
   position: DropPosition;
 };
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY =
+  'whiteboard.workspaceSidebarCollapsed';
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) {
     return error.message;
@@ -127,6 +130,23 @@ function getDropPosition(event: ReactDragEvent<HTMLElement>): DropPosition {
   return event.clientY - bounds.top < bounds.height / 2 ? 'before' : 'after';
 }
 
+function readStoredBoolean(key: string, fallbackValue: boolean): boolean {
+  if (typeof window === 'undefined') {
+    return fallbackValue;
+  }
+
+  const storedValue = window.localStorage.getItem(key);
+  if (storedValue === 'true') {
+    return true;
+  }
+
+  if (storedValue === 'false') {
+    return false;
+  }
+
+  return fallbackValue;
+}
+
 function syncBrowserRoute(route: AppRoute, mode: 'push' | 'replace'): void {
   const nextUrl = buildAppRouteUrl(route);
   const currentUrl = `${window.location.pathname}${window.location.search}`;
@@ -165,6 +185,9 @@ export function App() {
   const [isLoadingPages, setIsLoadingPages] = useState(false);
   const [dragState, setDragState] = useState<SidebarDragState | null>(null);
   const [dropState, setDropState] = useState<SidebarDropState | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+    readStoredBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY, false),
+  );
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProject = useMemo(
@@ -335,6 +358,17 @@ export function App() {
   useEffect(() => {
     setPageNameDraft(selectedPage?.name ?? '');
   }, [selectedPage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      SIDEBAR_COLLAPSED_STORAGE_KEY,
+      String(isSidebarCollapsed),
+    );
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     if (selectedProjectId === null) {
@@ -649,8 +683,24 @@ export function App() {
         onChange={(event) => void handleImportInputChange(event)}
       />
 
-      <main className="app-shell">
-        <aside className="sidebar">
+      <main
+        className={`app-shell ${isSidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}
+      >
+        <aside className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
+          <button
+            type="button"
+            className="ghost-button sidebar-edge-toggle"
+            aria-label={
+              isSidebarCollapsed ? 'Expand pages panel' : 'Collapse pages panel'
+            }
+            aria-expanded={!isSidebarCollapsed}
+            onClick={() => setIsSidebarCollapsed((current) => !current)}
+            title={
+              isSidebarCollapsed ? 'Expand pages panel' : 'Collapse pages panel'
+            }
+          >
+            {isSidebarCollapsed ? '>' : '<'}
+          </button>
           <section className="sidebar-header">
             <div className="section-title-row sidebar-title-row">
               <div>
@@ -660,16 +710,16 @@ export function App() {
                     ? `目前 Project：${selectedProject.name}`
                     : '回到首頁或建立新的規劃空間'}
                 </p>
-              </div>
               <button
-                className="ghost-button sidebar-home-button"
+                  className="ghost-button sidebar-home-button"
                 aria-label="首頁"
                 disabled={isMutating}
                 onClick={() => goHome()}
                 title="首頁"
               >
                 首頁
-              </button>
+                </button>
+              </div>
             </div>
           </section>
           <section className="sidebar-section">
