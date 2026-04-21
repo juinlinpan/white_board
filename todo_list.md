@@ -10,6 +10,13 @@
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 
+## Zoom And Grid Update Notes
+
+- [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
+- [x] Add toolbar zoom controls for `-`, `+`, current zoom readout, and reset to `1.0x`.
+- [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
+- [x] Snap newly created items and freeform `line` / `arrow` points to the background grid when `magnet` is enabled.
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo
@@ -63,6 +70,8 @@
 - [x] 提升左側導覽區對比與選取辨識
 - [x] 實作中央白板區域
 - [x] 實作基本工具列與側欄
+- [x] 畫布背景預設點狀加深，提高一般顯示器上的可見度
+- [x] 畫布右上角提供背景模式切換，可在點狀與格線間切換
 - [x] 串接 backend API
 - [x] 處理初次載入、空狀態與錯誤狀態
 
@@ -85,6 +94,7 @@
 
 - [x] 建立白板畫布
 - [x] 支援拖曳與選取
+- [x] 支援白板空白處框選，且僅選取完全包含於框選範圍內的物件
 - [x] 支援 viewport 平移與縮放
 - [x] 支援多選
 - [x] 支援 resize
@@ -122,9 +132,28 @@
 - [x] 支援 `line` 拖曳端點調整
 - [x] 支援 `line` 樣式設定
 - [x] 實作 `table`
-- [x] 支援列數 / 欄數調整
+- [x] 支援列數 / 欄數調整（舊版 Inspector；現已改為白板內 inline 操作）
 - [x] 支援儲存 table 內容
 - [x] 支援 table 樣式設定
+- [x] **重設計 table v2**：全新資料模型 (`colWidths`/`rowHeights`/merge spans)
+- [x] 支援點一下工具列 `table` 按鈕後，以該點為固定原點顯示 `1 × 1` 預覽，滑鼠往右 / 下移動可擴張成 `n × m`，再點一下才建立表格
+- [x] 支援選取 table 後拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
+- [x] 支援選取 table 後在直線 / 橫線上懸停並按 `+` 新增 row / col
+- [x] 支援滑鼠懸停分格線顯示新增 row / col 的 + 鈕（浮起動畫）
+- [x] 支援滑鼠框選多格並顯示「合併」按鈕
+- [x] 支援橫向 / 縱向分割已合併的儲存格
+- [x] 支援把 `small_item`（text_box、sticky_note、note_paper）拖進儲存格吸附（類 frame 邏輯）
+- [x] 支援 table resize 時同步 relayout 儲存格內已吸附的 `small_item`
+- [x] 支援儲存格 embedded item 展開 / 折疊預覽
+- [x] 支援向前相容解析舊版 `string[][]` 格式
+- [x] 支援分格線群組化：hover 時相連整條線一起高亮 + 中央顯示 `+`
+- [x] 支援合併儲存格造成的分格線獨立性（不連續的上下 / 左右線段各自獨立拖曳）
+- [x] 支援合併後儲存格視為新實體，不再回復原本被覆蓋格子的 identity
+- [x] 支援分割後線段獨立性（新產生的中間線段以目前合併格邊界重建，不回到原始欄列，也不自動與鄰行 / 鄰列重新連成同一群組）
+- [x] 支援最外圍擴增 table 時保留既有欄列獨立分格線結構，且原有區域 pixel layout exact 不變
+- [x] 儲存格改為 absolute positioning 排版，支援各行列分格線獨立偏移與顯式斷點
+
+- [x] table 僅在最外層邊框提供整體選取與移動游標；點擊表格內部直接反白單格，按住拖曳可延伸為多格選取
 
 ### 10. `small_item`
 
@@ -168,18 +197,15 @@
 - [x] 支援 `arrow` 拖曳建立方向與長度
 - [x] 支援 `arrow` 拖曳端點調整
 - [x] 支援 `arrow` 基本線條樣式
-- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor snap）
+- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor）
 - [x] 支援已連結的 `arrow` / `line` 端點在物件移動時即時跟隨
 
-### 14. Snap / 對齊
+### 14. Magnet / 網格吸附
 
-- [x] 實作基礎 snap 規則
-- [x] 實作對齊輔助線
-- [x] 實作對齊到其他白板物件
-- [x] 實作對齊到 frame 邊界
-- [x] 定義 snap 容忍距離
-- [x] 支援可調整的 snap 設定
-- [x] 支援暫時停用 snap
+- [x] 實作基礎 magnet 網格吸附
+- [x] 定義 magnet 容忍距離
+- [x] 僅在 magnet 開啟時吸附背景網格
+- [x] 支援按住 `Alt` 暫時停用 magnet
 - [x] 實作 connector anchor 磁性吸附指示器（anchor indicator）
 
 ### 15. 右側編輯面板
@@ -221,7 +247,7 @@
 - [x] 驗收 frame 內 item 可重疊但不會部分超出 frame
 - [x] 驗收 item 從 frame 拖出失敗時會自動彈回 frame 內
 - [x] 驗收 line / arrow 起終點建立與控制點調整
-- [x] 驗收 snap 對齊
+- [x] 驗收 magnet 網格吸附
 - [x] 驗收 Undo / Redo
 - [x] 驗收本機持久化
 - [x] 對照 `spec.md` 驗收條件逐項確認

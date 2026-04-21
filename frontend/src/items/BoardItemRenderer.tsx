@@ -28,6 +28,8 @@ type Props = {
   onToggleCollapse: () => void;
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
+  onTableCellInteractionStart?: () => void;
+  tableDropTargetCellId?: string | null;
 };
 
 export function BoardItemRenderer({
@@ -48,6 +50,8 @@ export function BoardItemRenderer({
   onToggleCollapse,
   onUpdate,
   onEditEnd,
+  onTableCellInteractionStart,
+  tableDropTargetCellId,
 }: Props) {
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const baseStyle: React.CSSProperties = {
@@ -118,15 +122,44 @@ export function BoardItemRenderer({
       return (
         <div
           style={baseStyle}
-          className={wrapperClass}
-          onMouseDown={onMouseDown}
-          onDoubleClick={onDoubleClick}
+          className={`${wrapperClass} board-item-table`}
         >
           <Table
             item={item}
+            isSelected={isSelected}
             isEditing={isEditing}
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}
+            onCellInteractionStart={onTableCellInteractionStart}
+            dropTargetCellId={tableDropTargetCellId}
+          />
+          <button
+            type="button"
+            className="board-item-table-edge board-item-table-edge-top"
+            aria-label="Move table"
+            tabIndex={-1}
+            onMouseDown={onMouseDown}
+          />
+          <button
+            type="button"
+            className="board-item-table-edge board-item-table-edge-right"
+            aria-label="Move table"
+            tabIndex={-1}
+            onMouseDown={onMouseDown}
+          />
+          <button
+            type="button"
+            className="board-item-table-edge board-item-table-edge-bottom"
+            aria-label="Move table"
+            tabIndex={-1}
+            onMouseDown={onMouseDown}
+          />
+          <button
+            type="button"
+            className="board-item-table-edge board-item-table-edge-left"
+            aria-label="Move table"
+            tabIndex={-1}
+            onMouseDown={onMouseDown}
           />
           {resizeHandle}
         </div>

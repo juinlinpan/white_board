@@ -22,6 +22,7 @@ import {
 } from './api';
 import { Canvas } from './Canvas';
 import { HomeView } from './HomeView';
+import { syncPageViewport } from './pageViewport';
 import {
   importProjectSnapshot,
   parseProjectImportText,
@@ -176,6 +177,13 @@ export function App() {
   );
   const normalizedProjectNameDraft = projectNameDraft.trim();
   const normalizedPageNameDraft = pageNameDraft.trim();
+
+  const handlePageViewportChange = useCallback(
+    (pageId: string, viewport: { x: number; y: number; zoom: number }) => {
+      setPages((current) => syncPageViewport(current, pageId, viewport));
+    },
+    [],
+  );
 
   function goHome(mode: 'push' | 'replace' = 'push'): void {
     syncBrowserRoute({ view: 'home' }, mode);
@@ -870,7 +878,13 @@ export function App() {
               </div>
             </section>
           ) : (
-            <Canvas key={selectedPage.id} page={selectedPage} />
+            <Canvas
+              key={selectedPage.id}
+              page={selectedPage}
+              onViewportChange={(viewport) =>
+                handlePageViewportChange(selectedPage.id, viewport)
+              }
+            />
           )}
         </section>
       </main>

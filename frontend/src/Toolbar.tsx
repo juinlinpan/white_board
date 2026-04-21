@@ -50,7 +50,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     id: 'sticky_note',
-    label: '便利貼',
+    label: '便條',
     icon: icon(
       'M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-5-5zM15 3v5h6',
     ),
@@ -81,8 +81,13 @@ const TOOLS: ToolDef[] = [
 type Props = {
   activeTool: ActiveTool;
   onToolChange: (tool: ActiveTool) => void;
-  snapEnabled: boolean;
-  onToggleSnap: () => void;
+  onTableToolClick: (clientX: number, clientY: number) => void;
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetZoom: () => void;
+  magnetEnabled: boolean;
+  onToggleMagnet: () => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -93,8 +98,13 @@ type Props = {
 export function Toolbar({
   activeTool,
   onToolChange,
-  snapEnabled,
-  onToggleSnap,
+  onTableToolClick,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  magnetEnabled,
+  onToggleMagnet,
   canUndo,
   canRedo,
   onUndo,
@@ -108,9 +118,17 @@ export function Toolbar({
           <button
             key={tool.id}
             type="button"
+            data-tool-id={tool.id}
             className={`tool-button ${activeTool === tool.id ? 'is-active' : ''}`}
             title={`${tool.label} (${tool.shortcut})`}
-            onClick={() => onToolChange(tool.id)}
+            onClick={(event) => {
+              if (tool.id === 'table') {
+                onTableToolClick(event.clientX, event.clientY);
+                return;
+              }
+
+              onToolChange(tool.id);
+            }}
           >
             <span className="tool-icon">{tool.icon}</span>
             <span className="tool-label">{tool.label}</span>
@@ -127,7 +145,9 @@ export function Toolbar({
         disabled={!canUndo || historyBusy}
         onClick={onUndo}
       >
-        <span className="tool-icon">{icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}</span>
+        <span className="tool-icon">
+          {icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}
+        </span>
         <span className="tool-label">Undo</span>
       </button>
 
@@ -138,23 +158,56 @@ export function Toolbar({
         disabled={!canRedo || historyBusy}
         onClick={onRedo}
       >
-        <span className="tool-icon">{icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}</span>
+        <span className="tool-icon">
+          {icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}
+        </span>
         <span className="tool-label">Redo</span>
       </button>
 
+      <div className="toolbar-divider" />
+
+      <div className="toolbar-zoom-group" aria-label="Zoom controls">
+        <button
+          type="button"
+          className="tool-button tool-button-compact"
+          title="縮小"
+          onClick={onZoomOut}
+        >
+          <span className="tool-label">-</span>
+        </button>
+        <div className="toolbar-zoom-readout" aria-live="polite">
+          {zoom.toFixed(1)}x
+        </div>
+        <button
+          type="button"
+          className="tool-button tool-button-compact"
+          title="放大"
+          onClick={onZoomIn}
+        >
+          <span className="tool-label">+</span>
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          title="重設縮放為 1.0x"
+          onClick={onResetZoom}
+        >
+          <span className="tool-label">1.0x</span>
+        </button>
+      </div>
+
       <button
         type="button"
-        className={`tool-button ${
-          snapEnabled ? 'is-active' : ''
-        }`}
-        title={`Snap ${snapEnabled ? '開啟' : '關閉'}（拖曳時按住 Alt 可暫時停用）`}
-        onClick={onToggleSnap}
+        aria-pressed={magnetEnabled}
+        className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
+        title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動/縮放時按住 Alt 暫停）`}
+        onClick={onToggleMagnet}
       >
         <span className="tool-icon">
-          {icon('M12 2v7m0 0a4 4 0 1 0 4 4h6m-6-4H8')}
+          {icon('M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z')}
         </span>
-        <span className="tool-label">Snap</span>
-        <span className="tool-meta">{snapEnabled ? 'On' : 'Off'}</span>
+        <span className="tool-label">Magnet</span>
+        <span className="tool-meta">{magnetEnabled ? 'On' : 'Off'}</span>
       </button>
     </div>
   );

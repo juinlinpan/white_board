@@ -11,6 +11,14 @@
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
 
+## Zoom And Grid Update Notes
+
+- The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
+- The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
+- `magnet` snaps item edges to the background grid lines while moving or resizing.
+- When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.
+- Holding `Alt` while moving or resizing should temporarily pause `magnet`.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。
@@ -164,6 +172,7 @@ Page 至少包含：
 - 物件 resize
 - z-index 排序
 - 多選
+- 白板空白處可滑鼠框選；僅將「完全包含於框選範圍」的物件加入選取，並可一起拖曳移動
 - Undo / Redo
 - 本機持久化
 - 具背景的物件背景色只能從 7 個預設柔和底色中選擇
@@ -197,10 +206,29 @@ Page 至少包含：
 
 ### 5.6 `table`
 
+- 點一下工具列的 `table` 新增按鈕後，需以該按下位置作為固定原點，在其右下方顯示一個 `1 × 1` 小表格預覽；滑鼠自該原點持續往右 / 下移動時，預覽需依目前滑鼠位置即時擴張為 `n × m`，再點一下才真正以該列欄數建立表格
 - 可自由拖曳
-- 可調整列數與欄數
-- 儲存表格文字內容
-- 支援基本樣式
+- 資料模型：`TableData`，包含 `colWidths`（分欄寬度分數）、`rowHeights`（列高分數）、`cells`（`TableCellData | null` 二維陣列）
+- 儲存格支援 `rowSpan` / `colSpan`（合併後的儲存格單元）
+- 儲存格可以嵌入一個 `small_item` 快照（`embed` 欄位，含 type / content / styleJson）
+- 選取 table 後可拖曳表格分格線調整列寬 / 欄高（以容器百分比分數計算，zoom-agnostic）
+- 選取 table 後，滑鼠懸停分格線時顯示 `+` 按鈕（浮起動畫）可在該位置插入新的 row 或 col
+- 雙擊儲存格可編輯文字
+- 滑鼠框選多格後顯示「合併」按鈕，合併為單一儲存格（`rowSpan` / `colSpan` > 1）
+- 已合併儲存格可按橫向 / 縱向分割恢復
+- 可把 `small_item`（`text_box`、`sticky_note`、`note_paper`）拖進儲存格吸附（類 `frame` 吸入邏輯）：item 從畫布刪除，內容存入儲存格的 `embed` 欄位
+- 表格 resize 時，儲存格內已吸附的 `small_item` 必須跟著依最新 cell bounds 同步重新排版與縮放，並維持留在原本儲存格內
+- 嵌入物件的儲存格支援折疊（顯示摘要）/ 展開（顯示完整內容）切換
+- 向前相容：可解析舊版 `string[][]` 格式並自動轉換為新格式
+- Inspector 顯示目前列數 / 欄數與已填格數（唯讀）；列欄操作改為白板內 inline 操作
+- 分格線群組互動：滑鼠懸停時，**相連的整條線段**一起加粗高亮，並在該群組中央顯示 `+` 按鈕；可直接拖曳整條線段進行列寬 / 欄高調整
+- 合併語意：儲存格一旦合併，視為**新的獨立儲存格實體**；不再保留或回復原本被覆蓋格子的 identity
+- 分格線獨立性：若有左右（或上下）合併儲存格，被合併儲存格中斷的上下（或左右）分格線視為**獨立線段群組**，各自有各自的位移自由度，不會互相關聯
+- 分割後線段獨立性：已合併儲存格再次分割時，新產生的儲存格視為新的格子；新產生的中間分格線以**目前合併格的邊界**重新計算，不需回到原本欄列位置，也不應自動與上下 / 左右原本線段重新連成同一群組
+- 外圍擴增語意：從表格最外圍新增 row / col 時，應擴張 table 外框，不應回頭重排既有欄列的獨立分格線結構；原有區域的像素大小、分格線位置與 cell layout 必須維持 **exact 不變**
+- 儲存格以 absolute positioning 排版，各行列的分格線位置可因群組拖曳而獨立偏移（資料模型中以 `colDividerPositions` / `rowDividerPositions` 記錄每段分格線的位置覆寫，並以 `colDividerBreaks` / `rowDividerBreaks` 記錄不得自動連續的線段斷點）
+
+- table 只允許透過最外層邊框選取整個物件與顯示移動游標；滑鼠位於表格內部時，單擊應直接反白單格，按住拖曳應可延伸為多格選取
 
 ### 5.7 `text_box`
 
@@ -253,12 +281,13 @@ Page 至少包含：
 
 ### 5.12 對齊與磁吸
 
-白板應支援 snap：
+白板應支援 magnet：
 
 - 物件與物件對齊
 - 物件與 frame 邊界對齊
 - 顯示對齊輔助線
-- 支援可調整的 snap 容忍距離
+- 僅在 `magnet` 開啟時對齊背景網格
+- 按住 `Alt` 拖曳時可暫時停用 `magnet`
 
 ### 5.13 連接器磁性錨點（Connector Anchor）
 
@@ -266,7 +295,7 @@ Page 至少包含：
 
 - 游標靠近可連結物件時，物件四邊中點會顯示錨點指示器（小圓圈）
 - 可連結物件類型包含：`text_box`、`sticky_note`、`note_paper`、`frame`、`table`
-- 拖曳 `line` / `arrow` 的起點或終點時，靠近錨點會自動吸附（磁性 snap）
+- 拖曳 `line` / `arrow` 的起點或終點時，靠近錨點會自動吸附到 connector anchor
 - 吸附閾值為 24px
 - 錨點分為四個基本方位：`top`、`right`、`bottom`、`left`
 - 連結關係記錄於 segment 的 `data_json` 中，格式為 `{ itemId: string, anchor: string }`
@@ -290,6 +319,8 @@ Page 至少包含：
 - 中間是白板主區域
 - 右側或浮動面板負責物件設定
 - 快捷鍵至少支援 `Delete`、`Ctrl/Cmd + C`、`Ctrl/Cmd + V`、`Ctrl/Cmd + Z`、`Ctrl/Cmd + Shift + Z`
+- 白板背景預設為較高對比的點狀底圖，避免在一般螢幕上難以辨識
+- 白板右上角要提供背景模式切換，至少支援 `點狀` 與 `格線` 兩種顯示
 
 ## 8. 資料模型
 
@@ -370,7 +401,7 @@ Page 至少包含：
 Frontend：
 
 - 白板 UI
-- drag / resize / select / snap
+- drag / resize / select / magnet
 - Project / Page 導覽
 - API 呼叫與狀態同步
 
@@ -421,7 +452,7 @@ MVP 至少包含：
 - `text_box`、`sticky_note`、`note_paper`
 - `frame`
 - `arrow`
-- snap 對齊
+- magnet 網格吸附
 - SQLite 持久化
 - 本機前後端啟動流程
 
@@ -450,7 +481,7 @@ MVP 至少包含：
 5. 物件可拖曳、resize、選取與排序
 6. `frame` 可展開 / 縮回，且縮回摘要規則正確
 7. `line` 與 `arrow` 可像 draw.io 一樣以起點 / 終點建立，且可拖曳控制點調整
-8. snap 對齊可用
+8. magnet 網格吸附可用
 9. 資料可寫入並重讀 SQLite
 10. 前端可成功呼叫 `GET /healthz`
 11. 背景色與文字色只能從系統提供的固定色票中選擇
@@ -462,5 +493,5 @@ MVP 至少包含：
 3. Frontend app shell 與 Project / Page 導覽
 4. 白板畫布與基本互動
 5. 物件型別逐步補齊
-6. snap 與連線
+6. magnet 與連線
 7. SQLite 持久化與驗收測試
