@@ -60,9 +60,6 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
         onChange={handleChange}
         onBlur={onEditEnd}
         onMouseDown={(e) => e.stopPropagation()}
-        placeholder={`# 標題
-
-開始寫你的 markdown 筆記`}
       />
     );
   }
@@ -79,9 +76,7 @@ export function NotePaper({ item, isEditing, onUpdate, onEditEnd }: Props) {
           omitFirstHeading={true}
           className="note-paper-body"
         />
-      ) : (
-        <span className="item-placeholder">雙擊開始撰寫 Markdown 筆記</span>
-      )}
+      ) : null}
     </div>
   );
 }

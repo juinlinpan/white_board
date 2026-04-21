@@ -362,7 +362,6 @@ export function Inspector({
             </div>
             <p className="inspector-meta">
               已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
-              雙擊表格可新增列 / 欄、合併、分割儲存格。
             </p>
           </section>
         ) : null}
@@ -397,7 +396,6 @@ export function Inspector({
                   type="text"
                   value={selectedItem.title ?? ''}
                   onChange={(e) => handleTitleChange(e.target.value)}
-                  placeholder="Frame title"
                 />
               </label>
             ) : null}
@@ -410,11 +408,6 @@ export function Inspector({
                   className="inspector-textarea"
                   value={selectedItem.content ?? ''}
                   onChange={(e) => handleContentChange(e.target.value)}
-                  placeholder={
-                    selectedItem.type === ITEM_TYPE.note_paper
-                      ? '# 標題'
-                      : '輸入內容'
-                  }
                 />
               </label>
             ) : null}

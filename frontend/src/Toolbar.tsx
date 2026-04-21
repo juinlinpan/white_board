@@ -207,7 +207,6 @@ export function Toolbar({
           {icon('M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z')}
         </span>
         <span className="tool-label">Magnet</span>
-        <span className="tool-meta">{magnetEnabled ? 'On' : 'Off'}</span>
       </button>
     </div>
   );

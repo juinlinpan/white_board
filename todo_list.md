@@ -14,6 +14,7 @@
 
 - [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
 - [x] Add toolbar zoom controls for `-`, `+`, current zoom readout, and reset to `1.0x`.
+- [x] Keep `magnet` enabled by default when the canvas loads.
 - [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
 - [x] Snap newly created items and freeform `line` / `arrow` points to the background grid when `magnet` is enabled.
 

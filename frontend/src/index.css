@@ -183,6 +183,7 @@ body {
 
 /* Empty hint */
 .home-empty-hint {
+  display: none;
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.6;
@@ -619,6 +620,7 @@ h3 {
 }
 
 .sort-hint {
+  display: none;
   margin: -2px 2px 0;
   color: var(--sidebar-muted);
   font-size: 0.75rem;
@@ -1215,6 +1217,7 @@ button {
 
 /* Empty state hint */
 .canvas-empty-hint {
+  display: none;
   position: absolute;
   inset: 0;
   display: flex;
@@ -1247,6 +1250,7 @@ button {
 }
 
 .canvas-guide-badge {
+  display: none;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
@@ -1395,6 +1399,7 @@ button {
 }
 
 .inspector-meta {
+  display: none;
   color: var(--muted);
   font-size: 0.82rem;
 }
@@ -1618,6 +1623,7 @@ button {
 }
 
 .tool-meta {
+  display: none;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2652,6 +2658,7 @@ button {
 ══════════════════════════════════════════ */
 
 .item-placeholder {
+  display: none;
   color: var(--muted);
   font-style: italic;
   font-size: 0.8rem;

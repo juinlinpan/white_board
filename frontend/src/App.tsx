@@ -741,9 +741,6 @@ export function App() {
                 })}
               </div>
             )}
-            {pages.length > 1 ? (
-              <p className="sort-hint">按住 Page 項目直接拖拉即可調整順序。</p>
-            ) : null}
             <button
               className="primary-button sidebar-add-page-button"
               disabled={selectedProject === null || isMutating}

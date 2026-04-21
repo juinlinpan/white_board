@@ -47,11 +47,7 @@ export function StickyNote({ item, isEditing, onUpdate, onEditEnd }: Props) {
 
   return (
     <div className="sticky-note-display" style={cardStyle}>
-      {item.content ? (
-        <span className="sticky-note-content">{item.content}</span>
-      ) : (
-        <span className="item-placeholder">雙擊新增筆記</span>
-      )}
+      {item.content ? <span className="sticky-note-content">{item.content}</span> : null}
     </div>
   );
 }

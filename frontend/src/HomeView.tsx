@@ -120,9 +120,7 @@ export function HomeView({
             <div className="home-loading-dot" />
             <div className="home-loading-dot" />
           </div>
-        ) : projects.length === 0 ? (
-          <p className="home-empty-hint">還沒有 Project，從下方建立或匯入一個吧。</p>
-        ) : (
+        ) : projects.length === 0 ? null : (
           <div className="home-project-list">
             {projects.map((project) => (
               <button

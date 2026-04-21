@@ -127,7 +127,7 @@ export function Canvas({ page, onViewportChange }: Props) {
       );
     },
   );
-  const [magnetEnabled, setMagnetEnabled] = useState(false);
+  const [magnetEnabled, setMagnetEnabled] = useState(true);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraftState | null>(
     null,
@@ -1137,15 +1137,6 @@ export function Canvas({ page, onViewportChange }: Props) {
               )}
             </div>
 
-            {items.length === 0 ? (
-              <div className="canvas-empty-hint">
-                <p>
-                  用工具列新增線條、表格、文字框、便利貼、筆記紙、
-                  frame 或箭頭，滑鼠滾輪縮放，按住空白鍵拖曳平移。
-                </p>
-              </div>
-            ) : null}
-
             <div className="canvas-top-right-stack">
               <div
                 className="canvas-background-picker"
@@ -1180,24 +1171,6 @@ export function Canvas({ page, onViewportChange }: Props) {
               </div>
             </div>
 
-            <div className="canvas-corner-stack">
-              {activeTool === 'line' || activeTool === 'arrow' ? (
-                <div className="canvas-guide-badge">
-                  {segmentDraft === null
-                    ? `${activeTool === 'line' ? '線條' : '箭頭'}工具：按住拖曳建立`
-                    : `${activeTool === 'line' ? '線條' : '箭頭'}工具：放開滑鼠完成，選取後可拉端點`}
-                </div>
-              ) : null}
-              <div
-                className={`canvas-guide-badge ${
-                  magnetEnabled ? '' : 'canvas-guide-badge-muted'
-                }`}
-              >
-                {magnetEnabled
-                  ? `Magnet 開啟 · ${CANVAS_GRID_SIZE}px 網格 · 移動/縮放時 Alt 暫停`
-                  : 'Magnet 關閉'}
-              </div>
-            </div>
           </div>
         </div>
 

@@ -47,11 +47,7 @@ export function TextBox({ item, isEditing, onUpdate, onEditEnd }: Props) {
 
   return (
     <div className="text-box-display" style={contentStyle}>
-      {item.content ? (
-        <span className="text-box-content">{item.content}</span>
-      ) : (
-        <span className="item-placeholder">雙擊編輯文字</span>
-      )}
+      {item.content ? <span className="text-box-content">{item.content}</span> : null}
     </div>
   );
 }

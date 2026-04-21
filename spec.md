@@ -15,6 +15,7 @@
 
 - The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
 - The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
+- `magnet` should be enabled by default when the canvas loads.
 - `magnet` snaps item edges to the background grid lines while moving or resizing.
 - When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.
 - Holding `Alt` while moving or resizing should temporarily pause `magnet`.
@@ -286,6 +287,7 @@ Page 至少包含：
 - 物件與物件對齊
 - 物件與 frame 邊界對齊
 - 顯示對齊輔助線
+- 預設為開啟
 - 僅在 `magnet` 開啟時對齊背景網格
 - 按住 `Alt` 拖曳時可暫時停用 `magnet`
 
