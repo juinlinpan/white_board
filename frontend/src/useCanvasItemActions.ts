@@ -234,6 +234,20 @@ export function useCanvasItemActions({
     pasteCountRef.current = 0;
   }, [itemsRef, selectedIdsRef]);
 
+  const hasClipboardData = useCallback(
+    () =>
+      clipboardRef.current !== null && clipboardRef.current.items.length > 0,
+    [],
+  );
+
+  const handleCutSelection = useCallback(async () => {
+    if (selectedIdsRef.current.length === 0) {
+      return;
+    }
+    handleCopySelection();
+    await handleDeleteSelection();
+  }, [handleCopySelection, handleDeleteSelection, selectedIdsRef]);
+
   const handlePasteSelection = useCallback(async () => {
     const clipboard = clipboardRef.current;
     if (clipboard === null || clipboard.items.length === 0) {
@@ -490,6 +504,8 @@ export function useCanvasItemActions({
     handleDeleteItems,
     handleDeleteSelection,
     handleCopySelection,
+    handleCutSelection,
+    hasClipboardData,
     handlePasteSelection,
     handleLayerChange,
     handleItemUpdate,

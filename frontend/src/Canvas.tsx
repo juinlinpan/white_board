@@ -108,6 +108,10 @@ type Props = {
   page: Page;
   onViewportChange?: (viewport: Viewport) => void;
 };
+type CanvasContextMenuState = {
+  clientX: number;
+  clientY: number;
+};
 
 const INSPECTOR_COLLAPSED_STORAGE_KEY =
   'whiteboard.canvasInspectorCollapsed';
@@ -166,6 +170,9 @@ export function Canvas({ page, onViewportChange }: Props) {
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelectionState | null>(null);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(() =>
     readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
+  );
+  const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
+    null,
   );
 
   const viewportRef = useRef<Viewport>(viewport);
@@ -377,6 +384,8 @@ export function Canvas({ page, onViewportChange }: Props) {
     handleDeleteItems,
     handleDeleteSelection,
     handleCopySelection,
+    handleCutSelection,
+    hasClipboardData,
     handlePasteSelection,
     handleLayerChange,
     handleItemUpdate,
@@ -655,6 +664,12 @@ export function Canvas({ page, onViewportChange }: Props) {
         return;
       }
 
+      if (isModifierDown && !e.shiftKey && normalizedKey === 'x') {
+        e.preventDefault();
+        void handleCutSelection();
+        return;
+      }
+
       if (isModifierDown && !e.shiftKey && normalizedKey === 'v') {
         e.preventDefault();
         void handlePasteSelection();
@@ -681,6 +696,7 @@ export function Canvas({ page, onViewportChange }: Props) {
       }
 
       if (e.key === 'Escape') {
+        setContextMenu(null);
         clearSelection();
         setEditingId(null);
         setSegmentDraft(null);
@@ -693,11 +709,27 @@ export function Canvas({ page, onViewportChange }: Props) {
   }, [
     clearSelection,
     handleCopySelection,
+    handleCutSelection,
     handleDeleteSelection,
     handlePasteSelection,
     handleRedo,
     handleUndo,
   ]);
+
+  useEffect(() => {
+    function closeContextMenu() {
+      setContextMenu(null);
+    }
+
+    window.addEventListener('mousedown', closeContextMenu);
+    window.addEventListener('resize', closeContextMenu);
+    window.addEventListener('scroll', closeContextMenu, true);
+    return () => {
+      window.removeEventListener('mousedown', closeContextMenu);
+      window.removeEventListener('resize', closeContextMenu);
+      window.removeEventListener('scroll', closeContextMenu, true);
+    };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -765,6 +797,66 @@ export function Canvas({ page, onViewportChange }: Props) {
       y: (screenY - rect.top - vp.y) / vp.zoom,
     };
   }
+
+  const handleCanvasContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      setEditingId(null);
+      setContextMenu({
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    },
+    [],
+  );
+
+  const handleItemContextMenu = useCallback(
+    (event: React.MouseEvent, itemId: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!selectedIdsRef.current.includes(itemId)) {
+        setSelection([itemId]);
+      }
+      setEditingId(null);
+      setContextMenu({
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    },
+    [setSelection],
+  );
+
+  const handleContextMenuPaste = useCallback(() => {
+    if (!hasClipboardData()) {
+      return;
+    }
+    setContextMenu(null);
+    void handlePasteSelection();
+  }, [handlePasteSelection, hasClipboardData]);
+
+  const handleContextMenuCopy = useCallback(() => {
+    if (selectedIdsRef.current.length === 0) {
+      return;
+    }
+    handleCopySelection();
+    setContextMenu(null);
+  }, [handleCopySelection]);
+
+  const handleContextMenuCut = useCallback(() => {
+    if (selectedIdsRef.current.length === 0) {
+      return;
+    }
+    setContextMenu(null);
+    void handleCutSelection();
+  }, [handleCutSelection]);
+
+  const handleContextMenuDelete = useCallback(() => {
+    if (selectedIdsRef.current.length === 0) {
+      return;
+    }
+    setContextMenu(null);
+    void handleDeleteSelection();
+  }, [handleDeleteSelection]);
 
   function scheduleViewportSave(nextViewport: Viewport) {
     onViewportChange?.(nextViewport);
@@ -975,6 +1067,7 @@ export function Canvas({ page, onViewportChange }: Props) {
             ref={containerRef}
             className={`canvas-container ${cursorClass}`}
             onMouseDown={handleCanvasMouseDown}
+            onContextMenu={handleCanvasContextMenu}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
@@ -1120,6 +1213,7 @@ export function Canvas({ page, onViewportChange }: Props) {
                       isEditing={item.id === editingId}
                       canTranslateSegment={canTranslateSegmentItem(item)}
                       onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+                      onContextMenu={(e) => handleItemContextMenu(e, item.id)}
                       onEndpointMouseDown={(e, endpoint) =>
                         handleSegmentEndpointMouseDown(e, item.id, endpoint)
                       }
@@ -1168,6 +1262,49 @@ export function Canvas({ page, onViewportChange }: Props) {
                     onWaypointMouseDown={() => {}}
                     onMidpointMouseDown={() => {}}
                   />
+                </div>
+              ) : null}
+              {contextMenu !== null ? (
+                <div
+                  className="canvas-context-menu"
+                  style={{
+                    left: contextMenu.clientX,
+                    top: contextMenu.clientY,
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="canvas-context-menu-item"
+                    onClick={handleContextMenuCut}
+                    disabled={selectedIds.length === 0}
+                  >
+                    剪下 (Ctrl/Cmd+X)
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-context-menu-item"
+                    onClick={handleContextMenuCopy}
+                    disabled={selectedIds.length === 0}
+                  >
+                    複製 (Ctrl/Cmd+C)
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-context-menu-item"
+                    onClick={handleContextMenuPaste}
+                    disabled={!hasClipboardData()}
+                  >
+                    貼上 (Ctrl/Cmd+V)
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-context-menu-item danger"
+                    onClick={handleContextMenuDelete}
+                    disabled={selectedIds.length === 0}
+                  >
+                    刪除 (Delete)
+                  </button>
                 </div>
               ) : null}
 

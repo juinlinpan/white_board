@@ -115,6 +115,7 @@
 - [x] 支援 resize
 - [x] 支援 z-index 調整
 - [x] 支援複製 / 貼上
+- [x] 支援右鍵選單（白板物件與白板空白區）與剪下 / 複製 / 貼上 / 刪除
 - [x] 支援 Delete
 - [x] 支援 Undo / Redo
 - [x] 支援自動儲存
@@ -238,6 +239,7 @@
 
 - [x] `Delete` 刪除
 - [x] `Ctrl/Cmd + C` 複製
+- [x] `Ctrl/Cmd + X` 剪下
 - [x] `Ctrl/Cmd + V` 貼上
 - [x] `Ctrl/Cmd + Z` Undo
 - [x] `Ctrl/Cmd + Shift + Z` Redo
