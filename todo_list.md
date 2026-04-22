@@ -32,6 +32,14 @@
 - [x] Make every `table` cell respect the minimum `text_box` size.
 - [x] Reduce the minimum `text_box` width by two grid columns so it aligns with `sticky_note`.
 
+## Item Context Menu Update Notes
+
+- [x] Split the canvas right-click menu into dedicated item and canvas variants.
+- [x] Show `cut`, `copy`, `paste`, and `delete` when right-clicking a selected board item.
+- [x] Keep canvas right-click focused on `paste` so empty-space context actions stay minimal.
+- [x] Reuse the existing clipboard/delete handlers so right-click actions match keyboard shortcuts.
+- [x] Cover the new context-menu action visibility and viewport clamping with tests.
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo

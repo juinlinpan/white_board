@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   type BoardItem,
   type ConnectorLink,
@@ -98,6 +99,13 @@ import {
   type CanvasBackgroundMode,
 } from './canvasBackground';
 import {
+  getCanvasContextMenuActionKeys,
+  getCanvasContextMenuPosition,
+  isCanvasContextMenuActionDisabled,
+  type CanvasContextMenuActionKey,
+  type CanvasContextMenuState,
+} from './canvasContextMenu';
+import {
   adjustZoomByStep,
   getDisplayZoom,
   getResetZoom,
@@ -107,10 +115,6 @@ import {
 type Props = {
   page: Page;
   onViewportChange?: (viewport: Viewport) => void;
-};
-type CanvasContextMenuState = {
-  clientX: number;
-  clientY: number;
 };
 
 const INSPECTOR_COLLAPSED_STORAGE_KEY =
@@ -171,9 +175,7 @@ export function Canvas({ page, onViewportChange }: Props) {
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(() =>
     readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
   );
-  const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
-    null,
-  );
+  const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(null);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -805,25 +807,32 @@ export function Canvas({ page, onViewportChange }: Props) {
       setContextMenu({
         clientX: event.clientX,
         clientY: event.clientY,
+        scope: 'canvas',
+        selectionCount: 0,
+        hasClipboardData: hasClipboardData(),
       });
     },
-    [],
+    [hasClipboardData],
   );
 
   const handleItemContextMenu = useCallback(
     (event: React.MouseEvent, itemId: string) => {
       event.preventDefault();
       event.stopPropagation();
-      if (!selectedIdsRef.current.includes(itemId)) {
+      const isSelectedItem = selectedIdsRef.current.includes(itemId);
+      if (!isSelectedItem) {
         setSelection([itemId]);
       }
       setEditingId(null);
       setContextMenu({
         clientX: event.clientX,
         clientY: event.clientY,
+        scope: 'selection',
+        selectionCount: isSelectedItem ? selectedIdsRef.current.length : 1,
+        hasClipboardData: hasClipboardData(),
       });
     },
-    [setSelection],
+    [hasClipboardData, setSelection],
   );
 
   const handleContextMenuPaste = useCallback(() => {
@@ -857,6 +866,94 @@ export function Canvas({ page, onViewportChange }: Props) {
     setContextMenu(null);
     void handleDeleteSelection();
   }, [handleDeleteSelection]);
+
+  const contextMenuActions = useMemo(
+    () =>
+      contextMenu === null ? [] : getCanvasContextMenuActionKeys(contextMenu),
+    [contextMenu],
+  );
+
+  const contextMenuPosition = useMemo(() => {
+    if (contextMenu === null) {
+      return null;
+    }
+
+    const viewportWidth =
+      typeof window === 'undefined' ? contextMenu.clientX + 232 : window.innerWidth;
+    const viewportHeight =
+      typeof window === 'undefined' ? contextMenu.clientY + 188 : window.innerHeight;
+
+    return getCanvasContextMenuPosition(
+      contextMenu,
+      viewportWidth,
+      viewportHeight,
+    );
+  }, [contextMenu]);
+
+  const contextMenuActionHandlers = useMemo<
+    Record<CanvasContextMenuActionKey, () => void>
+  >(
+    () => ({
+      cut: handleContextMenuCut,
+      copy: handleContextMenuCopy,
+      paste: handleContextMenuPaste,
+      delete: handleContextMenuDelete,
+    }),
+    [
+      handleContextMenuCopy,
+      handleContextMenuCut,
+      handleContextMenuDelete,
+      handleContextMenuPaste,
+    ],
+  );
+
+  const contextMenuActionLabels: Record<CanvasContextMenuActionKey, string> = {
+    cut: '剪下',
+    copy: '複製',
+    paste: '貼上',
+    delete: '刪除',
+  };
+
+  const contextMenuActionShortcuts: Record<CanvasContextMenuActionKey, string> = {
+    cut: 'Ctrl/Cmd+X',
+    copy: 'Ctrl/Cmd+C',
+    paste: 'Ctrl/Cmd+V',
+    delete: 'Delete',
+  };
+
+  const contextMenuNode =
+    contextMenu !== null &&
+    contextMenuPosition !== null &&
+    typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="canvas-context-menu"
+            style={{
+              left: contextMenuPosition.left,
+              top: contextMenuPosition.top,
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {contextMenuActions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                className={`canvas-context-menu-item ${
+                  action === 'delete' ? 'danger' : ''
+                }`}
+                onClick={contextMenuActionHandlers[action]}
+                disabled={isCanvasContextMenuActionDisabled(contextMenu, action)}
+              >
+                <span>{contextMenuActionLabels[action]}</span>
+                <span className="canvas-context-menu-shortcut">
+                  {contextMenuActionShortcuts[action]}
+                </span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )
+      : null;
 
   function scheduleViewportSave(nextViewport: Viewport) {
     onViewportChange?.(nextViewport);
@@ -1264,50 +1361,6 @@ export function Canvas({ page, onViewportChange }: Props) {
                   />
                 </div>
               ) : null}
-              {contextMenu !== null ? (
-                <div
-                  className="canvas-context-menu"
-                  style={{
-                    left: contextMenu.clientX,
-                    top: contextMenu.clientY,
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className="canvas-context-menu-item"
-                    onClick={handleContextMenuCut}
-                    disabled={selectedIds.length === 0}
-                  >
-                    剪下 (Ctrl/Cmd+X)
-                  </button>
-                  <button
-                    type="button"
-                    className="canvas-context-menu-item"
-                    onClick={handleContextMenuCopy}
-                    disabled={selectedIds.length === 0}
-                  >
-                    複製 (Ctrl/Cmd+C)
-                  </button>
-                  <button
-                    type="button"
-                    className="canvas-context-menu-item"
-                    onClick={handleContextMenuPaste}
-                    disabled={!hasClipboardData()}
-                  >
-                    貼上 (Ctrl/Cmd+V)
-                  </button>
-                  <button
-                    type="button"
-                    className="canvas-context-menu-item danger"
-                    onClick={handleContextMenuDelete}
-                    disabled={selectedIds.length === 0}
-                  >
-                    刪除 (Delete)
-                  </button>
-                </div>
-              ) : null}
-
               {/* Connector anchor indicators on nearby items */}
               {anchorIndicatorItems.map((item) =>
                 getItemConnectorAnchors(item).map(({ anchor, point }) => {
@@ -1406,6 +1459,7 @@ export function Canvas({ page, onViewportChange }: Props) {
           onSendToBack={() => handleLayerChange('sendToBack')}
         />
       </div>
+      {contextMenuNode}
     </div>
   );
 }

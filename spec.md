@@ -34,6 +34,14 @@
 - Every `table` cell must stay at least as large as the minimum `text_box` size.
 - The minimum `text_box` width should be reduced by two grid columns so it aligns with `sticky_note` width.
 
+## Item Context Menu Update Notes
+
+- After left-clicking to select a board item, right-clicking that item must open an item context menu.
+- The item context menu must provide basic item actions: `cut`, `copy`, `paste`, and `delete`.
+- Right-clicking an unselected item may first move selection onto that item, then open the same item context menu.
+- Right-clicking empty canvas space should keep a lighter canvas context menu that exposes `paste` only.
+- Context-menu actions must stay aligned with the existing keyboard shortcuts so both entry points trigger the same behavior.
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。

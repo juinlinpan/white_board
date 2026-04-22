@@ -1186,10 +1186,20 @@ button {
   border-radius: 8px;
   background: transparent;
   color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   text-align: left;
   font-size: 0.82rem;
   padding: 7px 9px;
   cursor: pointer;
+}
+
+.canvas-context-menu-shortcut {
+  color: #64748b;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
 }
 
 .canvas-context-menu-item:hover:not(:disabled) {
@@ -1204,6 +1214,10 @@ button {
 .canvas-context-menu-item:disabled {
   color: #cbd5e1;
   cursor: not-allowed;
+}
+
+.canvas-context-menu-item:disabled .canvas-context-menu-shortcut {
+  color: #cbd5e1;
 }
 
 .table-insert-preview {
@@ -2476,6 +2490,39 @@ button {
 
 .table-v2-merge-btn:hover {
   background: var(--accent-hover);
+  transform: scale(1.04);
+}
+
+/* ── Delete row / col overlay ──────────── */
+
+.table-v2-delete-overlay {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.06);
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  border-radius: 2px;
+  z-index: 8;
+  pointer-events: auto;
+}
+
+.table-v2-delete-btn {
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid #ef4444;
+  background: #ef4444;
+  color: #fff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 100ms ease, transform 100ms ease;
+}
+
+.table-v2-delete-btn:hover {
+  background: #dc2626;
   transform: scale(1.04);
 }
 

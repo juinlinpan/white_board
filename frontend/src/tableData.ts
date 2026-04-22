@@ -1078,6 +1078,216 @@ export function computeRowSegmentGroups(data: TableData): SegmentGroup[] {
   return groups;
 }
 
+// ── Delete row / col ─────────────────────────────────────────────────────
+
+type DividerState = Pick<
+  TableData,
+  'colDividerPositions' | 'rowDividerPositions' | 'colDividerBreaks' | 'rowDividerBreaks'
+>;
+
+function remapPositionsForDeleteRow(data: TableData, rowIndex: number): DividerState {
+  const colPos: Record<string, number> = {};
+  if (data.colDividerPositions) {
+    for (const [key, val] of Object.entries(data.colDividerPositions)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (r < rowIndex) colPos[key] = val;
+      else if (r > rowIndex) colPos[`c${b}r${r - 1}`] = val;
+    }
+  }
+
+  const rowPos: Record<string, number> = {};
+  if (data.rowDividerPositions) {
+    for (const [key, val] of Object.entries(data.rowDividerPositions)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (b < rowIndex - 1) rowPos[key] = val;
+      else if (b <= rowIndex) { /* skip boundaries adjacent to deleted row */ }
+      else rowPos[`r${b - 1}c${c}`] = val;
+    }
+  }
+
+  const colBreaks: Record<string, true> = {};
+  if (data.colDividerBreaks) {
+    for (const [key] of Object.entries(data.colDividerBreaks)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (r < rowIndex) colBreaks[key] = true;
+      else if (r > rowIndex) colBreaks[`c${b}r${r - 1}`] = true;
+    }
+  }
+
+  const rowBreaks: Record<string, true> = {};
+  if (data.rowDividerBreaks) {
+    for (const [key] of Object.entries(data.rowDividerBreaks)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (b < rowIndex - 1) rowBreaks[key] = true;
+      else if (b <= rowIndex) { /* skip */ }
+      else rowBreaks[`r${b - 1}c${c}`] = true;
+    }
+  }
+
+  return {
+    colDividerPositions: Object.keys(colPos).length > 0 ? colPos : undefined,
+    rowDividerPositions: Object.keys(rowPos).length > 0 ? rowPos : undefined,
+    colDividerBreaks: Object.keys(colBreaks).length > 0 ? colBreaks : undefined,
+    rowDividerBreaks: Object.keys(rowBreaks).length > 0 ? rowBreaks : undefined,
+  };
+}
+
+function remapPositionsForDeleteCol(data: TableData, colIndex: number): DividerState {
+  const colPos: Record<string, number> = {};
+  if (data.colDividerPositions) {
+    for (const [key, val] of Object.entries(data.colDividerPositions)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (b < colIndex - 1) colPos[key] = val;
+      else if (b <= colIndex) { /* skip boundaries adjacent to deleted col */ }
+      else colPos[`c${b - 1}r${r}`] = val;
+    }
+  }
+
+  const rowPos: Record<string, number> = {};
+  if (data.rowDividerPositions) {
+    for (const [key, val] of Object.entries(data.rowDividerPositions)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (c < colIndex) rowPos[key] = val;
+      else if (c > colIndex) rowPos[`r${b}c${c - 1}`] = val;
+    }
+  }
+
+  const colBreaks: Record<string, true> = {};
+  if (data.colDividerBreaks) {
+    for (const [key] of Object.entries(data.colDividerBreaks)) {
+      const m = key.match(/^c(\d+)r(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const r = parseInt(m[2]!, 10);
+      if (b < colIndex - 1) colBreaks[key] = true;
+      else if (b <= colIndex) { /* skip */ }
+      else colBreaks[`c${b - 1}r${r}`] = true;
+    }
+  }
+
+  const rowBreaks: Record<string, true> = {};
+  if (data.rowDividerBreaks) {
+    for (const [key] of Object.entries(data.rowDividerBreaks)) {
+      const m = key.match(/^r(\d+)c(\d+)$/);
+      if (!m) continue;
+      const b = parseInt(m[1]!, 10);
+      const c = parseInt(m[2]!, 10);
+      if (c < colIndex) rowBreaks[key] = true;
+      else if (c > colIndex) rowBreaks[`r${b}c${c - 1}`] = true;
+    }
+  }
+
+  return {
+    colDividerPositions: Object.keys(colPos).length > 0 ? colPos : undefined,
+    rowDividerPositions: Object.keys(rowPos).length > 0 ? rowPos : undefined,
+    colDividerBreaks: Object.keys(colBreaks).length > 0 ? colBreaks : undefined,
+    rowDividerBreaks: Object.keys(rowBreaks).length > 0 ? rowBreaks : undefined,
+  };
+}
+
+/** Delete the row at `rowIndex`. No-op if the table only has one row. */
+export function deleteRow(data: TableData, rowIndex: number): TableData {
+  if (data.rows <= TABLE_MIN_DIMENSION) return data;
+  if (rowIndex < 0 || rowIndex >= data.rows) return data;
+
+  // Clone and adjust spans for cells spanning over rowIndex from above
+  const adjusted: (TableCellData | null)[][] = data.cells.map((row, ri) =>
+    row.map((cell) => {
+      if (!cell) return null;
+      if (ri < rowIndex && ri + cell.rowSpan > rowIndex) {
+        return { ...cell, rowSpan: cell.rowSpan - 1 };
+      }
+      return cell;
+    }),
+  );
+
+  // Cells starting at rowIndex with rowSpan > 1 must be promoted to the next row
+  if (rowIndex + 1 < data.rows) {
+    for (let c = 0; c < data.cols; c++) {
+      const cell = adjusted[rowIndex]?.[c];
+      if (cell && cell.rowSpan > 1) {
+        adjusted[rowIndex + 1]![c] = { ...cell, rowSpan: cell.rowSpan - 1 };
+      }
+    }
+  }
+
+  adjusted.splice(rowIndex, 1);
+
+  const nextRowHeights = normalizeFractions(data.rowHeights.filter((_, i) => i !== rowIndex));
+  const remapped = remapPositionsForDeleteRow(data, rowIndex);
+
+  return {
+    ...data,
+    rows: data.rows - 1,
+    rowHeights: nextRowHeights,
+    cells: adjusted,
+    colDividerPositions: remapped.colDividerPositions,
+    rowDividerPositions: remapped.rowDividerPositions,
+    colDividerBreaks: remapped.colDividerBreaks,
+    rowDividerBreaks: remapped.rowDividerBreaks,
+  };
+}
+
+/** Delete the column at `colIndex`. No-op if the table only has one column. */
+export function deleteCol(data: TableData, colIndex: number): TableData {
+  if (data.cols <= TABLE_MIN_DIMENSION) return data;
+  if (colIndex < 0 || colIndex >= data.cols) return data;
+
+  // Adjust spans for cells spanning over colIndex from the left
+  const adjusted: (TableCellData | null)[][] = data.cells.map((row) =>
+    row.map((cell, ci) => {
+      if (!cell) return null;
+      if (ci < colIndex && ci + cell.colSpan > colIndex) {
+        return { ...cell, colSpan: cell.colSpan - 1 };
+      }
+      return cell;
+    }),
+  );
+
+  // Cells starting at colIndex with colSpan > 1 must be promoted to the next column
+  if (colIndex + 1 < data.cols) {
+    for (let r = 0; r < data.rows; r++) {
+      const cell = adjusted[r]?.[colIndex];
+      if (cell && cell.colSpan > 1) {
+        adjusted[r]![colIndex + 1] = { ...cell, colSpan: cell.colSpan - 1 };
+      }
+    }
+  }
+
+  const nextCells = adjusted.map((row) => row.filter((_, ci) => ci !== colIndex));
+  const nextColWidths = normalizeFractions(data.colWidths.filter((_, i) => i !== colIndex));
+  const remapped = remapPositionsForDeleteCol(data, colIndex);
+
+  return {
+    ...data,
+    cols: data.cols - 1,
+    colWidths: nextColWidths,
+    cells: nextCells,
+    colDividerPositions: remapped.colDividerPositions,
+    rowDividerPositions: remapped.rowDividerPositions,
+    colDividerBreaks: remapped.colDividerBreaks,
+    rowDividerBreaks: remapped.rowDividerBreaks,
+  };
+}
+
 // ── Per-group resize ────────────────────────────────────────────────────
 
 export function resizeColGroup(

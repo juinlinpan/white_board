@@ -13,6 +13,8 @@ import {
   type CellPosition,
   computeColSegmentGroups,
   computeRowSegmentGroups,
+  deleteCol,
+  deleteRow,
   getCellBounds,
   getEffectiveColEdge,
   getEffectiveRowEdge,
@@ -179,6 +181,43 @@ export function Table({
     };
   }, [selectedCells, tableData]);
 
+  // ── Whole-row / whole-col selection detection ────────────────────────────
+
+  const selectedWholeRow = useMemo<number | null>(() => {
+    if (selectedCells.length === 0) return null;
+    for (let r = 0; r < tableData.rows; r++) {
+      const rowIds = (tableData.cells[r] ?? [])
+        .filter((cell): cell is TableCellData => cell !== null)
+        .map((cell) => cell.id);
+      if (
+        rowIds.length > 0 &&
+        rowIds.length === selectedCells.length &&
+        rowIds.every((id) => selectedCells.includes(id))
+      ) {
+        return r;
+      }
+    }
+    return null;
+  }, [selectedCells, tableData]);
+
+  const selectedWholeCol = useMemo<number | null>(() => {
+    if (selectedCells.length === 0) return null;
+    for (let c = 0; c < tableData.cols; c++) {
+      const colIds = tableData.cells
+        .map((row) => row[c])
+        .filter((cell): cell is TableCellData => cell !== null)
+        .map((cell) => cell.id);
+      if (
+        colIds.length > 0 &&
+        colIds.length === selectedCells.length &&
+        colIds.every((id) => selectedCells.includes(id))
+      ) {
+        return c;
+      }
+    }
+    return null;
+  }, [selectedCells, tableData]);
+
   // ── Merge ───────────────────────────────────────────────────────────────
 
   function handleMerge() {
@@ -188,6 +227,36 @@ export function Table({
     const nextData = mergeCells(tableData, positions);
     handleUpdate(nextData);
     setSelectedCells([]);
+  }
+
+  // ── Delete row / col ─────────────────────────────────────────────────────
+
+  function handleDeleteRow(rowIndex: number) {
+    handleUpdate(deleteRow(tableData, rowIndex));
+    setSelectedCells([]);
+  }
+
+  function handleDeleteCol(colIndex: number) {
+    handleUpdate(deleteCol(tableData, colIndex));
+    setSelectedCells([]);
+  }
+
+  // ── Keyboard handler ──────────────────────────────────────────────────────
+
+  function handleContainerKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (editingCellId !== null) return; // let textarea handle it
+    if (selectedWholeRow !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDeleteRow(selectedWholeRow);
+      return;
+    }
+    if (selectedWholeCol !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDeleteCol(selectedWholeCol);
+    }
   }
 
   // ── Split ───────────────────────────────────────────────────────────────
@@ -323,6 +392,7 @@ export function Table({
       style={containerStyle}
       tabIndex={isEditing ? 0 : undefined}
       onBlur={isEditing ? handleBlurContainer : undefined}
+      onKeyDown={isEditing ? handleContainerKeyDown : undefined}
     >
       {/* Cells (absolute positioning for per-row column independence) */}
       <div
