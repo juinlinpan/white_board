@@ -16,6 +16,7 @@ type Props = {
   isEditing: boolean;
   canTranslateSegment?: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onEndpointMouseDown: (
     e: React.MouseEvent<HTMLButtonElement>,
     endpoint: SegmentEndpoint,
@@ -41,6 +42,7 @@ export function BoardItemRenderer({
   isEditing,
   canTranslateSegment = false,
   onMouseDown,
+  onContextMenu,
   onEndpointMouseDown,
   onWaypointMouseDown,
   onMidpointMouseDown,
@@ -91,6 +93,7 @@ export function BoardItemRenderer({
             isSelected={isSelected}
             canTranslate={canTranslateSegment}
             onMouseDown={onMouseDown as (e: React.MouseEvent<SVGPolylineElement>) => void}
+            onContextMenu={onContextMenu}
             onEndpointMouseDown={onEndpointMouseDown}
             onWaypointMouseDown={onWaypointMouseDown}
             onMidpointMouseDown={onMidpointMouseDown}
@@ -106,6 +109,7 @@ export function BoardItemRenderer({
           style={baseStyle}
           className={wrapperClass}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
         >
           <TextBox
@@ -123,6 +127,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={`${wrapperClass} board-item-table`}
+          onContextMenu={onContextMenu}
         >
           <Table
             item={item}
@@ -139,6 +144,7 @@ export function BoardItemRenderer({
             aria-label="Move table"
             tabIndex={-1}
             onMouseDown={onMouseDown}
+            onContextMenu={onContextMenu}
           />
           <button
             type="button"
@@ -146,6 +152,7 @@ export function BoardItemRenderer({
             aria-label="Move table"
             tabIndex={-1}
             onMouseDown={onMouseDown}
+            onContextMenu={onContextMenu}
           />
           <button
             type="button"
@@ -153,6 +160,7 @@ export function BoardItemRenderer({
             aria-label="Move table"
             tabIndex={-1}
             onMouseDown={onMouseDown}
+            onContextMenu={onContextMenu}
           />
           <button
             type="button"
@@ -160,6 +168,7 @@ export function BoardItemRenderer({
             aria-label="Move table"
             tabIndex={-1}
             onMouseDown={onMouseDown}
+            onContextMenu={onContextMenu}
           />
           {resizeHandle}
         </div>
@@ -171,6 +180,7 @@ export function BoardItemRenderer({
           style={baseStyle}
           className={wrapperClass}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
         >
           <StickyNote
@@ -189,6 +199,7 @@ export function BoardItemRenderer({
           style={baseStyle}
           className={wrapperClass}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
         >
           <NotePaper
@@ -207,6 +218,7 @@ export function BoardItemRenderer({
           style={baseStyle}
           className={wrapperClass}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
         >
           <Frame
@@ -235,6 +247,7 @@ export function BoardItemRenderer({
           }}
           className={wrapperClass}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
         >
           {item.type}
           {resizeHandle}

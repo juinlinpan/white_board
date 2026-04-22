@@ -362,6 +362,10 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   }
 
   function handleItemMouseDown(e: React.MouseEvent, itemId: string) {
+    if (e.button !== 0) {
+      return;
+    }
+
     const item = itemsRef.current.find((candidate) => candidate.id === itemId);
     if (!item) {
       return;

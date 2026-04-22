@@ -334,7 +334,8 @@ Page 至少包含：
 - 左側提供 Project / Page 導覽，且需有明顯區塊層次與足夠對比
 - 中間是白板主區域
 - 右側或浮動面板負責物件設定
-- 快捷鍵至少支援 `Delete`、`Ctrl/Cmd + C`、`Ctrl/Cmd + V`、`Ctrl/Cmd + Z`、`Ctrl/Cmd + Shift + Z`
+- 快捷鍵至少支援 `Delete`、`Ctrl/Cmd + C`、`Ctrl/Cmd + X`、`Ctrl/Cmd + V`、`Ctrl/Cmd + Z`、`Ctrl/Cmd + Shift + Z`
+- 白板物件與白板空白區都支援右鍵選單，並提供 `剪下`、`複製`、`貼上`、`刪除` 基本操作；不可用動作需以 disabled 呈現
 - 白板背景預設為較高對比的點狀底圖，避免在一般螢幕上難以辨識
 - 白板右上角要提供背景模式切換，至少支援 `點狀` 與 `格線` 兩種顯示
 

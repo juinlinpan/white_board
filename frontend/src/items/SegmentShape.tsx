@@ -14,6 +14,7 @@ type Props = {
   ) => void;
   onWaypointMouseDown: (e: React.MouseEvent<HTMLButtonElement>, waypointIndex: number) => void;
   onMidpointMouseDown: (e: React.MouseEvent<HTMLButtonElement>, segmentIndex: number) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   deletingWaypointIndex?: number;
 };
 
@@ -36,6 +37,7 @@ export function SegmentShape({
   onEndpointMouseDown,
   onWaypointMouseDown,
   onMidpointMouseDown,
+  onContextMenu,
   deletingWaypointIndex,
 }: Props) {
   const points = getSegmentLocalPoints(item);
@@ -102,6 +104,7 @@ export function SegmentShape({
           className={`segment-hit-line${canTranslate ? ' is-translatable' : ''}`}
           style={{ strokeWidth: hitStrokeWidth }}
           onMouseDown={onMouseDown}
+          onContextMenu={onContextMenu}
         />
       </svg>
 
