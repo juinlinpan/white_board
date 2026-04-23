@@ -13,6 +13,7 @@ import {
   countFilledTableCells,
   getTableMinSizeFromDataJson,
   parseTableData,
+  type TableCellData,
 } from './tableData';
 import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 
@@ -21,8 +22,14 @@ type Props = {
   connector: ConnectorLink | null;
   selectionCount: number;
   childCount: number;
+  selectedTableCellIds: string[];
   isCollapsed: boolean;
   onUpdate: (item: BoardItem) => void;
+  onUpdateTableCells: (
+    tableId: string,
+    cellIds: string[],
+    patch: Partial<TableCellData>,
+  ) => void;
   onDelete: () => void;
   onToggleInspector: () => void;
   onToggleCollapse: () => void;
@@ -133,8 +140,10 @@ export function Inspector({
   connector,
   selectionCount,
   childCount,
+  selectedTableCellIds,
   isCollapsed,
   onUpdate,
+  onUpdateTableCells,
   onDelete,
   onToggleInspector,
   onToggleCollapse,
@@ -236,6 +245,25 @@ export function Inspector({
   const supportsLineStyling = isLine || isArrow;
   const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
+  const selectedTableCells =
+    isTable && tableData !== null && selectedTableCellIds.length > 0
+      ? tableData.cells
+          .flat()
+          .filter(
+            (cell): cell is TableCellData =>
+              cell !== null && selectedTableCellIds.includes(cell.id),
+          )
+      : [];
+  const selectedTableCellBackgroundColor =
+    selectedTableCells.length > 0
+      ? selectedTableCells.every(
+          (cell) =>
+            (cell.backgroundColor ?? resolvedStyle.backgroundColor) ===
+            (selectedTableCells[0]?.backgroundColor ?? resolvedStyle.backgroundColor),
+        )
+        ? (selectedTableCells[0]?.backgroundColor ?? resolvedStyle.backgroundColor)
+        : resolvedStyle.backgroundColor
+      : resolvedStyle.backgroundColor;
   const hasCustomStyle =
     selectedItem.style_json !== null &&
     selectedItem.style_json.trim().length > 0;
@@ -423,6 +451,9 @@ export function Inspector({
             <p className="inspector-meta">
               已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
             </p>
+            <p className="inspector-meta">
+              在表格內反白一格或多格後，底下 Style 的背景色會只套用到反白儲存格。
+            </p>
           </section>
         ) : null}
 
@@ -504,10 +535,18 @@ export function Inspector({
               <ColorPaletteField
                 label="背景色"
                 options={BACKGROUND_COLOR_OPTIONS}
-                selectedValue={resolvedStyle.backgroundColor}
+                selectedValue={
+                  isTable && selectedTableCells.length > 0
+                    ? selectedTableCellBackgroundColor
+                    : resolvedStyle.backgroundColor
+                }
                 tone="background"
                 onSelect={(value) =>
-                  handleStyleChange({ backgroundColor: value })
+                  isTable && selectedTableCells.length > 0
+                    ? onUpdateTableCells(selectedItem.id, selectedTableCellIds, {
+                        backgroundColor: value,
+                      })
+                    : handleStyleChange({ backgroundColor: value })
                 }
               />
               <ColorPaletteField

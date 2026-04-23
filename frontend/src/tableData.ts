@@ -12,6 +12,7 @@ export const TABLE_CELL_MIN_HEIGHT = ITEM_MIN_SIZE[ITEM_TYPE.text_box].height;
 export type TableCellData = {
   id: string;
   content: string;       // plain text label for the cell
+  backgroundColor?: string;
   rowSpan: number;       // >= 1
   colSpan: number;       // >= 1
   isCollapsed: boolean;
@@ -66,6 +67,7 @@ function makeCell(): TableCellData {
   return {
     id: makeCellId(),
     content: '',
+    backgroundColor: undefined,
     rowSpan: 1,
     colSpan: 1,
     isCollapsed: true,
@@ -194,6 +196,10 @@ function parseNewFormat(parsed: Record<string, unknown>): TableData {
       return {
         id: typeof obj['id'] === 'string' ? obj['id'] : makeCellId(),
         content: typeof obj['content'] === 'string' ? obj['content'] : '',
+        backgroundColor:
+          typeof obj['backgroundColor'] === 'string'
+            ? obj['backgroundColor']
+            : undefined,
         rowSpan: typeof obj['rowSpan'] === 'number' && obj['rowSpan'] >= 1 ? obj['rowSpan'] : 1,
         colSpan: typeof obj['colSpan'] === 'number' && obj['colSpan'] >= 1 ? obj['colSpan'] : 1,
         isCollapsed: typeof obj['isCollapsed'] === 'boolean' ? obj['isCollapsed'] : true,
@@ -280,6 +286,7 @@ function parseOldFormat(parsed: Record<string, unknown>): TableData {
       return {
         id: cell.id,
         content: typeof rawVal === 'string' ? rawVal : '',
+        backgroundColor: cell.backgroundColor,
         rowSpan: cell.rowSpan,
         colSpan: cell.colSpan,
         isCollapsed: cell.isCollapsed,
@@ -368,16 +375,21 @@ export function mergeCells(data: TableData, positions: CellPosition[]): TableDat
   if (minRow === maxRow && minCol === maxCol) return data;
 
   const contents: string[] = [];
+  let backgroundColor: string | undefined;
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
       const cell = data.cells[r]?.[c];
       if (cell?.content.trim()) contents.push(cell.content.trim());
+      if (backgroundColor === undefined && cell?.backgroundColor) {
+        backgroundColor = cell.backgroundColor;
+      }
     }
   }
 
   const mergedCell: TableCellData = {
     id: makeCellId(),
     content: contents.join('\n'),
+    backgroundColor,
     rowSpan: maxRow - minRow + 1,
     colSpan: maxCol - minCol + 1,
     isCollapsed: true,

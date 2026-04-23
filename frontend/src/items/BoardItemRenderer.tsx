@@ -30,6 +30,7 @@ type Props = {
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
   onTableCellInteractionStart?: () => void;
+  onTableSelectedCellsChange?: (cellIds: string[]) => void;
   tableDropTargetCellId?: string | null;
 };
 
@@ -53,6 +54,7 @@ export function BoardItemRenderer({
   onUpdate,
   onEditEnd,
   onTableCellInteractionStart,
+  onTableSelectedCellsChange,
   tableDropTargetCellId,
 }: Props) {
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
@@ -136,6 +138,7 @@ export function BoardItemRenderer({
             onUpdate={onUpdate}
             onEditEnd={onEditEnd}
             onCellInteractionStart={onTableCellInteractionStart}
+            onSelectedCellsChange={onTableSelectedCellsChange}
             dropTargetCellId={tableDropTargetCellId}
           />
           <button
