@@ -69,8 +69,10 @@ import {
 } from './segmentData';
 import {
   createTableData,
+  parseTableData,
   serializeTableData,
   TABLE_MAX_DIMENSION,
+  updateTableCell,
 } from './tableData';
 import {
   TABLE_INSERT_PREVIEW_CELL_HEIGHT,
@@ -115,6 +117,11 @@ import {
 type Props = {
   page: Page;
   onViewportChange?: (viewport: Viewport) => void;
+};
+
+type TableInspectorSelection = {
+  tableId: string;
+  cellId: string;
 };
 
 const INSPECTOR_COLLAPSED_STORAGE_KEY =
@@ -171,6 +178,8 @@ export function Canvas({ page, onViewportChange }: Props) {
   const [activeTableDropTarget, setActiveTableDropTarget] = useState<TableCellHit | null>(null);
   const [tableInsertPreview, setTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
   const [toolbarTableInsertPreview, setToolbarTableInsertPreview] = useState<TableInsertPreviewState | null>(null);
+  const [tableInspectorSelection, setTableInspectorSelection] =
+    useState<TableInspectorSelection | null>(null);
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelectionState | null>(null);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(() =>
     readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
@@ -350,6 +359,15 @@ export function Canvas({ page, onViewportChange }: Props) {
     () => items.find((item) => item.id === primarySelectedId) ?? null,
     [items, primarySelectedId],
   );
+
+  useEffect(() => {
+    if (
+      selectedItem?.type !== ITEM_TYPE.table ||
+      tableInspectorSelection?.tableId !== selectedItem.id
+    ) {
+      setTableInspectorSelection(null);
+    }
+  }, [selectedItem, tableInspectorSelection]);
 
   const {
     canUndo,
@@ -1331,6 +1349,13 @@ export function Canvas({ page, onViewportChange }: Props) {
                       onUpdate={handleItemUpdate}
                       onEditEnd={handleEditEnd}
                       onTableCellInteractionStart={() => handleItemDoubleClick(item)}
+                      onTableSelectedCellChange={(cellId) =>
+                        setTableInspectorSelection(
+                          cellId === null
+                            ? null
+                            : { tableId: item.id, cellId },
+                        )
+                      }
                       tableDropTargetCellId={
                         isTableDropTarget ? activeTableDropTarget?.cellId ?? null : null
                       }
@@ -1444,8 +1469,30 @@ export function Canvas({ page, onViewportChange }: Props) {
           connector={selectedConnector}
           selectionCount={selectedIds.length}
           childCount={selectedChildCount}
+          selectedTableCellId={
+            selectedItem?.type === ITEM_TYPE.table &&
+            tableInspectorSelection?.tableId === selectedItem.id
+              ? tableInspectorSelection.cellId
+              : null
+          }
           isCollapsed={isInspectorCollapsed}
           onUpdate={handleItemUpdate}
+          onUpdateTableCell={(tableId, cellId, patch) => {
+            const tableItem = items.find(
+              (candidate) =>
+                candidate.id === tableId && candidate.type === ITEM_TYPE.table,
+            );
+            if (!tableItem) {
+              return;
+            }
+            const tableData = parseTableData(tableItem.data_json);
+            handleItemUpdate({
+              ...tableItem,
+              data_json: serializeTableData(
+                updateTableCell(tableData, cellId, patch),
+              ),
+            });
+          }}
           onDelete={() => void handleDeleteSelection()}
           onToggleInspector={() =>
             setIsInspectorCollapsed((current) => !current)

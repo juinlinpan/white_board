@@ -13,6 +13,7 @@ import {
   countFilledTableCells,
   getTableMinSizeFromDataJson,
   parseTableData,
+  type TableCellData,
 } from './tableData';
 import { ITEM_MIN_SIZE, ITEM_TYPE, ITEM_TYPE_LABEL } from './types';
 
@@ -21,8 +22,14 @@ type Props = {
   connector: ConnectorLink | null;
   selectionCount: number;
   childCount: number;
+  selectedTableCellId: string | null;
   isCollapsed: boolean;
   onUpdate: (item: BoardItem) => void;
+  onUpdateTableCell: (
+    tableId: string,
+    cellId: string,
+    patch: Partial<TableCellData>,
+  ) => void;
   onDelete: () => void;
   onToggleInspector: () => void;
   onToggleCollapse: () => void;
@@ -133,8 +140,10 @@ export function Inspector({
   connector,
   selectionCount,
   childCount,
+  selectedTableCellId,
   isCollapsed,
   onUpdate,
+  onUpdateTableCell,
   onDelete,
   onToggleInspector,
   onToggleCollapse,
@@ -235,6 +244,15 @@ export function Inspector({
   const supportsTextStyling = !isArrow && !isLine;
   const supportsLineStyling = isLine || isArrow;
   const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
+  const selectedTableCell =
+    isTable && tableData !== null && selectedTableCellId !== null
+      ? tableData.cells
+          .flat()
+          .find(
+            (cell): cell is TableCellData =>
+              cell !== null && cell.id === selectedTableCellId,
+          ) ?? null
+      : null;
   const resolvedStyle = resolveBoardItemStyle(selectedItem);
   const hasCustomStyle =
     selectedItem.style_json !== null &&
@@ -423,6 +441,30 @@ export function Inspector({
             <p className="inspector-meta">
               已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
             </p>
+            {selectedTableCell !== null ? (
+              <>
+                <p className="meta-label">Cell</p>
+                <p className="inspector-meta">已選取單一儲存格，可獨立調整顏色。</p>
+                <ColorPaletteField
+                  label="儲存格背景"
+                  options={BACKGROUND_COLOR_OPTIONS}
+                  selectedValue={
+                    selectedTableCell.backgroundColor ??
+                    resolvedStyle.backgroundColor
+                  }
+                  tone="background"
+                  onSelect={(value) =>
+                    onUpdateTableCell(selectedItem.id, selectedTableCell.id, {
+                      backgroundColor: value,
+                    })
+                  }
+                />
+              </>
+            ) : (
+              <p className="inspector-meta">
+                在表格內單選一個儲存格後，即可在這裡修改該格背景色。
+              </p>
+            )}
           </section>
         ) : null}
 
