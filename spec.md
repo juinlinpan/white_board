@@ -254,7 +254,7 @@ Page 至少包含：
 - 儲存格以 absolute positioning 排版，各行列的分格線位置可因群組拖曳而獨立偏移（資料模型中以 `colDividerPositions` / `rowDividerPositions` 記錄每段分格線的位置覆寫，並以 `colDividerBreaks` / `rowDividerBreaks` 記錄不得自動連續的線段斷點）
 
 - table 只允許透過最外層邊框選取整個物件與顯示移動游標；滑鼠位於表格內部時，單擊應直接反白單格，按住拖曳應可延伸為多格選取
-- table 內單一儲存格被反白時，右側 Inspector 應切換為該儲存格的編輯內容，並允許單格獨立調整背景色
+- table 內反白一格或多格時，不可跳出額外色彩選單；右側 Inspector 既有背景色控制應直接套用到被反白儲存格
 
 ### 5.7 `text_box`
 

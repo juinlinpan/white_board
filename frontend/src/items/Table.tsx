@@ -52,7 +52,7 @@ type Props = {
   onUpdate: (item: BoardItem) => void;
   onEditEnd: () => void;
   onCellInteractionStart?: () => void;
-  onSelectedCellChange?: (cellId: string | null) => void;
+  onSelectedCellsChange?: (cellIds: string[]) => void;
   dropTargetCellId?: string | null;
 };
 
@@ -65,7 +65,7 @@ export function Table({
   onUpdate,
   onEditEnd,
   onCellInteractionStart,
-  onSelectedCellChange,
+  onSelectedCellsChange,
   dropTargetCellId,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,11 +97,11 @@ export function Table({
 
   useEffect(() => {
     if (!isSelected) {
-      onSelectedCellChange?.(null);
+      onSelectedCellsChange?.([]);
       return;
     }
-    onSelectedCellChange?.(selectedCells.length === 1 ? selectedCells[0] ?? null : null);
-  }, [isSelected, onSelectedCellChange, selectedCells]);
+    onSelectedCellsChange?.(selectedCells);
+  }, [isSelected, onSelectedCellsChange, selectedCells]);
 
   useEffect(() => {
     function handleWindowMouseUp() {

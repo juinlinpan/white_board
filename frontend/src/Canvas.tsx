@@ -121,7 +121,7 @@ type Props = {
 
 type TableInspectorSelection = {
   tableId: string;
-  cellId: string;
+  cellIds: string[];
 };
 
 const INSPECTOR_COLLAPSED_STORAGE_KEY =
@@ -1349,11 +1349,11 @@ export function Canvas({ page, onViewportChange }: Props) {
                       onUpdate={handleItemUpdate}
                       onEditEnd={handleEditEnd}
                       onTableCellInteractionStart={() => handleItemDoubleClick(item)}
-                      onTableSelectedCellChange={(cellId) =>
+                      onTableSelectedCellsChange={(cellIds) =>
                         setTableInspectorSelection(
-                          cellId === null
+                          cellIds.length === 0
                             ? null
-                            : { tableId: item.id, cellId },
+                            : { tableId: item.id, cellIds },
                         )
                       }
                       tableDropTargetCellId={
@@ -1469,27 +1469,30 @@ export function Canvas({ page, onViewportChange }: Props) {
           connector={selectedConnector}
           selectionCount={selectedIds.length}
           childCount={selectedChildCount}
-          selectedTableCellId={
+          selectedTableCellIds={
             selectedItem?.type === ITEM_TYPE.table &&
             tableInspectorSelection?.tableId === selectedItem.id
-              ? tableInspectorSelection.cellId
-              : null
+              ? tableInspectorSelection.cellIds
+              : []
           }
           isCollapsed={isInspectorCollapsed}
           onUpdate={handleItemUpdate}
-          onUpdateTableCell={(tableId, cellId, patch) => {
+          onUpdateTableCells={(tableId, cellIds, patch) => {
             const tableItem = items.find(
               (candidate) =>
                 candidate.id === tableId && candidate.type === ITEM_TYPE.table,
             );
-            if (!tableItem) {
+            if (!tableItem || cellIds.length === 0) {
               return;
             }
             const tableData = parseTableData(tableItem.data_json);
             handleItemUpdate({
               ...tableItem,
               data_json: serializeTableData(
-                updateTableCell(tableData, cellId, patch),
+                cellIds.reduce(
+                  (current, cellId) => updateTableCell(current, cellId, patch),
+                  tableData,
+                ),
               ),
             });
           }}

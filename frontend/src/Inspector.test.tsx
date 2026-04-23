@@ -41,10 +41,10 @@ describe('Inspector style palette', () => {
         connector={null}
         selectionCount={1}
         childCount={0}
-        selectedTableCellId={null}
+        selectedTableCellIds={[]}
         isCollapsed
         onUpdate={() => {}}
-        onUpdateTableCell={() => {}}
+        onUpdateTableCells={() => {}}
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
@@ -65,10 +65,10 @@ describe('Inspector style palette', () => {
         connector={null}
         selectionCount={1}
         childCount={0}
-        selectedTableCellId={null}
+        selectedTableCellIds={[]}
         isCollapsed={false}
         onUpdate={() => {}}
-        onUpdateTableCell={() => {}}
+        onUpdateTableCells={() => {}}
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
@@ -103,10 +103,10 @@ describe('Inspector style palette', () => {
         connector={null}
         selectionCount={1}
         childCount={0}
-        selectedTableCellId={null}
+        selectedTableCellIds={[]}
         isCollapsed={false}
         onUpdate={() => {}}
-        onUpdateTableCell={() => {}}
+        onUpdateTableCells={() => {}}
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}

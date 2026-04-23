@@ -22,12 +22,12 @@ type Props = {
   connector: ConnectorLink | null;
   selectionCount: number;
   childCount: number;
-  selectedTableCellId: string | null;
+  selectedTableCellIds: string[];
   isCollapsed: boolean;
   onUpdate: (item: BoardItem) => void;
-  onUpdateTableCell: (
+  onUpdateTableCells: (
     tableId: string,
-    cellId: string,
+    cellIds: string[],
     patch: Partial<TableCellData>,
   ) => void;
   onDelete: () => void;
@@ -140,10 +140,10 @@ export function Inspector({
   connector,
   selectionCount,
   childCount,
-  selectedTableCellId,
+  selectedTableCellIds,
   isCollapsed,
   onUpdate,
-  onUpdateTableCell,
+  onUpdateTableCells,
   onDelete,
   onToggleInspector,
   onToggleCollapse,
@@ -244,16 +244,26 @@ export function Inspector({
   const supportsTextStyling = !isArrow && !isLine;
   const supportsLineStyling = isLine || isArrow;
   const tableData = isTable ? parseTableData(selectedItem.data_json) : null;
-  const selectedTableCell =
-    isTable && tableData !== null && selectedTableCellId !== null
+  const resolvedStyle = resolveBoardItemStyle(selectedItem);
+  const selectedTableCells =
+    isTable && tableData !== null && selectedTableCellIds.length > 0
       ? tableData.cells
           .flat()
-          .find(
+          .filter(
             (cell): cell is TableCellData =>
-              cell !== null && cell.id === selectedTableCellId,
-          ) ?? null
-      : null;
-  const resolvedStyle = resolveBoardItemStyle(selectedItem);
+              cell !== null && selectedTableCellIds.includes(cell.id),
+          )
+      : [];
+  const selectedTableCellBackgroundColor =
+    selectedTableCells.length > 0
+      ? selectedTableCells.every(
+          (cell) =>
+            (cell.backgroundColor ?? resolvedStyle.backgroundColor) ===
+            (selectedTableCells[0]?.backgroundColor ?? resolvedStyle.backgroundColor),
+        )
+        ? (selectedTableCells[0]?.backgroundColor ?? resolvedStyle.backgroundColor)
+        : resolvedStyle.backgroundColor
+      : resolvedStyle.backgroundColor;
   const hasCustomStyle =
     selectedItem.style_json !== null &&
     selectedItem.style_json.trim().length > 0;
@@ -441,30 +451,9 @@ export function Inspector({
             <p className="inspector-meta">
               已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
             </p>
-            {selectedTableCell !== null ? (
-              <>
-                <p className="meta-label">Cell</p>
-                <p className="inspector-meta">已選取單一儲存格，可獨立調整顏色。</p>
-                <ColorPaletteField
-                  label="儲存格背景"
-                  options={BACKGROUND_COLOR_OPTIONS}
-                  selectedValue={
-                    selectedTableCell.backgroundColor ??
-                    resolvedStyle.backgroundColor
-                  }
-                  tone="background"
-                  onSelect={(value) =>
-                    onUpdateTableCell(selectedItem.id, selectedTableCell.id, {
-                      backgroundColor: value,
-                    })
-                  }
-                />
-              </>
-            ) : (
-              <p className="inspector-meta">
-                在表格內單選一個儲存格後，即可在這裡修改該格背景色。
-              </p>
-            )}
+            <p className="inspector-meta">
+              在表格內反白一格或多格後，底下 Style 的背景色會只套用到反白儲存格。
+            </p>
           </section>
         ) : null}
 
@@ -546,10 +535,18 @@ export function Inspector({
               <ColorPaletteField
                 label="背景色"
                 options={BACKGROUND_COLOR_OPTIONS}
-                selectedValue={resolvedStyle.backgroundColor}
+                selectedValue={
+                  isTable && selectedTableCells.length > 0
+                    ? selectedTableCellBackgroundColor
+                    : resolvedStyle.backgroundColor
+                }
                 tone="background"
                 onSelect={(value) =>
-                  handleStyleChange({ backgroundColor: value })
+                  isTable && selectedTableCells.length > 0
+                    ? onUpdateTableCells(selectedItem.id, selectedTableCellIds, {
+                        backgroundColor: value,
+                      })
+                    : handleStyleChange({ backgroundColor: value })
                 }
               />
               <ColorPaletteField
