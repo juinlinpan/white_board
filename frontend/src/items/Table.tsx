@@ -232,12 +232,32 @@ export function Table({
   // ── Delete row / col ─────────────────────────────────────────────────────
 
   function handleDeleteRow(rowIndex: number) {
-    handleUpdate(deleteRow(tableData, rowIndex));
+    const removedFraction = tableData.rowHeights[rowIndex] ?? 0;
+    const nextData = deleteRow(tableData, rowIndex);
+    const nextHeight =
+      nextData.rows === tableData.rows
+        ? item.height
+        : Math.max(1, item.height * (1 - removedFraction));
+    onUpdate({
+      ...item,
+      height: nextHeight,
+      data_json: serializeTableData(nextData),
+    });
     setSelectedCells([]);
   }
 
   function handleDeleteCol(colIndex: number) {
-    handleUpdate(deleteCol(tableData, colIndex));
+    const removedFraction = tableData.colWidths[colIndex] ?? 0;
+    const nextData = deleteCol(tableData, colIndex);
+    const nextWidth =
+      nextData.cols === tableData.cols
+        ? item.width
+        : Math.max(1, item.width * (1 - removedFraction));
+    onUpdate({
+      ...item,
+      width: nextWidth,
+      data_json: serializeTableData(nextData),
+    });
     setSelectedCells([]);
   }
 
