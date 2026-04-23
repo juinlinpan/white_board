@@ -16,6 +16,7 @@ import {
 import type { BoardSnapshot } from './boardHistory';
 import { PASTE_OFFSET_STEP, ITEM_SAVE_DELAY } from './canvasConstants';
 import {
+  relayoutTableItems,
   clampItemSize,
   expandSelectionItemIds,
   getPrimarySelectionId,
@@ -467,16 +468,32 @@ export function useCanvasItemActions({
         editSessionRef.current = { itemId: updated.id };
       }
 
-      setItemsAndSync((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      let changedChildIds: string[] = [];
+      setItemsAndSync((current) => {
+        const nextItems = current.map((item) => (item.id === updated.id ? updated : item));
+        if (updated.type !== ITEM_TYPE.table) {
+          changedChildIds = [];
+          return nextItems;
+        }
+        const relayoutResult = relayoutTableItems(nextItems, [updated.id]);
+        changedChildIds = relayoutResult.changedIds;
+        return relayoutResult.items;
+      });
 
       if (itemSaveTimerRef.current !== null) {
         clearTimeout(itemSaveTimerRef.current);
       }
 
       itemSaveTimerRef.current = setTimeout(() => {
-        void updateBoardItem(updated.id, toPayload(updated)).catch((err) => {
+        const latestUpdated =
+          itemsRef.current.find((item) => item.id === updated.id) ?? updated;
+        const latestChildren = changedChildIds
+          .map((childId) => itemsRef.current.find((item) => item.id === childId))
+          .filter((item): item is BoardItem => item !== undefined);
+        void Promise.all([
+          updateBoardItem(latestUpdated.id, toPayload(latestUpdated)),
+          ...latestChildren.map((child) => updateBoardItem(child.id, toPayload(child))),
+        ]).catch((err) => {
           console.error('[Canvas] Failed to update item', err);
         });
         if (editSessionRef.current?.itemId === updated.id) {
