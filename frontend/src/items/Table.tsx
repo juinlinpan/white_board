@@ -35,6 +35,7 @@ import {
   updateTableCell,
   getRootCellAt,
 } from '../tableData';
+import { reconcileTableInteractionState } from '../tableInteractionState';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -88,12 +89,27 @@ export function Table({
 
   // Stop editing when the board item leaves editing mode
   useEffect(() => {
-    if (!isEditing) {
-      setEditingCellId(null);
-      setSelectedCells([]);
+    const nextState = reconcileTableInteractionState(
+      {
+        selectedCellIds: selectedCells,
+        editingCellId,
+      },
+      {
+        isSelected,
+        isEditing,
+      },
+    );
+
+    if (nextState.editingCellId !== editingCellId) {
+      setEditingCellId(nextState.editingCellId);
+    }
+    if (nextState.selectedCellIds !== selectedCells) {
+      setSelectedCells(nextState.selectedCellIds);
+    }
+    if (!isSelected || !isEditing) {
       dragSelectStartRef.current = null;
     }
-  }, [isEditing]);
+  }, [editingCellId, isEditing, isSelected, selectedCells]);
 
   useEffect(() => {
     if (!isSelected) {
@@ -399,7 +415,6 @@ export function Table({
   function handleBlurContainer(e: React.FocusEvent) {
     if (containerRef.current?.contains(e.relatedTarget as Node)) return;
     setEditingCellId(null);
-    setSelectedCells([]);
     onEditEnd();
   }
 
