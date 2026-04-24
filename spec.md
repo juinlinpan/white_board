@@ -205,6 +205,11 @@ Page 至少包含：
 - `updated_at`
 - `sort_order`
 
+Page 匯出補充規則：
+
+- 匯出的 JSON 需同時保留 `board_items[].parent_item_id` 與可直接遍歷的 `item_hierarchy`（樹狀 children 結構）
+- `item_hierarchy` 與 `parent_item_id` 必須互相一致，避免後續 MCP / agent 消費時出現歧義
+
 ### 5.3 白板通用能力
 
 每個 Page 內的白板應支援：
@@ -414,6 +419,7 @@ Page 至少包含：
 
 補充：
 
+- `parent_item_id` 是白板物件從屬關係的持久化主欄位（例如 frame 內 child item）
 - `line` 與 `arrow` 的起點 / 終點資料應存放於 `data_json`
 - `x`、`y`、`width`、`height` 仍可作為命中、選取與拖曳所需的包圍盒
 

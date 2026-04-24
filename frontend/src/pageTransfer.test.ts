@@ -50,6 +50,9 @@ describe('pageTransfer', () => {
     expect(imported.name).toBe('Sprint board');
     expect(imported.viewport).toEqual({ x: 120, y: 80, zoom: 1.25 });
     expect(imported.board_items[0]?.id).toBe('note-1');
+    expect(imported.item_hierarchy).toEqual({
+      roots: [{ id: 'note-1', children: [] }],
+    });
   });
 
   it('merges imported items on top of existing page state with id remapping', () => {
@@ -176,5 +179,62 @@ describe('pageTransfer', () => {
       from_item_id: 'note-new',
       to_item_id: 'frame-new',
     });
+  });
+
+  it('rejects item_hierarchy when parent linkage does not match board_items', () => {
+    expect(() =>
+      parsePageImportText(
+        JSON.stringify({
+          version: 1,
+          kind: 'whiteboard-page',
+          page: {
+            name: 'Broken hierarchy',
+            viewport: { x: 0, y: 0, zoom: 1 },
+            board_items: [
+              {
+                id: 'frame-1',
+                parent_item_id: null,
+                category: 'large_item',
+                type: 'frame',
+                title: null,
+                content: null,
+                content_format: null,
+                x: 0,
+                y: 0,
+                width: 300,
+                height: 200,
+                rotation: 0,
+                z_index: 0,
+                is_collapsed: false,
+                style_json: null,
+                data_json: null,
+              },
+              {
+                id: 'note-1',
+                parent_item_id: 'frame-1',
+                category: 'small_item',
+                type: 'text_box',
+                title: null,
+                content: 'hello',
+                content_format: null,
+                x: 20,
+                y: 20,
+                width: 120,
+                height: 60,
+                rotation: 0,
+                z_index: 1,
+                is_collapsed: false,
+                style_json: null,
+                data_json: null,
+              },
+            ],
+            item_hierarchy: {
+              roots: [{ id: 'note-1', children: [] }],
+            },
+            connector_links: [],
+          },
+        }),
+      ),
+    ).toThrow(/item_hierarchy parent mismatch/);
   });
 });
