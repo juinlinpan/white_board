@@ -1754,6 +1754,19 @@ button {
   gap: 2px;
 }
 
+.toolbar-menu-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-menu-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 2px;
+}
+
 .tool-button {
   display: flex;
   align-items: center;
@@ -1801,10 +1814,6 @@ button {
 .tool-label {
   font-size: 0.76rem;
   font-weight: 500;
-}
-
-.tool-button-utility {
-  margin-left: auto;
 }
 
 .tool-button-compact {

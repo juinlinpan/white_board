@@ -117,6 +117,9 @@ import {
 type Props = {
   page: Page;
   onViewportChange?: (viewport: Viewport) => void;
+  onImportPage: () => void;
+  onExportPage: () => void;
+  importExportDisabled: boolean;
 };
 
 type TableInspectorSelection = {
@@ -144,7 +147,13 @@ function readStoredBoolean(key: string, fallbackValue: boolean): boolean {
   return fallbackValue;
 }
 
-export function Canvas({ page, onViewportChange }: Props) {
+export function Canvas({
+  page,
+  onViewportChange,
+  onImportPage,
+  onExportPage,
+  importExportDisabled,
+}: Props) {
   const [viewport, setViewport] = useState<Viewport>({
     x: page.viewport_x,
     y: page.viewport_y,
@@ -1162,6 +1171,9 @@ export function Canvas({ page, onViewportChange }: Props) {
         activeTool={activeTool}
         onToolChange={handleToolChange}
         onTableToolClick={handleToolbarTableClick}
+        onImportPage={onImportPage}
+        onExportPage={onExportPage}
+        importExportDisabled={importExportDisabled}
         zoom={getDisplayZoom(viewport.zoom)}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
