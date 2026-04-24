@@ -115,6 +115,8 @@ import {
   getResetZoom,
   zoomViewportAroundPoint,
 } from './viewport';
+import { resolveBoardItemStyle } from './itemStyles';
+import { getMinimapLayout, worldToMinimap } from './minimap';
 
 type Props = {
   page: Page;
@@ -123,6 +125,9 @@ type Props = {
   onExportPage: () => void;
   importExportDisabled: boolean;
 };
+
+const MINIMAP_WIDTH = 190;
+const MINIMAP_HEIGHT = 130;
 
 type TableInspectorSelection = {
   tableId: string;
@@ -192,6 +197,7 @@ export function Canvas({
   const [tableInspectorSelection, setTableInspectorSelection] =
     useState<TableInspectorSelection | null>(null);
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelectionState | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(() =>
     readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
   );
@@ -226,6 +232,29 @@ export function Canvas({
     connectorsRef.current = connectors;
     selectedIdsRef.current = selectedIds;
   }, [connectors, items, selectedIds, viewport]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (container === null) {
+      return;
+    }
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      setContainerSize({
+        width: Math.max(rect.width, 1),
+        height: Math.max(rect.height, 1),
+      });
+    };
+
+    updateSize();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   const { frameItemAnimations, triggerFrameItemAnimation } =
     useCanvasFrameAnimation();
@@ -598,6 +627,20 @@ export function Canvas({
       updated_at: 'draft',
     } satisfies BoardItem;
   }, [page.id, segmentDraft]);
+
+  const minimapLayout = useMemo(
+    () =>
+      getMinimapLayout(
+        items,
+        viewport,
+        containerSize,
+        {
+          width: MINIMAP_WIDTH,
+          height: MINIMAP_HEIGHT,
+        },
+      ),
+    [containerSize, items, viewport],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1278,6 +1321,65 @@ export function Canvas({
               style={{ top: `${viewport.y}px` }}
             >
               <span className="canvas-zero-axis-label">X=0</span>
+            </div>
+            <div className="canvas-minimap" aria-hidden="true">
+              <div className="canvas-minimap-title">Map</div>
+              <div
+                className="canvas-minimap-surface"
+                style={{
+                  width: `${MINIMAP_WIDTH}px`,
+                  height: `${MINIMAP_HEIGHT}px`,
+                }}
+              >
+                {items
+                  .filter((item) => item.type !== ITEM_TYPE.arrow && item.type !== ITEM_TYPE.line)
+                  .map((item) => {
+                    const style = resolveBoardItemStyle(item);
+                    const point = worldToMinimap(
+                      item.x + item.width / 2,
+                      item.y + item.height / 2,
+                      minimapLayout,
+                    );
+                    return (
+                      <span
+                        key={`minimap-${item.id}`}
+                        className="canvas-minimap-dot"
+                        style={{
+                          left: `${point.x}px`,
+                          top: `${point.y}px`,
+                          backgroundColor: style.backgroundColor,
+                        }}
+                      />
+                    );
+                  })}
+                <div
+                  className="canvas-minimap-viewport"
+                  style={{
+                    left: `${
+                      worldToMinimap(
+                        minimapLayout.viewportBounds.x,
+                        minimapLayout.viewportBounds.y,
+                        minimapLayout,
+                      ).x
+                    }px`,
+                    top: `${
+                      worldToMinimap(
+                        minimapLayout.viewportBounds.x,
+                        minimapLayout.viewportBounds.y,
+                        minimapLayout,
+                      ).y
+                    }px`,
+                    width: `${Math.max(
+                      minimapLayout.viewportBounds.width * minimapLayout.scale,
+                      8,
+                    )}px`,
+                    height: `${Math.max(
+                      minimapLayout.viewportBounds.height * minimapLayout.scale,
+                      8,
+                    )}px`,
+                  }}
+                />
+              </div>
             </div>
 
             {activeTool === ITEM_TYPE.table && tableInsertPreview !== null ? (

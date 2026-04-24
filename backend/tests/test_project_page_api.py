@@ -75,6 +75,8 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
         assert page["project_id"] == project["id"]
         assert page["sort_order"] == 0
         assert page["zoom"] == 1
+        assert page["viewport_x"] == 240
+        assert page["viewport_y"] == 160
 
         second_page_response = client.post(
             f"/projects/{project['id']}/pages",
