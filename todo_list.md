@@ -26,6 +26,7 @@
 - [x] Keep `magnet` enabled by default when the canvas loads.
 - [x] Remove nearby-item alignment and keep `magnet` for background-grid edge snapping during move / resize.
 - [x] Snap newly created items and freeform `line` / `arrow` points to the background grid when `magnet` is enabled.
+- [x] Add clear `X=0` / `Y=0` zero-axis guide lines on the canvas.
 
 ## Item Content Display Update Notes
 

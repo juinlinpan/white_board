@@ -263,6 +263,9 @@ export function App() {
   const [pageNameDraft, setPageNameDraft] = useState('');
   const [isMutating, setIsMutating] = useState(false);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
+  const [pageRefreshTokenById, setPageRefreshTokenById] = useState<
+    Record<string, number>
+  >({});
   const [dragState, setDragState] = useState<SidebarDragState | null>(null);
   const [dropState, setDropState] = useState<SidebarDropState | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
@@ -777,6 +780,10 @@ export function App() {
         importedPage,
       );
       await replacePageBoardState(selectedPage.id, mergedBoardState);
+      setPageRefreshTokenById((current) => ({
+        ...current,
+        [selectedPage.id]: (current[selectedPage.id] ?? 0) + 1,
+      }));
     });
   }
 
@@ -1067,7 +1074,7 @@ export function App() {
             </section>
           ) : (
             <Canvas
-              key={selectedPage.id}
+              key={`${selectedPage.id}:${pageRefreshTokenById[selectedPage.id] ?? 0}`}
               page={selectedPage}
               onImportPage={handleImportPageButtonClick}
               onExportPage={handleExportPageClick}

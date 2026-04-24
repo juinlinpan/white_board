@@ -1267,6 +1267,18 @@ export function Canvas({
                 backgroundPosition: `${viewport.x}px ${viewport.y}px`,
               }}
             />
+            <div
+              className="canvas-zero-axis canvas-zero-axis-y"
+              style={{ left: `${viewport.x}px` }}
+            >
+              <span className="canvas-zero-axis-label">Y=0</span>
+            </div>
+            <div
+              className="canvas-zero-axis canvas-zero-axis-x"
+              style={{ top: `${viewport.y}px` }}
+            >
+              <span className="canvas-zero-axis-label">X=0</span>
+            </div>
 
             {activeTool === ITEM_TYPE.table && tableInsertPreview !== null ? (
               <div
