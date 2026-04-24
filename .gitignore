@@ -14,5 +14,6 @@ __pycache__/
 logs/
 data/
 backups/
+dev-server*.log
 .DS_Store
 Thumbs.db
