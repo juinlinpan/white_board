@@ -93,7 +93,7 @@ async function savePageSnapshotWithPicker(
       {
         description: 'Whiteboard Page JSON',
         accept: {
-          'application/json': ['.json', '.whiteboard-page.json'],
+          'application/json': ['.json', '.whiteboard-page'],
         },
       },
     ],
@@ -714,9 +714,12 @@ export function App() {
         const boardData = await getPageBoardData(selectedPage.id);
         const payload = buildPageExportSnapshot(boardData);
         const safePageName = sanitizeExportName(selectedPage.name);
+        const suggestedFileName = `${safePageName}.whiteboard-page.json`;
+        const fileName =
+          askForName('請輸入匯出檔名', suggestedFileName) ?? suggestedFileName;
         await savePageSnapshotWithPicker(
           payload,
-          `${safePageName}.whiteboard-page.json`,
+          fileName,
         );
       } catch (error) {
         if (isAbortError(error)) {
