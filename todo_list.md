@@ -10,6 +10,7 @@
 - [x] Page delete now uses a trash button on the right side of the workspace header.
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
+- [x] Clicking `＋ 新增 Page` now creates `untitled_n` directly without a prompt dialog.
 
 ## Toolbar Menu Update Notes
 

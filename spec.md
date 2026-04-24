@@ -11,6 +11,7 @@
 - Page delete action should be shown as a trash button on the right side of the workspace header.
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
+- Clicking `＋ 新增 Page` should create a new page immediately with auto-generated name `untitled_n` (no prompt dialog).
 
 ## Toolbar Menu Update Notes
 

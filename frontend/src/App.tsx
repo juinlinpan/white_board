@@ -125,6 +125,29 @@ function askForName(label: string, initialValue: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function buildUntitledPageName(pages: Page[]): string {
+  const takenNumbers = new Set<number>();
+
+  for (const page of pages) {
+    const matched = page.name.trim().match(/^untitled_(\d+)$/i);
+    if (matched === null) {
+      continue;
+    }
+
+    const parsed = Number.parseInt(matched[1], 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      takenNumbers.add(parsed);
+    }
+  }
+
+  let candidate = 1;
+  while (takenNumbers.has(candidate)) {
+    candidate += 1;
+  }
+
+  return `untitled_${candidate}`;
+}
+
 function selectFallbackId<T extends { id: string }>(
   items: T[],
   preferredId: string | null,
@@ -521,10 +544,7 @@ export function App() {
       return;
     }
 
-    const name = askForName('新增 Page 名稱', 'Untitled Page');
-    if (name === null) {
-      return;
-    }
+    const name = buildUntitledPageName(pages);
 
     await runMutation(async () => {
       const page = await createPage(selectedProject.id, name);
