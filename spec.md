@@ -12,6 +12,13 @@
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
 
+## Toolbar Menu Update Notes
+
+- The top toolbar should follow an Office-like menu pattern where `檔案` and `編輯` open dropdown menus after clicking the menu name.
+- `檔案` dropdown should contain `import` and `export` entries instead of direct always-visible buttons.
+- `export` should open a right-side submenu on hover so future formats can be extended without changing menu hierarchy.
+- `magnet` and `zoom` controls should stay aligned at the far-right end of the top toolbar.
+
 ## Zoom And Grid Update Notes
 
 - The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
