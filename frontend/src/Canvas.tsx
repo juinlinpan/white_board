@@ -1548,6 +1548,7 @@ export function Canvas({
                             : { tableId: item.id, cellIds },
                         )
                       }
+                      magnetEnabled={magnetEnabled}
                       tableDropTargetCellId={
                         isTableDropTarget ? activeTableDropTarget?.cellId ?? null : null
                       }

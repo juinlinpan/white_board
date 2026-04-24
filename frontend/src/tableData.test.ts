@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  TABLE_MAX_DIMENSION,
   addCol,
   addRow,
   computeColSegmentGroups,
@@ -242,6 +243,19 @@ describe('tableData merge and split semantics', () => {
   it('uses text box minimum size as the minimum size of each table cell', () => {
     expect(getTableMinSize(1, 1)).toEqual({ width: 120, height: 72 });
     expect(getTableMinSize(4, 5)).toEqual({ width: 600, height: 288 });
+  });
+
+  it('keeps table minimum sizes on the canvas grid', () => {
+    const gridSize = 24;
+
+    for (let rows = 1; rows <= TABLE_MAX_DIMENSION; rows += 1) {
+      for (let cols = 1; cols <= TABLE_MAX_DIMENSION; cols += 1) {
+        const minSize = getTableMinSize(rows, cols);
+
+        expect(minSize.width % gridSize).toBe(0);
+        expect(minSize.height % gridSize).toBe(0);
+      }
+    }
   });
 
   it('keeps resized column groups above the requested minimum fraction', () => {

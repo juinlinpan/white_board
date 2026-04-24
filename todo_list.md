@@ -40,6 +40,8 @@
 - [x] Raise the `table` dimension cap from `12 x 12` to `20 x 20`.
 - [x] Make every `table` cell respect the minimum `text_box` size.
 - [x] Reduce the minimum `text_box` width by two grid columns so it aligns with `sticky_note`.
+- [x] Verify every board item minimum size, including `line`, `arrow`, and dynamic `table` minimum sizes, stays aligned to whole canvas grid units.
+- [x] Snap internal `table` row and column divider dragging to the canvas grid when `magnet` is enabled, with `Alt` as the temporary bypass.
 
 ## Item Context Menu Update Notes
 

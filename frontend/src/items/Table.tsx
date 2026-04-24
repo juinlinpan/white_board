@@ -6,7 +6,9 @@ import {
   useState,
 } from 'react';
 import { type BoardItem } from '../api';
+import { CANVAS_GRID_SIZE } from '../canvasConstants';
 import { resolveBoardItemStyle } from '../itemStyles';
+import { snapValueToGrid } from '../magnet';
 import {
   addCol,
   addRow,
@@ -46,6 +48,26 @@ type GroupDividerDrag = {
   containerSize: number;  // container width or height in pixels
 };
 
+export function getMagnetSnappedTableDividerPosition(
+  item: Pick<BoardItem, 'x' | 'y' | 'width' | 'height'>,
+  dividerType: SegmentGroup['type'],
+  rawPosition: number,
+): number {
+  if (dividerType === 'col') {
+    return (
+      (snapValueToGrid(item.x + rawPosition * item.width, CANVAS_GRID_SIZE) -
+        item.x) /
+      Math.max(item.width, 1)
+    );
+  }
+
+  return (
+    (snapValueToGrid(item.y + rawPosition * item.height, CANVAS_GRID_SIZE) -
+      item.y) /
+    Math.max(item.height, 1)
+  );
+}
+
 type Props = {
   item: BoardItem;
   isSelected: boolean;
@@ -55,6 +77,7 @@ type Props = {
   onCellInteractionStart?: () => void;
   onSelectedCellsChange?: (cellIds: string[]) => void;
   dropTargetCellId?: string | null;
+  magnetEnabled?: boolean;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -68,6 +91,7 @@ export function Table({
   onCellInteractionStart,
   onSelectedCellsChange,
   dropTargetCellId,
+  magnetEnabled = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tableData = useMemo(() => parseTableData(item.data_json), [item.data_json]);
@@ -373,7 +397,15 @@ export function Table({
       if (!drag) return;
       const curPos = drag.group.type === 'col' ? e.clientX : e.clientY;
       const delta = (curPos - drag.startPos) / drag.containerSize;
-      const newPosition = drag.startPosition + delta;
+      const rawPosition = drag.startPosition + delta;
+      const newPosition =
+        magnetEnabled && !e.altKey
+          ? getMagnetSnappedTableDividerPosition(
+              item,
+              drag.group.type,
+              rawPosition,
+            )
+          : rawPosition;
       const minFraction =
         drag.group.type === 'col'
           ? Math.min(0.5, TABLE_CELL_MIN_WIDTH / Math.max(item.width, 1))
@@ -398,7 +430,7 @@ export function Table({
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [item, onUpdate, tableData]);
+  }, [item, magnetEnabled, onUpdate, tableData]);
 
   // ── Add row / col ────────────────────────────────────────────────────────
 

@@ -42,6 +42,8 @@
 - `table` must support up to `20 x 20` cells.
 - Every `table` cell must stay at least as large as the minimum `text_box` size.
 - The minimum `text_box` width should be reduced by two grid columns so it aligns with `sticky_note` width.
+- Every board item minimum size, including `line`, `arrow`, and dynamic `table` minimum sizes, must stay aligned to whole canvas grid units.
+- When `magnet` is enabled, dragging internal `table` row and column divider lines must snap those divider lines to the canvas grid. Holding `Alt` temporarily disables this table-divider snapping.
 
 ## Item Context Menu Update Notes
 

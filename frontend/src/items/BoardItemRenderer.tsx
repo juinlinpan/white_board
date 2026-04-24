@@ -32,6 +32,7 @@ type Props = {
   onTableCellInteractionStart?: () => void;
   onTableSelectedCellsChange?: (cellIds: string[]) => void;
   tableDropTargetCellId?: string | null;
+  magnetEnabled?: boolean;
 };
 
 export function BoardItemRenderer({
@@ -56,6 +57,7 @@ export function BoardItemRenderer({
   onTableCellInteractionStart,
   onTableSelectedCellsChange,
   tableDropTargetCellId,
+  magnetEnabled,
 }: Props) {
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
   const baseStyle: React.CSSProperties = {
@@ -140,6 +142,7 @@ export function BoardItemRenderer({
             onCellInteractionStart={onTableCellInteractionStart}
             onSelectedCellsChange={onTableSelectedCellsChange}
             dropTargetCellId={tableDropTargetCellId}
+            magnetEnabled={magnetEnabled}
           />
           <button
             type="button"
