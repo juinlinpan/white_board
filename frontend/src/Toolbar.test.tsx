@@ -10,6 +10,9 @@ describe('Toolbar', () => {
         activeTool="select"
         onToolChange={() => {}}
         onTableToolClick={() => {}}
+        onImportPage={() => {}}
+        onExportPage={() => {}}
+        importExportDisabled={false}
         zoom={1.7}
         onZoomIn={() => {}}
         onZoomOut={() => {}}
@@ -27,5 +30,7 @@ describe('Toolbar', () => {
     expect(markup).toContain('1.7x');
     expect(markup).toContain('1.0x');
     expect(markup).toContain('Magnet');
+    expect(markup).toContain('檔案');
+    expect(markup).toContain('編輯');
   });
 });

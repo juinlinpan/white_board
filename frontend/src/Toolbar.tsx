@@ -82,6 +82,9 @@ type Props = {
   activeTool: ActiveTool;
   onToolChange: (tool: ActiveTool) => void;
   onTableToolClick: (clientX: number, clientY: number) => void;
+  onImportPage: () => void;
+  onExportPage: () => void;
+  importExportDisabled: boolean;
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -99,6 +102,9 @@ export function Toolbar({
   activeTool,
   onToolChange,
   onTableToolClick,
+  onImportPage,
+  onExportPage,
+  importExportDisabled,
   zoom,
   onZoomIn,
   onZoomOut,
@@ -113,6 +119,61 @@ export function Toolbar({
 }: Props) {
   return (
     <div className="toolbar">
+      <div className="toolbar-menu-group" aria-label="檔案">
+        <span className="toolbar-menu-label">檔案</span>
+        <button
+          type="button"
+          className="tool-button"
+          title="匯入目前 Page JSON"
+          disabled={importExportDisabled}
+          onClick={onImportPage}
+        >
+          <span className="tool-label">Import</span>
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          title="匯出目前 Page JSON"
+          disabled={importExportDisabled}
+          onClick={onExportPage}
+        >
+          <span className="tool-label">Export</span>
+        </button>
+      </div>
+
+      <div className="toolbar-divider" />
+
+      <div className="toolbar-menu-group" aria-label="編輯">
+        <span className="toolbar-menu-label">編輯</span>
+        <button
+          type="button"
+          className="tool-button"
+          title="Undo (Ctrl/Cmd + Z)"
+          disabled={!canUndo || historyBusy}
+          onClick={onUndo}
+        >
+          <span className="tool-icon">
+            {icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}
+          </span>
+          <span className="tool-label">Undo</span>
+        </button>
+
+        <button
+          type="button"
+          className="tool-button"
+          title="Redo (Ctrl/Cmd + Shift + Z)"
+          disabled={!canRedo || historyBusy}
+          onClick={onRedo}
+        >
+          <span className="tool-icon">
+            {icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}
+          </span>
+          <span className="tool-label">Redo</span>
+        </button>
+      </div>
+
+      <div className="toolbar-divider" />
+
       <div className="toolbar-actions">
         {TOOLS.map((tool) => (
           <button
@@ -135,34 +196,6 @@ export function Toolbar({
           </button>
         ))}
       </div>
-
-      <div className="toolbar-divider" />
-
-      <button
-        type="button"
-        className="tool-button tool-button-utility"
-        title="Undo (Ctrl/Cmd + Z)"
-        disabled={!canUndo || historyBusy}
-        onClick={onUndo}
-      >
-        <span className="tool-icon">
-          {icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}
-        </span>
-        <span className="tool-label">Undo</span>
-      </button>
-
-      <button
-        type="button"
-        className="tool-button"
-        title="Redo (Ctrl/Cmd + Shift + Z)"
-        disabled={!canRedo || historyBusy}
-        onClick={onRedo}
-      >
-        <span className="tool-icon">
-          {icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}
-        </span>
-        <span className="tool-label">Redo</span>
-      </button>
 
       <div className="toolbar-divider" />
 

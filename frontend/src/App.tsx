@@ -947,22 +947,6 @@ export function App() {
             </div>
             <div className="workspace-header-actions">
               <button
-                className="ghost-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={handleExportPageClick}
-                title={selectedPage !== null ? `Export Page「${selectedPage.name}」` : 'Export Page'}
-              >
-                Export JSON
-              </button>
-              <button
-                className="ghost-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={handleImportPageButtonClick}
-                title={selectedPage !== null ? `Import 到 Page「${selectedPage.name}」` : 'Import 到目前 Page'}
-              >
-                Import JSON
-              </button>
-              <button
                 className="ghost-button danger-button trash-button"
                 disabled={selectedPage === null || isMutating}
                 onClick={() => void handleDeletePage()}
@@ -1015,6 +999,9 @@ export function App() {
             <Canvas
               key={selectedPage.id}
               page={selectedPage}
+              onImportPage={handleImportPageButtonClick}
+              onExportPage={handleExportPageClick}
+              importExportDisabled={isMutating}
               onViewportChange={(viewport) =>
                 handlePageViewportChange(selectedPage.id, viewport)
               }
