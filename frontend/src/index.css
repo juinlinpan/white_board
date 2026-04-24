@@ -1343,6 +1343,52 @@ button {
     );
 }
 
+.canvas-zero-axis {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.canvas-zero-axis-y {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(220, 38, 38, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.canvas-zero-axis-x {
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(37, 99, 235, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.canvas-zero-axis-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  letter-spacing: 0.01em;
+}
+
+.canvas-zero-axis-y .canvas-zero-axis-label {
+  transform: translateX(6px);
+}
+
+.canvas-zero-axis-x .canvas-zero-axis-label {
+  transform: translateY(6px);
+}
+
 /* World layer */
 .canvas-world {
   position: absolute;

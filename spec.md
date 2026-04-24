@@ -28,6 +28,7 @@
 - `magnet` snaps item edges to the background grid lines while moving or resizing.
 - When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.
 - Holding `Alt` while moving or resizing should temporarily pause `magnet`.
+- Canvas should render clearly visible `X=0` and `Y=0` zero-axis guide lines above the background layer.
 
 ## Item Content Display Update Notes
 
