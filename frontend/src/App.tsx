@@ -11,9 +11,11 @@ import {
   createPage,
   createProject,
   deletePage,
+  getPageBoardData,
   getHealth,
   listPages,
   listProjects,
+  replacePageBoardState,
   reorderPages,
   updatePage,
   updateProject,
@@ -27,6 +29,11 @@ import {
   importProjectSnapshot,
   parseProjectImportText,
 } from './projectImport';
+import {
+  buildPageExportSnapshot,
+  mergeImportedPageBoardState,
+  parsePageImportText,
+} from './pageTransfer';
 import { buildAppRouteUrl, readAppRoute, type AppRoute } from './appRoute';
 import { resolveProjectEntryPageId } from './workspaceNavigation';
 
@@ -188,7 +195,8 @@ export function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
     readStoredBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY, false),
   );
-  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const projectImportInputRef = useRef<HTMLInputElement | null>(null);
+  const pageImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -624,7 +632,7 @@ export function App() {
       return;
     }
 
-    importInputRef.current?.click();
+    projectImportInputRef.current?.click();
   }
 
   async function handleImportInputChange(
@@ -646,11 +654,67 @@ export function App() {
     });
   }
 
+  function handleExportPageClick(): void {
+    if (selectedPage === null || isMutating) {
+      return;
+    }
+
+    void runMutation(async () => {
+      const boardData = await getPageBoardData(selectedPage.id);
+      const payload = buildPageExportSnapshot(boardData);
+      const blob = new Blob([payload], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safePageName = selectedPage.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      link.href = url;
+      link.download = `${safePageName.length > 0 ? safePageName : 'page'}.whiteboard-page.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    });
+  }
+
+  function handleImportPageButtonClick(): void {
+    if (selectedPage === null || isMutating) {
+      return;
+    }
+
+    pageImportInputRef.current?.click();
+  }
+
+  async function handleImportPageInputChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+
+    if (file === undefined || selectedPage === null) {
+      return;
+    }
+
+    await runMutation(async () => {
+      const importedPage = parsePageImportText(await file.text());
+      const currentBoardData = await getPageBoardData(selectedPage.id);
+      const mergedBoardState = mergeImportedPageBoardState(
+        selectedPage.id,
+        currentBoardData,
+        importedPage,
+      );
+      await replacePageBoardState(selectedPage.id, mergedBoardState);
+    });
+  }
+
   if (loadState === 'error' || appView === 'home') {
     return (
       <>
         <input
-          ref={importInputRef}
+          ref={projectImportInputRef}
           hidden
           accept=".json,.whiteboard-project.json"
           type="file"
@@ -676,11 +740,18 @@ export function App() {
   return (
     <>
       <input
-        ref={importInputRef}
+        ref={projectImportInputRef}
         hidden
         accept=".json,.whiteboard-project.json"
         type="file"
         onChange={(event) => void handleImportInputChange(event)}
+      />
+      <input
+        ref={pageImportInputRef}
+        hidden
+        accept=".json,.whiteboard-page.json"
+        type="file"
+        onChange={(event) => void handleImportPageInputChange(event)}
       />
 
       <main
@@ -875,6 +946,22 @@ export function App() {
               ) : null}
             </div>
             <div className="workspace-header-actions">
+              <button
+                className="ghost-button"
+                disabled={selectedPage === null || isMutating}
+                onClick={handleExportPageClick}
+                title={selectedPage !== null ? `Export Page「${selectedPage.name}」` : 'Export Page'}
+              >
+                Export JSON
+              </button>
+              <button
+                className="ghost-button"
+                disabled={selectedPage === null || isMutating}
+                onClick={handleImportPageButtonClick}
+                title={selectedPage !== null ? `Import 到 Page「${selectedPage.name}」` : 'Import 到目前 Page'}
+              >
+                Import JSON
+              </button>
               <button
                 className="ghost-button danger-button trash-button"
                 disabled={selectedPage === null || isMutating}
