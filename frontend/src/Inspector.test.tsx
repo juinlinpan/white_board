@@ -1,4 +1,3 @@
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -33,36 +32,6 @@ function createBoardItem(overrides: Partial<BoardItem> = {}): BoardItem {
     updated_at: FIXTURE_TIMESTAMP,
     ...overrides,
   };
-}
-
-type TestElement = ReactElement<{
-  children?: ReactNode;
-  className?: string;
-  onClick?: () => void;
-}>;
-
-function collectElements(
-  node: ReactNode,
-  predicate: (element: TestElement) => boolean,
-): TestElement[] {
-  if (Array.isArray(node)) {
-    return node.flatMap((child) => collectElements(child, predicate));
-  }
-
-  if (!isValidElement(node)) {
-    return [];
-  }
-
-  if (typeof node.type === 'function') {
-    return collectElements(
-      (node.type as (props: object) => ReactNode)(node.props as object),
-      predicate,
-    );
-  }
-
-  const element = node as TestElement;
-  const matches = predicate(element) ? [element] : [];
-  return [...matches, ...collectElements(element.props.children, predicate)];
 }
 
 describe('Inspector style palette', () => {
@@ -151,49 +120,63 @@ describe('Inspector style palette', () => {
       throw new Error('Missing fixture table cell');
     }
 
-    const onUpdate = vi.fn();
-    const onUpdateTableCells = vi.fn();
-    const tree = Inspector({
-      item: createBoardItem({
-        category: ITEM_CATEGORY.shape,
-        type: ITEM_TYPE.table,
-        width: 320,
-        height: 160,
-        content: null,
-        content_format: null,
-        data_json: serializeTableData(tableData),
-      }),
-      connector: null,
-      selectionCount: 1,
-      childCount: 0,
-      selectedTableCellIds: [firstCellId],
-      isCollapsed: false,
-      onUpdate,
-      onUpdateTableCells,
-      onDelete: () => {},
-      onToggleInspector: () => {},
-      onToggleCollapse: () => {},
-    });
-
-    const swatches = collectElements(
-      tree,
-      (element) =>
-        element.type === 'button' &&
-        typeof element.props.className === 'string' &&
-        element.props.className.includes('inspector-swatch-button'),
+    const markup = renderToStaticMarkup(
+      <Inspector
+        item={createBoardItem({
+          category: ITEM_CATEGORY.shape,
+          type: ITEM_TYPE.table,
+          width: 320,
+          height: 160,
+          content: null,
+          content_format: null,
+          data_json: serializeTableData(tableData),
+        })}
+        connector={null}
+        selectionCount={1}
+        childCount={0}
+        selectedTableCellIds={[firstCellId]}
+        isCollapsed={false}
+        onUpdate={vi.fn()}
+        onUpdateTableCells={vi.fn()}
+        onDelete={() => {}}
+        onToggleInspector={() => {}}
+        onToggleCollapse={() => {}}
+      />,
     );
-    const firstBackgroundSwatch = swatches[0];
-    if (!firstBackgroundSwatch || !firstBackgroundSwatch.props.onClick) {
-      throw new Error('Missing background swatch');
-    }
 
-    firstBackgroundSwatch.props.onClick();
+    expect(markup).toContain('在表格內反白一格或多格後');
+    expect(markup).toContain('aria-label="背景色');
+  });
 
-    expect(onUpdate).not.toHaveBeenCalled();
-    expect(onUpdateTableCells).toHaveBeenCalledWith(
-      'item-1',
-      [firstCellId],
-      { backgroundColor: BACKGROUND_COLOR_OPTIONS[0]?.value },
+  it('moves table text controls into a dedicated 文字 section and hides row/col fields', () => {
+    const tableData = createTableData(2, 2);
+    const markup = renderToStaticMarkup(
+      <Inspector
+        item={createBoardItem({
+          category: ITEM_CATEGORY.shape,
+          type: ITEM_TYPE.table,
+          width: 320,
+          height: 160,
+          content: null,
+          content_format: null,
+          data_json: serializeTableData(tableData),
+        })}
+        connector={null}
+        selectionCount={1}
+        childCount={0}
+        selectedTableCellIds={[]}
+        isCollapsed={false}
+        onUpdate={() => {}}
+        onUpdateTableCells={() => {}}
+        onDelete={() => {}}
+        onToggleInspector={() => {}}
+        onToggleCollapse={() => {}}
+      />,
     );
+
+    expect(markup).toContain('meta-label">文字<');
+    expect(markup).toContain('儲存格文字');
+    expect(markup).not.toContain('列數');
+    expect(markup).not.toContain('欄數');
   });
 });

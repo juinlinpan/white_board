@@ -44,6 +44,13 @@
 - Right-clicking empty canvas space should keep a lighter canvas context menu that exposes `paste` only.
 - Context-menu actions must stay aligned with the existing keyboard shortcuts so both entry points trigger the same behavior.
 
+## Table Text Layout And Inspector Update Notes
+
+- `table` 不需要在右下角額外顯示列 × 欄文字標籤。
+- `text_box` 內容顯示需固定置中（視覺上 always centered）。
+- `note_paper` 內容需維持如文字檔閱讀方向，自左上往右下流動顯示。
+- 右側 Inspector 在選取 `table` 時，需提供一個名為 `文字` 的區塊，集中放置文字相關調整（例如儲存格文字與字型樣式）。
+
 ## 1. 產品定位
 
 這是一個 local-first 的單人白板規劃工具，預設在使用者自己的電腦上以本機前後端服務方式運作，而不是桌面殼應用。
