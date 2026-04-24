@@ -58,6 +58,13 @@
 - [x] 讓 `note_paper` 內容維持由左上到右下的閱讀流向。
 - [x] 在右側 Inspector 為 `table` 新增 `文字` 區塊，集中文字相關調整。
 
+## Minimap And New-Page Viewport Update Notes
+
+- [x] 在 Canvas 右下角新增 mini map，顯示整張白板縮圖。
+- [x] mini map 顯示目前 viewport 對應矩形框。
+- [x] mini map 以各物件背景色圓點顯示分布。
+- [x] 新增 Page 時預設 viewport 先落在約 80% 第一象限視角。
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo

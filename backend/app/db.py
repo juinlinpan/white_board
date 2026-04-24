@@ -30,6 +30,9 @@ from app.settings import AppSettings
 
 LOGGER = logging.getLogger("whiteboard.app")
 CONNECTABLE_ITEM_TYPES = {"text_box", "sticky_note", "note_paper", "frame"}
+NEW_PAGE_VIEWPORT_X = 240.0
+NEW_PAGE_VIEWPORT_Y = 160.0
+NEW_PAGE_DEFAULT_ZOOM = 1.0
 
 
 class StorageInitializationError(RuntimeError):
@@ -400,9 +403,19 @@ class WhiteboardRepository:
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, 0, 0, 1, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (page_id, project_id, payload.name, sort_order, timestamp, timestamp),
+                (
+                    page_id,
+                    project_id,
+                    payload.name,
+                    sort_order,
+                    NEW_PAGE_VIEWPORT_X,
+                    NEW_PAGE_VIEWPORT_Y,
+                    NEW_PAGE_DEFAULT_ZOOM,
+                    timestamp,
+                    timestamp,
+                ),
             )
             row = connection.execute(
                 """
