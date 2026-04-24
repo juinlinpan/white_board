@@ -38,6 +38,8 @@
 
 - After left-clicking to select a board item, right-clicking that item must open an item context menu.
 - The item context menu must provide basic item actions: `cut`, `copy`, `paste`, and `delete`.
+- Item z-order actions should be provided in the item context menu: `move forward`, `move backward`, `bring to front`, and `send to back`.
+- The right inspector should no longer render dedicated z-order action buttons.
 - Right-clicking an unselected item may first move selection onto that item, then open the same item context menu.
 - Right-clicking empty canvas space should keep a lighter canvas context menu that exposes `paste` only.
 - Context-menu actions must stay aligned with the existing keyboard shortcuts so both entry points trigger the same behavior.

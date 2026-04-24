@@ -22,7 +22,9 @@ import {
   getFrameChildren,
   getFrameOverlapScore,
   getItemConnectorAnchors,
+  getLayerBlockIds,
   getPrimarySelectionId,
+  sortItemsByLayer,
   getUniqueItemIds,
   isFrame,
   isHiddenByCollapsedFrame,
@@ -837,6 +839,10 @@ export function Canvas({
         scope: 'canvas',
         selectionCount: 0,
         hasClipboardData: hasClipboardData(),
+        canBringForward: false,
+        canSendBackward: false,
+        canBringToFront: false,
+        canSendToBack: false,
       });
     },
     [hasClipboardData],
@@ -850,13 +856,31 @@ export function Canvas({
       if (!isSelectedItem) {
         setSelection([itemId]);
       }
+      const targetSelectionCount = isSelectedItem ? selectedIdsRef.current.length : 1;
+      const ordered = sortItemsByLayer(itemsRef.current);
+      const targetId = isSelectedItem
+        ? getPrimarySelectionId(selectedIdsRef.current)
+        : itemId;
+      const movingIds =
+        targetId === null ? [] : getLayerBlockIds(ordered, targetId);
+      const movingSet = new Set(movingIds);
+      const lastMovingIndex = ordered.reduce(
+        (lastIndex, item, index) => (movingSet.has(item.id) ? index : lastIndex),
+        -1,
+      );
+      const canBringForward = lastMovingIndex < ordered.length - 1;
+      const canSendBackward = ordered.findIndex((item) => movingSet.has(item.id)) > 0;
       setEditingId(null);
       setContextMenu({
         clientX: event.clientX,
         clientY: event.clientY,
         scope: 'selection',
-        selectionCount: isSelectedItem ? selectedIdsRef.current.length : 1,
+        selectionCount: targetSelectionCount,
         hasClipboardData: hasClipboardData(),
+        canBringForward,
+        canSendBackward,
+        canBringToFront: canBringForward,
+        canSendToBack: canSendBackward,
       });
     },
     [hasClipboardData, setSelection],
@@ -894,6 +918,26 @@ export function Canvas({
     void handleDeleteSelection();
   }, [handleDeleteSelection]);
 
+  const handleContextMenuBringForward = useCallback(() => {
+    handleLayerChange('bringForward');
+    setContextMenu(null);
+  }, [handleLayerChange]);
+
+  const handleContextMenuSendBackward = useCallback(() => {
+    handleLayerChange('sendBackward');
+    setContextMenu(null);
+  }, [handleLayerChange]);
+
+  const handleContextMenuBringToFront = useCallback(() => {
+    handleLayerChange('bringToFront');
+    setContextMenu(null);
+  }, [handleLayerChange]);
+
+  const handleContextMenuSendToBack = useCallback(() => {
+    handleLayerChange('sendToBack');
+    setContextMenu(null);
+  }, [handleLayerChange]);
+
   const contextMenuActions = useMemo(
     () =>
       contextMenu === null ? [] : getCanvasContextMenuActionKeys(contextMenu),
@@ -925,12 +969,20 @@ export function Canvas({
       copy: handleContextMenuCopy,
       paste: handleContextMenuPaste,
       delete: handleContextMenuDelete,
+      bringForward: handleContextMenuBringForward,
+      sendBackward: handleContextMenuSendBackward,
+      bringToFront: handleContextMenuBringToFront,
+      sendToBack: handleContextMenuSendToBack,
     }),
     [
       handleContextMenuCopy,
+      handleContextMenuBringForward,
+      handleContextMenuBringToFront,
       handleContextMenuCut,
       handleContextMenuDelete,
       handleContextMenuPaste,
+      handleContextMenuSendBackward,
+      handleContextMenuSendToBack,
     ],
   );
 
@@ -939,6 +991,10 @@ export function Canvas({
     copy: '複製',
     paste: '貼上',
     delete: '刪除',
+    bringForward: '移上一層',
+    sendBackward: '移下一層',
+    bringToFront: '移到最頂',
+    sendToBack: '移到最底',
   };
 
   const contextMenuActionShortcuts: Record<CanvasContextMenuActionKey, string> = {
@@ -946,6 +1002,10 @@ export function Canvas({
     copy: 'Ctrl/Cmd+C',
     paste: 'Ctrl/Cmd+V',
     delete: 'Delete',
+    bringForward: '',
+    sendBackward: '',
+    bringToFront: '',
+    sendToBack: '',
   };
 
   const contextMenuNode =
@@ -1517,8 +1577,6 @@ export function Canvas({
               handleToggleFrameCollapse(selectedItem.id);
             }
           }}
-          onBringToFront={() => handleLayerChange('bringToFront')}
-          onSendToBack={() => handleLayerChange('sendToBack')}
         />
       </div>
       {contextMenuNode}

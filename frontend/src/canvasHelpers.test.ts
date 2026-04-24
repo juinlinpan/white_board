@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BoardItem } from './api';
-import { getSelectionMagnetBounds } from './canvasHelpers';
+import { getSelectionMagnetBounds, reorderItemsForLayer } from './canvasHelpers';
 import { buildSegmentGeometry } from './segmentData';
 import { ITEM_CATEGORY, ITEM_TYPE } from './types';
 
@@ -74,5 +74,33 @@ describe('getSelectionMagnetBounds', () => {
       width: 168,
       height: 144,
     });
+  });
+});
+
+describe('reorderItemsForLayer', () => {
+  it('moves an item one level forward', () => {
+    const items = [
+      createBoardItem({ id: 'a', z_index: 0, created_at: '2026-04-20T00:00:00Z' }),
+      createBoardItem({ id: 'b', z_index: 1, created_at: '2026-04-20T00:00:01Z' }),
+      createBoardItem({ id: 'c', z_index: 2, created_at: '2026-04-20T00:00:02Z' }),
+    ];
+
+    const reordered = reorderItemsForLayer(items, 'b', 'bringForward');
+
+    expect(reordered.map((item) => item.id)).toEqual(['a', 'c', 'b']);
+    expect(reordered.map((item) => item.z_index)).toEqual([0, 1, 2]);
+  });
+
+  it('moves an item one level backward', () => {
+    const items = [
+      createBoardItem({ id: 'a', z_index: 0, created_at: '2026-04-20T00:00:00Z' }),
+      createBoardItem({ id: 'b', z_index: 1, created_at: '2026-04-20T00:00:01Z' }),
+      createBoardItem({ id: 'c', z_index: 2, created_at: '2026-04-20T00:00:02Z' }),
+    ];
+
+    const reordered = reorderItemsForLayer(items, 'b', 'sendBackward');
+
+    expect(reordered.map((item) => item.id)).toEqual(['b', 'a', 'c']);
+    expect(reordered.map((item) => item.z_index)).toEqual([0, 1, 2]);
   });
 });

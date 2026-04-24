@@ -16,6 +16,10 @@ function createContextMenuState(
     scope: 'selection',
     selectionCount: 1,
     hasClipboardData: true,
+    canBringForward: true,
+    canSendBackward: true,
+    canBringToFront: true,
+    canSendToBack: true,
     ...overrides,
   };
 }
@@ -27,6 +31,10 @@ describe('canvas context menu helpers', () => {
       'copy',
       'paste',
       'delete',
+      'bringForward',
+      'sendBackward',
+      'bringToFront',
+      'sendToBack',
     ]);
   });
 
@@ -45,7 +53,25 @@ describe('canvas context menu helpers', () => {
     expect(isCanvasContextMenuActionDisabled(state, 'cut')).toBe(true);
     expect(isCanvasContextMenuActionDisabled(state, 'copy')).toBe(true);
     expect(isCanvasContextMenuActionDisabled(state, 'delete')).toBe(true);
+    expect(isCanvasContextMenuActionDisabled(state, 'bringForward')).toBe(false);
+    expect(isCanvasContextMenuActionDisabled(state, 'sendBackward')).toBe(false);
+    expect(isCanvasContextMenuActionDisabled(state, 'bringToFront')).toBe(false);
+    expect(isCanvasContextMenuActionDisabled(state, 'sendToBack')).toBe(false);
     expect(isCanvasContextMenuActionDisabled(state, 'paste')).toBe(false);
+  });
+
+  it('disables layer actions when the selected item is already at the edge', () => {
+    const state = createContextMenuState({
+      canBringForward: false,
+      canBringToFront: false,
+      canSendBackward: true,
+      canSendToBack: true,
+    });
+
+    expect(isCanvasContextMenuActionDisabled(state, 'bringForward')).toBe(true);
+    expect(isCanvasContextMenuActionDisabled(state, 'bringToFront')).toBe(true);
+    expect(isCanvasContextMenuActionDisabled(state, 'sendBackward')).toBe(false);
+    expect(isCanvasContextMenuActionDisabled(state, 'sendToBack')).toBe(false);
   });
 
   it('disables paste when the clipboard is empty', () => {
@@ -66,7 +92,7 @@ describe('canvas context menu helpers', () => {
       ),
     ).toEqual({
       left: 408,
-      top: 312,
+      top: 168,
     });
   });
 

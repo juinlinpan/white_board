@@ -755,7 +755,11 @@ export function getItemsNearPoint(
 const FRAME_LAYOUT_PADDING_X = 20;
 const FRAME_LAYOUT_PADDING_TOP = 72;
 
-export type LayerAction = 'bringToFront' | 'sendToBack';
+export type LayerAction =
+  | 'bringToFront'
+  | 'sendToBack'
+  | 'bringForward'
+  | 'sendBackward';
 
 export function toPayload(item: BoardItem): BoardItemPayload {
   return {
@@ -1326,10 +1330,45 @@ export function reorderItemsForLayer(
 
   const movingItems = ordered.filter((item) => movingIds.has(item.id));
   const stationaryItems = ordered.filter((item) => !movingIds.has(item.id));
-  const nextOrder =
-    action === 'bringToFront'
-      ? [...stationaryItems, ...movingItems]
-      : [...movingItems, ...stationaryItems];
+  let nextOrder: BoardItem[] = ordered;
+  if (action === 'bringToFront') {
+    nextOrder = [...stationaryItems, ...movingItems];
+  } else if (action === 'sendToBack') {
+    nextOrder = [...movingItems, ...stationaryItems];
+  } else if (action === 'bringForward') {
+    const lastMovingIndex = ordered.reduce(
+      (lastIndex, item, index) => (movingIds.has(item.id) ? index : lastIndex),
+      -1,
+    );
+    const nextStationary = ordered
+      .slice(lastMovingIndex + 1)
+      .find((item) => !movingIds.has(item.id));
+    if (nextStationary) {
+      const insertAfter = stationaryItems.findIndex(
+        (item) => item.id === nextStationary.id,
+      );
+      nextOrder = [
+        ...stationaryItems.slice(0, insertAfter + 1),
+        ...movingItems,
+        ...stationaryItems.slice(insertAfter + 1),
+      ];
+    }
+  } else {
+    const firstMovingIndex = ordered.findIndex((item) => movingIds.has(item.id));
+    const prevStationary = [...ordered.slice(0, firstMovingIndex)]
+      .reverse()
+      .find((item) => !movingIds.has(item.id));
+    if (prevStationary) {
+      const insertBefore = stationaryItems.findIndex(
+        (item) => item.id === prevStationary.id,
+      );
+      nextOrder = [
+        ...stationaryItems.slice(0, insertBefore),
+        ...movingItems,
+        ...stationaryItems.slice(insertBefore),
+      ];
+    }
+  }
 
   return nextOrder.map((item, index) =>
     item.z_index === index ? item : { ...item, z_index: index },

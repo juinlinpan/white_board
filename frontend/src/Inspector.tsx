@@ -33,8 +33,6 @@ type Props = {
   onDelete: () => void;
   onToggleInspector: () => void;
   onToggleCollapse: () => void;
-  onBringToFront: () => void;
-  onSendToBack: () => void;
 };
 
 function clampDimension(
@@ -147,8 +145,6 @@ export function Inspector({
   onDelete,
   onToggleInspector,
   onToggleCollapse,
-  onBringToFront,
-  onSendToBack,
 }: Props) {
   if (isCollapsed) {
     return (
@@ -456,26 +452,6 @@ export function Inspector({
             </p>
           </section>
         ) : null}
-
-        <section className="inspector-section">
-          <p className="meta-label">Layer</p>
-          <div className="inspector-action-grid">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={onBringToFront}
-            >
-              置頂
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={onSendToBack}
-            >
-              置底
-            </button>
-          </div>
-        </section>
 
         {supportsContent || supportsTitle ? (
           <section className="inspector-section">

@@ -6,13 +6,21 @@ export type CanvasContextMenuState = {
   scope: CanvasContextMenuScope;
   selectionCount: number;
   hasClipboardData: boolean;
+  canBringForward: boolean;
+  canSendBackward: boolean;
+  canBringToFront: boolean;
+  canSendToBack: boolean;
 };
 
 export type CanvasContextMenuActionKey =
   | 'cut'
   | 'copy'
   | 'paste'
-  | 'delete';
+  | 'delete'
+  | 'bringForward'
+  | 'sendBackward'
+  | 'bringToFront'
+  | 'sendToBack';
 
 const MENU_MARGIN = 12;
 const MENU_WIDTH = 220;
@@ -26,7 +34,16 @@ export function getCanvasContextMenuActionKeys(
   state: CanvasContextMenuState,
 ): CanvasContextMenuActionKey[] {
   if (state.scope === 'selection') {
-    return ['cut', 'copy', 'paste', 'delete'];
+    return [
+      'cut',
+      'copy',
+      'paste',
+      'delete',
+      'bringForward',
+      'sendBackward',
+      'bringToFront',
+      'sendToBack',
+    ];
   }
 
   return ['paste'];
@@ -43,6 +60,14 @@ export function isCanvasContextMenuActionDisabled(
     case 'copy':
     case 'delete':
       return state.selectionCount === 0;
+    case 'bringForward':
+      return !state.canBringForward;
+    case 'sendBackward':
+      return !state.canSendBackward;
+    case 'bringToFront':
+      return !state.canBringToFront;
+    case 'sendToBack':
+      return !state.canSendToBack;
     default:
       return false;
   }

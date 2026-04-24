@@ -36,6 +36,8 @@
 
 - [x] Split the canvas right-click menu into dedicated item and canvas variants.
 - [x] Show `cut`, `copy`, `paste`, and `delete` when right-clicking a selected board item.
+- [x] Add `move forward`, `move backward`, `bring to front`, and `send to back` into the selected-item right-click menu.
+- [x] Remove z-index layer action buttons from the right inspector panel.
 - [x] Keep canvas right-click focused on `paste` so empty-space context actions stay minimal.
 - [x] Reuse the existing clipboard/delete handlers so right-click actions match keyboard shortcuts.
 - [x] Cover the new context-menu action visibility and viewport clamping with tests.
