@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { type ActiveTool } from './types';
 
 type ToolDef = {
@@ -98,6 +98,8 @@ type Props = {
   historyBusy: boolean;
 };
 
+type ToolbarMenuId = 'file' | 'edit' | null;
+
 export function Toolbar({
   activeTool,
   onToolChange,
@@ -117,130 +119,218 @@ export function Toolbar({
   onRedo,
   historyBusy,
 }: Props) {
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<ToolbarMenuId>(null);
+  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(false);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!toolbarRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+        setFileSubmenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpenMenu(null);
+        setFileSubmenuOpen(false);
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  function toggleMenu(menuId: Exclude<ToolbarMenuId, null>) {
+    setFileSubmenuOpen(false);
+    setOpenMenu((current) => (current === menuId ? null : menuId));
+  }
+
   return (
-    <div className="toolbar">
-      <div className="toolbar-menu-group" aria-label="檔案">
-        <span className="toolbar-menu-label">檔案</span>
-        <button
-          type="button"
-          className="tool-button"
-          title="匯入目前 Page JSON"
-          disabled={importExportDisabled}
-          onClick={onImportPage}
-        >
-          <span className="tool-label">Import</span>
-        </button>
-        <button
-          type="button"
-          className="tool-button"
-          title="匯出目前 Page JSON"
-          disabled={importExportDisabled}
-          onClick={onExportPage}
-        >
-          <span className="tool-label">Export</span>
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      <div className="toolbar-menu-group" aria-label="編輯">
-        <span className="toolbar-menu-label">編輯</span>
-        <button
-          type="button"
-          className="tool-button"
-          title="Undo (Ctrl/Cmd + Z)"
-          disabled={!canUndo || historyBusy}
-          onClick={onUndo}
-        >
-          <span className="tool-icon">
-            {icon('M9 14 4 9l5-5M4 9h11a5 5 0 1 1 0 10h-1')}
-          </span>
-          <span className="tool-label">Undo</span>
-        </button>
-
-        <button
-          type="button"
-          className="tool-button"
-          title="Redo (Ctrl/Cmd + Shift + Z)"
-          disabled={!canRedo || historyBusy}
-          onClick={onRedo}
-        >
-          <span className="tool-icon">
-            {icon('m15 14 5-5-5-5M20 9H9a5 5 0 1 0 0 10h1')}
-          </span>
-          <span className="tool-label">Redo</span>
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      <div className="toolbar-actions">
-        {TOOLS.map((tool) => (
+    <div ref={toolbarRef} className="toolbar">
+      <div className="toolbar-left">
+        <div className="toolbar-menu-dropdown" aria-label="檔案">
           <button
-            key={tool.id}
             type="button"
-            data-tool-id={tool.id}
-            className={`tool-button ${activeTool === tool.id ? 'is-active' : ''}`}
-            title={`${tool.label} (${tool.shortcut})`}
-            onClick={(event) => {
-              if (tool.id === 'table') {
-                onTableToolClick(event.clientX, event.clientY);
-                return;
-              }
-
-              onToolChange(tool.id);
-            }}
+            className={`tool-button toolbar-menu-trigger ${openMenu === 'file' ? 'is-active' : ''}`}
+            aria-expanded={openMenu === 'file'}
+            onClick={() => toggleMenu('file')}
           >
-            <span className="tool-icon">{tool.icon}</span>
-            <span className="tool-label">{tool.label}</span>
+            <span className="tool-label">檔案</span>
           </button>
-        ))}
-      </div>
-
-      <div className="toolbar-divider" />
-
-      <div className="toolbar-zoom-group" aria-label="Zoom controls">
-        <button
-          type="button"
-          className="tool-button tool-button-compact"
-          title="縮小"
-          onClick={onZoomOut}
-        >
-          <span className="tool-label">-</span>
-        </button>
-        <div className="toolbar-zoom-readout" aria-live="polite">
-          {zoom.toFixed(1)}x
+          {openMenu === 'file' ? (
+            <div className="toolbar-dropdown-panel" role="menu" aria-label="檔案選單">
+              <button
+                type="button"
+                className="toolbar-dropdown-item"
+                role="menuitem"
+                disabled={importExportDisabled}
+                onClick={() => {
+                  onImportPage();
+                  setOpenMenu(null);
+                }}
+              >
+                Import
+              </button>
+              <div
+                className="toolbar-dropdown-item toolbar-dropdown-item-submenu"
+                role="menuitem"
+                aria-haspopup="menu"
+                aria-expanded={fileSubmenuOpen}
+                onMouseEnter={() => setFileSubmenuOpen(true)}
+                onMouseLeave={() => setFileSubmenuOpen(false)}
+              >
+                <button type="button" className="toolbar-dropdown-item-button" disabled={importExportDisabled}>
+                  <span>Export</span>
+                  <span className="toolbar-submenu-chevron">›</span>
+                </button>
+                {fileSubmenuOpen ? (
+                  <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
+                    <button
+                      type="button"
+                      className="toolbar-dropdown-item"
+                      role="menuitem"
+                      disabled={importExportDisabled}
+                      onClick={() => {
+                        onExportPage();
+                        setOpenMenu(null);
+                        setFileSubmenuOpen(false);
+                      }}
+                    >
+                      JSON (.json)
+                    </button>
+                    <button type="button" className="toolbar-dropdown-item" role="menuitem" disabled>
+                      PNG（即將支援）
+                    </button>
+                    <button type="button" className="toolbar-dropdown-item" role="menuitem" disabled>
+                      PDF（即將支援）
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
-        <button
-          type="button"
-          className="tool-button tool-button-compact"
-          title="放大"
-          onClick={onZoomIn}
-        >
-          <span className="tool-label">+</span>
-        </button>
-        <button
-          type="button"
-          className="tool-button"
-          title="重設縮放為 1.0x"
-          onClick={onResetZoom}
-        >
-          <span className="tool-label">1.0x</span>
-        </button>
+
+        <div className="toolbar-menu-dropdown" aria-label="編輯">
+          <button
+            type="button"
+            className={`tool-button toolbar-menu-trigger ${openMenu === 'edit' ? 'is-active' : ''}`}
+            aria-expanded={openMenu === 'edit'}
+            onClick={() => toggleMenu('edit')}
+          >
+            <span className="tool-label">編輯</span>
+          </button>
+          {openMenu === 'edit' ? (
+            <div className="toolbar-dropdown-panel" role="menu" aria-label="編輯選單">
+              <button
+                type="button"
+                className="toolbar-dropdown-item"
+                title="Undo (Ctrl/Cmd + Z)"
+                role="menuitem"
+                disabled={!canUndo || historyBusy}
+                onClick={() => {
+                  onUndo();
+                  setOpenMenu(null);
+                }}
+              >
+                Undo
+              </button>
+
+              <button
+                type="button"
+                className="toolbar-dropdown-item"
+                title="Redo (Ctrl/Cmd + Shift + Z)"
+                role="menuitem"
+                disabled={!canRedo || historyBusy}
+                onClick={() => {
+                  onRedo();
+                  setOpenMenu(null);
+                }}
+              >
+                Redo
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="toolbar-divider" />
+
+        <div className="toolbar-actions">
+          {TOOLS.map((tool) => (
+            <button
+              key={tool.id}
+              type="button"
+              data-tool-id={tool.id}
+              className={`tool-button ${activeTool === tool.id ? 'is-active' : ''}`}
+              title={`${tool.label} (${tool.shortcut})`}
+              onClick={(event) => {
+                if (tool.id === 'table') {
+                  onTableToolClick(event.clientX, event.clientY);
+                  return;
+                }
+
+                onToolChange(tool.id);
+              }}
+            >
+              <span className="tool-icon">{tool.icon}</span>
+              <span className="tool-label">{tool.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <button
-        type="button"
-        aria-pressed={magnetEnabled}
-        className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-        title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動/縮放時按住 Alt 暫停）`}
-        onClick={onToggleMagnet}
-      >
-        <span className="tool-icon">
-          {icon('M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z')}
-        </span>
-        <span className="tool-label">Magnet</span>
-      </button>
+      <div className="toolbar-spacer" />
+
+      <div className="toolbar-right">
+        <button
+          type="button"
+          aria-pressed={magnetEnabled}
+          className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
+          title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動/縮放時按住 Alt 暫停）`}
+          onClick={onToggleMagnet}
+        >
+          <span className="tool-icon">
+            {icon('M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z')}
+          </span>
+          <span className="tool-label">Magnet</span>
+        </button>
+
+        <div className="toolbar-zoom-group" aria-label="Zoom controls">
+          <button
+            type="button"
+            className="tool-button tool-button-compact"
+            title="縮小"
+            onClick={onZoomOut}
+          >
+            <span className="tool-label">-</span>
+          </button>
+          <div className="toolbar-zoom-readout" aria-live="polite">
+            {zoom.toFixed(1)}x
+          </div>
+          <button
+            type="button"
+            className="tool-button tool-button-compact"
+            title="放大"
+            onClick={onZoomIn}
+          >
+            <span className="tool-label">+</span>
+          </button>
+          <button
+            type="button"
+            className="tool-button"
+            title="重設縮放為 1.0x"
+            onClick={onResetZoom}
+          >
+            <span className="tool-label">1.0x</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

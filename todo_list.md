@@ -11,6 +11,13 @@
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 
+## Toolbar Menu Update Notes
+
+- [x] Rework top toolbar into Office-like `檔案` / `編輯` clickable dropdown menus.
+- [x] Move page `import` / `export` under the `檔案` dropdown.
+- [x] Add hover-triggered right submenu under `export` to host current and future formats.
+- [x] Keep `magnet` and `zoom` controls pinned to the far-right side of the toolbar.
+
 ## Zoom And Grid Update Notes
 
 - [x] Keep the left page list zoom indicator in sync with live canvas zoom changes.
