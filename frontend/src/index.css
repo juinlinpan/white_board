@@ -1792,11 +1792,11 @@ button {
 
 .toolbar-submenu-panel {
   top: -5px;
-  left: calc(100% + 4px);
+  left: 100%;
 }
 
 .toolbar-dropdown-item,
-.toolbar-dropdown-item-button {
+.toolbar-dropdown-item-submenu-trigger {
   width: 100%;
   display: flex;
   align-items: center;
@@ -1811,23 +1811,23 @@ button {
   text-align: left;
 }
 
-.toolbar-dropdown-item-button {
-  cursor: pointer;
-}
-
 .toolbar-dropdown-item:hover:not(:disabled),
-.toolbar-dropdown-item-button:hover:not(:disabled) {
+.toolbar-dropdown-item-submenu-trigger:hover:not(:disabled) {
   background: var(--surface-dim);
 }
 
 .toolbar-dropdown-item:disabled,
-.toolbar-dropdown-item-button:disabled {
+.toolbar-dropdown-item-submenu-trigger:disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
 
 .toolbar-dropdown-item-submenu {
   position: relative;
+}
+
+.toolbar-dropdown-item-submenu-trigger {
+  cursor: pointer;
 }
 
 .toolbar-submenu-chevron {

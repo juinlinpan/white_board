@@ -170,6 +170,7 @@ export function Toolbar({
                 className="toolbar-dropdown-item"
                 role="menuitem"
                 disabled={importExportDisabled}
+                onMouseEnter={() => setFileSubmenuOpen(false)}
                 onClick={() => {
                   onImportPage();
                   setOpenMenu(null);
@@ -178,14 +179,32 @@ export function Toolbar({
                 Import
               </button>
               <div
-                className="toolbar-dropdown-item toolbar-dropdown-item-submenu"
-                role="menuitem"
-                aria-haspopup="menu"
-                aria-expanded={fileSubmenuOpen}
-                onMouseEnter={() => setFileSubmenuOpen(true)}
+                className="toolbar-dropdown-item-submenu"
+                onMouseEnter={() => {
+                  if (!importExportDisabled) {
+                    setFileSubmenuOpen(true);
+                  }
+                }}
                 onMouseLeave={() => setFileSubmenuOpen(false)}
               >
-                <button type="button" className="toolbar-dropdown-item-button" disabled={importExportDisabled}>
+                <button
+                  type="button"
+                  className="toolbar-dropdown-item toolbar-dropdown-item-submenu-trigger"
+                  role="menuitem"
+                  disabled={importExportDisabled}
+                  aria-haspopup="menu"
+                  aria-expanded={fileSubmenuOpen}
+                  onFocus={() => {
+                    if (!importExportDisabled) {
+                      setFileSubmenuOpen(true);
+                    }
+                  }}
+                  onClick={() => {
+                    if (!importExportDisabled) {
+                      setFileSubmenuOpen((current) => !current);
+                    }
+                  }}
+                >
                   <span>Export</span>
                   <span className="toolbar-submenu-chevron">›</span>
                 </button>

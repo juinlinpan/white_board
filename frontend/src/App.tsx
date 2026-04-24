@@ -53,6 +53,56 @@ type SidebarDropState = SidebarDragState & {
 const SIDEBAR_COLLAPSED_STORAGE_KEY =
   'whiteboard.workspaceSidebarCollapsed';
 
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options?: {
+    suggestedName?: string;
+    types?: Array<{
+      description?: string;
+      accept: Record<string, string[]>;
+    }>;
+  }) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: Blob | string) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
+  }>;
+};
+
+function sanitizeExportName(name: string): string {
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized.length > 0 ? normalized : 'page';
+}
+
+async function savePageSnapshotWithPicker(
+  payload: string,
+  suggestedName: string,
+): Promise<void> {
+  const pickerWindow = window as SaveFilePickerWindow;
+  if (pickerWindow.showSaveFilePicker === undefined) {
+    throw new Error('目前瀏覽器不支援「選擇儲存位置」匯出，請改用支援 File System Access API 的瀏覽器。');
+  }
+
+  const fileHandle = await pickerWindow.showSaveFilePicker({
+    suggestedName,
+    types: [
+      {
+        description: 'Whiteboard Page JSON',
+        accept: {
+          'application/json': ['.json', '.whiteboard-page.json'],
+        },
+      },
+    ],
+  });
+  const writable = await fileHandle.createWritable();
+  await writable.write(payload);
+  await writable.close();
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) {
     return error.message;
@@ -660,22 +710,21 @@ export function App() {
     }
 
     void runMutation(async () => {
-      const boardData = await getPageBoardData(selectedPage.id);
-      const payload = buildPageExportSnapshot(boardData);
-      const blob = new Blob([payload], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const safePageName = selectedPage.name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9-_]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-      link.href = url;
-      link.download = `${safePageName.length > 0 ? safePageName : 'page'}.whiteboard-page.json`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      try {
+        const boardData = await getPageBoardData(selectedPage.id);
+        const payload = buildPageExportSnapshot(boardData);
+        const safePageName = sanitizeExportName(selectedPage.name);
+        await savePageSnapshotWithPicker(
+          payload,
+          `${safePageName}.whiteboard-page.json`,
+        );
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+
+        throw error;
+      }
     });
   }
 
