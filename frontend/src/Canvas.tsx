@@ -128,6 +128,8 @@ type Props = {
 
 const MINIMAP_WIDTH = 190;
 const MINIMAP_HEIGHT = 130;
+const MINIMAP_VIEWPORT_FRAME_WIDTH = 44;
+const MINIMAP_VIEWPORT_FRAME_HEIGHT = 30;
 
 type TableInspectorSelection = {
   tableId: string;
@@ -1355,28 +1357,32 @@ export function Canvas({
                 <div
                   className="canvas-minimap-viewport"
                   style={{
-                    left: `${
-                      worldToMinimap(
-                        minimapLayout.viewportBounds.x,
-                        minimapLayout.viewportBounds.y,
-                        minimapLayout,
-                      ).x
-                    }px`,
-                    top: `${
-                      worldToMinimap(
-                        minimapLayout.viewportBounds.x,
-                        minimapLayout.viewportBounds.y,
-                        minimapLayout,
-                      ).y
-                    }px`,
-                    width: `${Math.max(
-                      minimapLayout.viewportBounds.width * minimapLayout.scale,
-                      8,
+                    left: `${Math.min(
+                      Math.max(
+                        worldToMinimap(
+                          minimapLayout.viewportBounds.x + minimapLayout.viewportBounds.width / 2,
+                          minimapLayout.viewportBounds.y + minimapLayout.viewportBounds.height / 2,
+                          minimapLayout,
+                        ).x -
+                          MINIMAP_VIEWPORT_FRAME_WIDTH / 2,
+                        0,
+                      ),
+                      MINIMAP_WIDTH - MINIMAP_VIEWPORT_FRAME_WIDTH,
                     )}px`,
-                    height: `${Math.max(
-                      minimapLayout.viewportBounds.height * minimapLayout.scale,
-                      8,
+                    top: `${Math.min(
+                      Math.max(
+                        worldToMinimap(
+                          minimapLayout.viewportBounds.x + minimapLayout.viewportBounds.width / 2,
+                          minimapLayout.viewportBounds.y + minimapLayout.viewportBounds.height / 2,
+                          minimapLayout,
+                        ).y -
+                          MINIMAP_VIEWPORT_FRAME_HEIGHT / 2,
+                        0,
+                      ),
+                      MINIMAP_HEIGHT - MINIMAP_VIEWPORT_FRAME_HEIGHT,
                     )}px`,
+                    width: `${MINIMAP_VIEWPORT_FRAME_WIDTH}px`,
+                    height: `${MINIMAP_VIEWPORT_FRAME_HEIGHT}px`,
                   }}
                 />
               </div>

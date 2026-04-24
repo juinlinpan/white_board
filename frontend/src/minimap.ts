@@ -21,8 +21,13 @@ export type MinimapLayout = {
   offsetY: number;
 };
 
-const MIN_WORLD_SPAN = 200;
-const WORLD_PADDING = 120;
+export const MAX_CANVAS_EDGE = 12_000;
+const FIXED_WORLD_BOUNDS: Rect = {
+  x: -MAX_CANVAS_EDGE,
+  y: -MAX_CANVAS_EDGE,
+  width: MAX_CANVAS_EDGE * 2,
+  height: MAX_CANVAS_EDGE * 2,
+};
 
 export function getViewportWorldBounds(
   viewport: Viewport,
@@ -39,53 +44,21 @@ export function getViewportWorldBounds(
 }
 
 export function getMinimapLayout(
-  items: BoardItem[],
+  _items: BoardItem[],
   viewport: Viewport,
   viewportSize: Size,
   minimapSize: Size,
 ): MinimapLayout {
   const viewportBounds = getViewportWorldBounds(viewport, viewportSize);
-  const itemBounds = items.map((item) => ({
-    minX: item.x,
-    minY: item.y,
-    maxX: item.x + Math.max(item.width, 8),
-    maxY: item.y + Math.max(item.height, 8),
-  }));
-
-  const minX = Math.min(
-    viewportBounds.x,
-    ...itemBounds.map((bound) => bound.minX),
-  );
-  const minY = Math.min(
-    viewportBounds.y,
-    ...itemBounds.map((bound) => bound.minY),
-  );
-  const maxX = Math.max(
-    viewportBounds.x + viewportBounds.width,
-    ...itemBounds.map((bound) => bound.maxX),
-  );
-  const maxY = Math.max(
-    viewportBounds.y + viewportBounds.height,
-    ...itemBounds.map((bound) => bound.maxY),
-  );
-
-  const worldWidth = Math.max(maxX - minX + WORLD_PADDING * 2, MIN_WORLD_SPAN);
-  const worldHeight = Math.max(maxY - minY + WORLD_PADDING * 2, MIN_WORLD_SPAN);
-  const worldBounds: Rect = {
-    x: minX - WORLD_PADDING,
-    y: minY - WORLD_PADDING,
-    width: worldWidth,
-    height: worldHeight,
-  };
   const scale = Math.min(
-    minimapSize.width / worldBounds.width,
-    minimapSize.height / worldBounds.height,
+    minimapSize.width / FIXED_WORLD_BOUNDS.width,
+    minimapSize.height / FIXED_WORLD_BOUNDS.height,
   );
-  const offsetX = (minimapSize.width - worldBounds.width * scale) / 2;
-  const offsetY = (minimapSize.height - worldBounds.height * scale) / 2;
+  const offsetX = (minimapSize.width - FIXED_WORLD_BOUNDS.width * scale) / 2;
+  const offsetY = (minimapSize.height - FIXED_WORLD_BOUNDS.height * scale) / 2;
 
   return {
-    worldBounds,
+    worldBounds: FIXED_WORLD_BOUNDS,
     viewportBounds,
     scale,
     offsetX,

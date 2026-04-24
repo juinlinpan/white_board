@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BoardItem } from './api';
 import {
+  MAX_CANVAS_EDGE,
   getMinimapLayout,
   getViewportWorldBounds,
   worldToMinimap,
@@ -67,6 +68,13 @@ describe('minimap helpers', () => {
       { width: 1000, height: 600 },
       { width: 190, height: 130 },
     );
+
+    expect(layout.worldBounds).toEqual({
+      x: -MAX_CANVAS_EDGE,
+      y: -MAX_CANVAS_EDGE,
+      width: MAX_CANVAS_EDGE * 2,
+      height: MAX_CANVAS_EDGE * 2,
+    });
 
     const topLeft = worldToMinimap(
       layout.viewportBounds.x,
