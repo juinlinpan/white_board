@@ -77,6 +77,10 @@ Import behavior is additive: if the current page is empty it fills from the
 file, and if the current page already has content the imported items are layered
 on top with regenerated local ids.
 
+Page export payloads now also include `page.item_hierarchy.roots` so downstream
+tools (including MCP/agent workflows) can directly read containment trees
+without rebuilding them from `parent_item_id`.
+
 ## Project Import
 
 The home page accepts `.json` or `.whiteboard-project.json` files with a v1
@@ -125,6 +129,8 @@ object:
 
 `board_items[].id` is required inside the import file so parent relations and
 connector references can be rebuilt correctly during import.
+When present, `page.item_hierarchy` must stay consistent with
+`board_items[].parent_item_id`.
 
 ## Single-Port Local Run
 

@@ -13,8 +13,16 @@ type ExportedPageSnapshot = {
       zoom: number;
     };
     board_items: Omit<BoardItem, 'page_id' | 'created_at' | 'updated_at'>[];
+    item_hierarchy: {
+      roots: ItemHierarchyNode[];
+    };
     connector_links: Omit<ConnectorLink, 'id'>[];
   };
+};
+
+type ItemHierarchyNode = {
+  id: string;
+  children: ItemHierarchyNode[];
 };
 
 type MergeImportedPageOptions = {
@@ -157,6 +165,79 @@ function parseSnapshotConnector(value: unknown, index: number) {
   };
 }
 
+function buildItemHierarchy(items: ReadonlyArray<{ id: string; parent_item_id: string | null }>): ItemHierarchyNode[] {
+  const childrenByParent = new Map<string, ItemHierarchyNode[]>();
+  for (const item of items) {
+    childrenByParent.set(item.id, []);
+  }
+
+  const roots: ItemHierarchyNode[] = [];
+  for (const item of items) {
+    const node: ItemHierarchyNode = {
+      id: item.id,
+      children: childrenByParent.get(item.id) ?? [],
+    };
+
+    if (item.parent_item_id === null) {
+      roots.push(node);
+      continue;
+    }
+
+    const siblings = childrenByParent.get(item.parent_item_id);
+    if (siblings === undefined) {
+      roots.push(node);
+      continue;
+    }
+
+    siblings.push(node);
+  }
+
+  return roots;
+}
+
+function parseHierarchyNode(value: unknown, label: string): ItemHierarchyNode {
+  const node = ensureObject(value, label);
+  return {
+    id: readString(node.id, `${label}.id`),
+    children: readArray(node.children, `${label}.children`, (entry, index) =>
+      parseHierarchyNode(entry, `${label}.children[${index}]`),
+    ),
+  };
+}
+
+function validateHierarchy(
+  items: ReadonlyArray<{ id: string; parent_item_id: string | null }>,
+  roots: ItemHierarchyNode[],
+): void {
+  const parentByItemId = new Map(items.map((item) => [item.id, item.parent_item_id]));
+  const visited = new Set<string>();
+  const walk = (node: ItemHierarchyNode, expectedParent: string | null) => {
+    const actualParent = parentByItemId.get(node.id);
+    if (actualParent === undefined) {
+      throw new Error(`item_hierarchy references missing board item "${node.id}".`);
+    }
+
+    if (actualParent !== expectedParent) {
+      throw new Error(
+        `item_hierarchy parent mismatch for "${node.id}". Expected "${actualParent ?? 'null'}".`,
+      );
+    }
+
+    if (visited.has(node.id)) {
+      throw new Error(`item_hierarchy contains duplicate item "${node.id}".`);
+    }
+    visited.add(node.id);
+
+    node.children.forEach((child) => walk(child, node.id));
+  };
+
+  roots.forEach((root) => walk(root, null));
+
+  if (visited.size !== items.length) {
+    throw new Error('item_hierarchy must cover all board items.');
+  }
+}
+
 export function buildPageExportSnapshot(boardData: PageBoardData): string {
   const boardItems = boardData.board_items.map((item) => ({
     id: item.id,
@@ -195,6 +276,9 @@ export function buildPageExportSnapshot(boardData: PageBoardData): string {
         zoom: boardData.page.zoom,
       },
       board_items: boardItems,
+      item_hierarchy: {
+        roots: buildItemHierarchy(boardItems),
+      },
       connector_links: connectorLinks,
     },
   };
@@ -219,6 +303,26 @@ export function parsePageImportText(text: string): ExportedPageSnapshot['page'] 
 
   const page = ensureObject(root.page, 'import file.page');
   const viewport = ensureObject(page.viewport, 'import file.page.viewport');
+  const boardItems = readArray(
+    page.board_items,
+    'import file.page.board_items',
+    parseSnapshotBoardItem,
+  );
+  const hierarchyRoots = (() => {
+    const candidate = page.item_hierarchy;
+    if (candidate === undefined) {
+      return buildItemHierarchy(boardItems);
+    }
+
+    const hierarchy = ensureObject(candidate, 'import file.page.item_hierarchy');
+    return readArray(
+      hierarchy.roots,
+      'import file.page.item_hierarchy.roots',
+      (entry, index) =>
+        parseHierarchyNode(entry, `import file.page.item_hierarchy.roots[${index}]`),
+    );
+  })();
+  validateHierarchy(boardItems, hierarchyRoots);
 
   return {
     name: readString(page.name, 'import file.page.name'),
@@ -227,11 +331,8 @@ export function parsePageImportText(text: string): ExportedPageSnapshot['page'] 
       y: readNumber(viewport.y, 'import file.page.viewport.y'),
       zoom: readNumber(viewport.zoom, 'import file.page.viewport.zoom'),
     },
-    board_items: readArray(
-      page.board_items,
-      'import file.page.board_items',
-      parseSnapshotBoardItem,
-    ),
+    board_items: boardItems,
+    item_hierarchy: { roots: hierarchyRoots },
     connector_links: readArray(
       page.connector_links,
       'import file.page.connector_links',

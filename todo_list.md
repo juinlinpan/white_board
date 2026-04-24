@@ -128,6 +128,7 @@
 - [x] 複製 Page
 - [x] 在畫布 toolbar 的「檔案」群組提供 Page JSON export / import 按鈕
 - [x] 支援匯入 Page JSON 到空白 Page，並在非空白 Page 以疊加方式匯入
+- [x] Page JSON export 新增 `item_hierarchy` 樹狀從屬資料，並在 import 驗證與 `parent_item_id` 一致
 - [x] 以拖拉調整 Page 排序
 - [x] 切換 Page
 
