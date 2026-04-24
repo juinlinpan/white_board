@@ -260,6 +260,8 @@ export function Inspector({
         ? (selectedTableCells[0]?.backgroundColor ?? resolvedStyle.backgroundColor)
         : resolvedStyle.backgroundColor
       : resolvedStyle.backgroundColor;
+  const selectedTableCellTextContent =
+    selectedTableCells.length === 1 ? selectedTableCells[0]?.content ?? '' : '';
   const hasCustomStyle =
     selectedItem.style_json !== null &&
     selectedItem.style_json.trim().length > 0;
@@ -434,22 +436,91 @@ export function Inspector({
         {isTable && tableData !== null ? (
           <section className="inspector-section">
             <p className="meta-label">Table</p>
-            <div className="inspector-grid">
-              <label>
-                列數
-                <input type="number" readOnly value={tableData.rows} />
-              </label>
-              <label>
-                欄數
-                <input type="number" readOnly value={tableData.cols} />
-              </label>
-            </div>
             <p className="inspector-meta">
               已填入 {countFilledTableCells(tableData)}/{tableData.rows * tableData.cols} 格。
             </p>
             <p className="inspector-meta">
               在表格內反白一格或多格後，底下 Style 的背景色會只套用到反白儲存格。
             </p>
+          </section>
+        ) : null}
+
+        {isTable ? (
+          <section className="inspector-section">
+            <p className="meta-label">文字</p>
+            <label className="inspector-field">
+              儲存格文字
+              <textarea
+                className="inspector-textarea"
+                value={selectedTableCellTextContent}
+                disabled={selectedTableCells.length === 0}
+                placeholder={
+                  selectedTableCells.length === 0
+                    ? '請先在表格中選取儲存格'
+                    : selectedTableCells.length > 1
+                      ? `將套用到 ${selectedTableCells.length} 個儲存格`
+                      : undefined
+                }
+                onChange={(e) =>
+                  onUpdateTableCells(selectedItem.id, selectedTableCellIds, {
+                    content: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <div className="inspector-color-grid">
+              <ColorPaletteField
+                label="文字色"
+                options={TEXT_COLOR_OPTIONS}
+                selectedValue={resolvedStyle.textColor}
+                tone="text"
+                onSelect={(value) => handleStyleChange({ textColor: value })}
+              />
+            </div>
+            <div className="inspector-grid">
+              <label>
+                字級
+                <input
+                  type="number"
+                  min={12}
+                  max={32}
+                  value={resolvedStyle.fontSize}
+                  onChange={(e) => handleFontSizeChange(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="inspector-toggle-group">
+              <button
+                type="button"
+                className={`ghost-button ${
+                  resolvedStyle.fontWeight === 'bold' ? 'is-active' : ''
+                }`}
+                onClick={() =>
+                  handleStyleChange({
+                    fontWeight:
+                      resolvedStyle.fontWeight === 'bold' ? 'normal' : 'bold',
+                  })
+                }
+              >
+                粗體
+              </button>
+              <button
+                type="button"
+                className={`ghost-button ${
+                  resolvedStyle.fontStyle === 'italic' ? 'is-active' : ''
+                }`}
+                onClick={() =>
+                  handleStyleChange({
+                    fontStyle:
+                      resolvedStyle.fontStyle === 'italic'
+                        ? 'normal'
+                        : 'italic',
+                  })
+                }
+              >
+                斜體
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -525,58 +596,66 @@ export function Inspector({
                     : handleStyleChange({ backgroundColor: value })
                 }
               />
-              <ColorPaletteField
-                label="文字色"
-                options={TEXT_COLOR_OPTIONS}
-                selectedValue={resolvedStyle.textColor}
-                tone="text"
-                onSelect={(value) => handleStyleChange({ textColor: value })}
-              />
-            </div>
-            <div className="inspector-grid">
-              <label>
-                字級
-                <input
-                  type="number"
-                  min={12}
-                  max={32}
-                  value={resolvedStyle.fontSize}
-                  onChange={(e) => handleFontSizeChange(e.target.value)}
+              {!isTable ? (
+                <ColorPaletteField
+                  label="文字色"
+                  options={TEXT_COLOR_OPTIONS}
+                  selectedValue={resolvedStyle.textColor}
+                  tone="text"
+                  onSelect={(value) => handleStyleChange({ textColor: value })}
                 />
-              </label>
+              ) : null}
             </div>
-            <div className="inspector-toggle-group">
-              <button
-                type="button"
-                className={`ghost-button ${
-                  resolvedStyle.fontWeight === 'bold' ? 'is-active' : ''
-                }`}
-                onClick={() =>
-                  handleStyleChange({
-                    fontWeight:
-                      resolvedStyle.fontWeight === 'bold' ? 'normal' : 'bold',
-                  })
-                }
-              >
-                粗體
-              </button>
-              <button
-                type="button"
-                className={`ghost-button ${
-                  resolvedStyle.fontStyle === 'italic' ? 'is-active' : ''
-                }`}
-                onClick={() =>
-                  handleStyleChange({
-                    fontStyle:
-                      resolvedStyle.fontStyle === 'italic'
-                        ? 'normal'
-                        : 'italic',
-                  })
-                }
-              >
-                斜體
-              </button>
-            </div>
+            {!isTable ? (
+              <>
+                <div className="inspector-grid">
+                  <label>
+                    字級
+                    <input
+                      type="number"
+                      min={12}
+                      max={32}
+                      value={resolvedStyle.fontSize}
+                      onChange={(e) => handleFontSizeChange(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="inspector-toggle-group">
+                  <button
+                    type="button"
+                    className={`ghost-button ${
+                      resolvedStyle.fontWeight === 'bold' ? 'is-active' : ''
+                    }`}
+                    onClick={() =>
+                      handleStyleChange({
+                        fontWeight:
+                          resolvedStyle.fontWeight === 'bold'
+                            ? 'normal'
+                            : 'bold',
+                      })
+                    }
+                  >
+                    粗體
+                  </button>
+                  <button
+                    type="button"
+                    className={`ghost-button ${
+                      resolvedStyle.fontStyle === 'italic' ? 'is-active' : ''
+                    }`}
+                    onClick={() =>
+                      handleStyleChange({
+                        fontStyle:
+                          resolvedStyle.fontStyle === 'italic'
+                            ? 'normal'
+                            : 'italic',
+                      })
+                    }
+                  >
+                    斜體
+                  </button>
+                </div>
+              </>
+            ) : null}
             <p className="inspector-meta">
               背景固定 7
               色，文字固定高飽和色票；變更會即時套用到畫布並自動儲存。

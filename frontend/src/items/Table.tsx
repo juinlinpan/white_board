@@ -690,12 +690,6 @@ export function Table({
         </div>
       )}
 
-      {/* Not-editing label */}
-      {!isEditing && (
-        <div className="table-v2-label">
-          {tableData.rows} × {tableData.cols}
-        </div>
-      )}
     </div>
   );
 }

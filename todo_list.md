@@ -42,6 +42,13 @@
 - [x] Reuse the existing clipboard/delete handlers so right-click actions match keyboard shortcuts.
 - [x] Cover the new context-menu action visibility and viewport clamping with tests.
 
+## Table Text Layout And Inspector Update Notes
+
+- [x] 移除 `table` 右下角的列 × 欄標籤顯示。
+- [x] 讓 `text_box` 內容固定置中顯示。
+- [x] 讓 `note_paper` 內容維持由左上到右下的閱讀流向。
+- [x] 在右側 Inspector 為 `table` 新增 `文字` 區塊，集中文字相關調整。
+
 依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
 
 ## MVP Todo
