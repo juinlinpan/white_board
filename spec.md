@@ -24,6 +24,7 @@
 
 - The left workspace page list must reflect the active page zoom immediately while the user changes zoom in the canvas.
 - The toolbar must expose a zoom utility cluster with `-`, `+`, a current zoom readout in `x.x` format, and a `1.0x` reset action.
+- The zoom reset action defaults to `1.0x`, and a compact adjacent control must let the user adjust the reset target in `0.1x` increments such as `0.5x` or `1.5x`.
 - `magnet` should be enabled by default when the canvas loads.
 - `magnet` snaps item edges to the background grid lines while moving or resizing.
 - When `magnet` is enabled, newly created items and freeform `line` / `arrow` points should also snap to the background grid unless they attach to an item anchor.

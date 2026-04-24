@@ -14,9 +14,11 @@ describe('Toolbar', () => {
         onExportPage={() => {}}
         importExportDisabled={false}
         zoom={1.7}
+        resetZoom={1.5}
         onZoomIn={() => {}}
         onZoomOut={() => {}}
         onResetZoom={() => {}}
+        onResetZoomAdjust={() => {}}
         magnetEnabled
         onToggleMagnet={() => {}}
         canUndo
@@ -28,9 +30,10 @@ describe('Toolbar', () => {
     );
 
     expect(markup).toContain('1.7x');
-    expect(markup).toContain('1.0x');
+    expect(markup).toContain('1.5x');
+    expect(markup).toContain('Adjust reset zoom target');
     expect(markup).toContain('Magnet');
-    expect(markup).toContain('檔案');
-    expect(markup).toContain('編輯');
+    expect(markup).toContain('File');
+    expect(markup).toContain('Edit');
   });
 });

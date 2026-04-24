@@ -26,31 +26,31 @@ const icon = (d: string) => (
 const TOOLS: ToolDef[] = [
   {
     id: 'select',
-    label: '選取',
+    label: 'Select',
     icon: icon('M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z'),
     shortcut: 'V',
   },
   {
     id: 'line',
-    label: '線條',
+    label: 'Line',
     icon: icon('M4 20 20 4'),
     shortcut: 'L',
   },
   {
     id: 'table',
-    label: '表格',
+    label: 'Table',
     icon: icon('M3 5h18M3 12h18M3 19h18M8 5v14M16 5v14M3 5h18v14H3z'),
     shortcut: 'T',
   },
   {
     id: 'text_box',
-    label: '文字框',
+    label: 'Text',
     icon: icon('M4 7V4h16v3M9 20h6M12 4v16'),
     shortcut: 'X',
   },
   {
     id: 'sticky_note',
-    label: '便條',
+    label: 'Sticky',
     icon: icon(
       'M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-5-5zM15 3v5h6',
     ),
@@ -58,7 +58,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     id: 'note_paper',
-    label: '筆記紙',
+    label: 'Note',
     icon: icon(
       'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8',
     ),
@@ -66,13 +66,13 @@ const TOOLS: ToolDef[] = [
   },
   {
     id: 'frame',
-    label: '框架',
+    label: 'Frame',
     icon: icon('M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18'),
     shortcut: 'F',
   },
   {
     id: 'arrow',
-    label: '箭頭',
+    label: 'Arrow',
     icon: icon('M5 12h14M12 5l7 7-7 7'),
     shortcut: 'A',
   },
@@ -86,9 +86,11 @@ type Props = {
   onExportPage: () => void;
   importExportDisabled: boolean;
   zoom: number;
+  resetZoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
+  onResetZoomAdjust: (direction: -1 | 1) => void;
   magnetEnabled: boolean;
   onToggleMagnet: () => void;
   canUndo: boolean;
@@ -108,9 +110,11 @@ export function Toolbar({
   onExportPage,
   importExportDisabled,
   zoom,
+  resetZoom,
   onZoomIn,
   onZoomOut,
   onResetZoom,
+  onResetZoomAdjust,
   magnetEnabled,
   onToggleMagnet,
   canUndo,
@@ -122,12 +126,14 @@ export function Toolbar({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<ToolbarMenuId>(null);
   const [fileSubmenuOpen, setFileSubmenuOpen] = useState(false);
+  const [resetZoomEditorOpen, setResetZoomEditorOpen] = useState(false);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       if (!toolbarRef.current?.contains(event.target as Node)) {
         setOpenMenu(null);
         setFileSubmenuOpen(false);
+        setResetZoomEditorOpen(false);
       }
     }
 
@@ -135,6 +141,7 @@ export function Toolbar({
       if (event.key === 'Escape') {
         setOpenMenu(null);
         setFileSubmenuOpen(false);
+        setResetZoomEditorOpen(false);
       }
     }
 
@@ -154,17 +161,17 @@ export function Toolbar({
   return (
     <div ref={toolbarRef} className="toolbar">
       <div className="toolbar-left">
-        <div className="toolbar-menu-dropdown" aria-label="檔案">
+        <div className="toolbar-menu-dropdown" aria-label="File">
           <button
             type="button"
             className={`tool-button toolbar-menu-trigger ${openMenu === 'file' ? 'is-active' : ''}`}
             aria-expanded={openMenu === 'file'}
             onClick={() => toggleMenu('file')}
           >
-            <span className="tool-label">檔案</span>
+            <span className="tool-label">File</span>
           </button>
           {openMenu === 'file' ? (
-            <div className="toolbar-dropdown-panel" role="menu" aria-label="檔案選單">
+            <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
               <button
                 type="button"
                 className="toolbar-dropdown-item"
@@ -206,7 +213,7 @@ export function Toolbar({
                   }}
                 >
                   <span>Export</span>
-                  <span className="toolbar-submenu-chevron">›</span>
+                  <span className="toolbar-submenu-chevron">&gt;</span>
                 </button>
                 {fileSubmenuOpen ? (
                   <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
@@ -224,10 +231,10 @@ export function Toolbar({
                       JSON (.json)
                     </button>
                     <button type="button" className="toolbar-dropdown-item" role="menuitem" disabled>
-                      PNG（即將支援）
+                      PNG (coming soon)
                     </button>
                     <button type="button" className="toolbar-dropdown-item" role="menuitem" disabled>
-                      PDF（即將支援）
+                      PDF (coming soon)
                     </button>
                   </div>
                 ) : null}
@@ -236,17 +243,17 @@ export function Toolbar({
           ) : null}
         </div>
 
-        <div className="toolbar-menu-dropdown" aria-label="編輯">
+        <div className="toolbar-menu-dropdown" aria-label="Edit">
           <button
             type="button"
             className={`tool-button toolbar-menu-trigger ${openMenu === 'edit' ? 'is-active' : ''}`}
             aria-expanded={openMenu === 'edit'}
             onClick={() => toggleMenu('edit')}
           >
-            <span className="tool-label">編輯</span>
+            <span className="tool-label">Edit</span>
           </button>
           {openMenu === 'edit' ? (
-            <div className="toolbar-dropdown-panel" role="menu" aria-label="編輯選單">
+            <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
               <button
                 type="button"
                 className="toolbar-dropdown-item"
@@ -311,7 +318,7 @@ export function Toolbar({
           type="button"
           aria-pressed={magnetEnabled}
           className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-          title={`Magnet ${magnetEnabled ? '開啟' : '關閉'}（移動/縮放時按住 Alt 暫停）`}
+          title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
           onClick={onToggleMagnet}
         >
           <span className="tool-icon">
@@ -321,33 +328,76 @@ export function Toolbar({
         </button>
 
         <div className="toolbar-zoom-group" aria-label="Zoom controls">
-          <button
-            type="button"
-            className="tool-button tool-button-compact"
-            title="縮小"
-            onClick={onZoomOut}
-          >
-            <span className="tool-label">-</span>
-          </button>
-          <div className="toolbar-zoom-readout" aria-live="polite">
-            {zoom.toFixed(1)}x
+          <div className="toolbar-zoom-stepper" aria-label="Current zoom controls">
+            <button
+              type="button"
+              className="tool-button tool-button-compact toolbar-zoom-step"
+              title="Zoom in"
+              onClick={onZoomIn}
+            >
+              <span className="tool-label">+</span>
+            </button>
+            <div className="toolbar-zoom-readout" aria-live="polite">
+              <span className="toolbar-zoom-value">{zoom.toFixed(1)}x</span>
+              <span className="toolbar-zoom-caption">Zoom</span>
+            </div>
+            <button
+              type="button"
+              className="tool-button tool-button-compact toolbar-zoom-step"
+              title="Zoom out"
+              onClick={onZoomOut}
+            >
+              <span className="tool-label">-</span>
+            </button>
           </div>
-          <button
-            type="button"
-            className="tool-button tool-button-compact"
-            title="放大"
-            onClick={onZoomIn}
-          >
-            <span className="tool-label">+</span>
-          </button>
-          <button
-            type="button"
-            className="tool-button"
-            title="重設縮放為 1.0x"
-            onClick={onResetZoom}
-          >
-            <span className="tool-label">1.0x</span>
-          </button>
+          <div className="toolbar-zoom-reset-tools">
+            <button
+              type="button"
+              className="tool-button toolbar-zoom-reset-button"
+              title={'Reset zoom to ' + resetZoom.toFixed(1) + 'x'}
+              onClick={onResetZoom}
+            >
+              <span className="toolbar-zoom-reset-action">Reset</span>
+              <span className="toolbar-zoom-reset-target">
+                {resetZoom.toFixed(1)}x
+              </span>
+            </button>
+            <button
+              type="button"
+              className="tool-button toolbar-zoom-adjust-button"
+              title="Adjust reset zoom target"
+              aria-expanded={resetZoomEditorOpen}
+              onClick={() => setResetZoomEditorOpen((current) => !current)}
+            >
+              <span className="tool-label">Adjust</span>
+            </button>
+            {resetZoomEditorOpen ? (
+              <div className="toolbar-zoom-reset-panel" aria-label="Reset zoom target controls">
+                <span className="toolbar-zoom-reset-panel-label">
+                  Reset target
+                </span>
+                <button
+                  type="button"
+                  className="tool-button tool-button-compact"
+                  title="Lower reset zoom target by 0.1x"
+                  onClick={() => onResetZoomAdjust(-1)}
+                >
+                  <span className="tool-label">-</span>
+                </button>
+                <span className="toolbar-zoom-reset-value">
+                  {resetZoom.toFixed(1)}x
+                </span>
+                <button
+                  type="button"
+                  className="tool-button tool-button-compact"
+                  title="Raise reset zoom target by 0.1x"
+                  onClick={() => onResetZoomAdjust(1)}
+                >
+                  <span className="tool-label">+</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

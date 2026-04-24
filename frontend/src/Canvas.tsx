@@ -110,6 +110,7 @@ import {
   type CanvasContextMenuState,
 } from './canvasContextMenu';
 import {
+  adjustResetZoomByStep,
   adjustZoomByStep,
   getDisplayZoom,
   getResetZoom,
@@ -138,6 +139,7 @@ type TableInspectorSelection = {
 
 const INSPECTOR_COLLAPSED_STORAGE_KEY =
   'whiteboard.canvasInspectorCollapsed';
+const RESET_ZOOM_STORAGE_KEY = 'whiteboard.resetZoomTarget';
 
 function readStoredBoolean(key: string, fallbackValue: boolean): boolean {
   if (typeof window === 'undefined') {
@@ -154,6 +156,20 @@ function readStoredBoolean(key: string, fallbackValue: boolean): boolean {
   }
 
   return fallbackValue;
+}
+
+function readStoredNumber(key: string, fallbackValue: number): number {
+  if (typeof window === 'undefined') {
+    return fallbackValue;
+  }
+
+  const rawValue = window.localStorage.getItem(key);
+  if (rawValue === null) {
+    return fallbackValue;
+  }
+
+  const storedValue = Number(rawValue);
+  return Number.isFinite(storedValue) ? storedValue : fallbackValue;
 }
 
 export function Canvas({
@@ -185,6 +201,9 @@ export function Canvas({
     },
   );
   const [magnetEnabled, setMagnetEnabled] = useState(true);
+  const [resetZoomTarget, setResetZoomTarget] = useState(() =>
+    getResetZoom(readStoredNumber(RESET_ZOOM_STORAGE_KEY, getResetZoom())),
+  );
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const [segmentDraft, setSegmentDraft] = useState<SegmentDraftState | null>(
     null,
@@ -494,6 +513,17 @@ export function Canvas({
       String(isInspectorCollapsed),
     );
   }, [isInspectorCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      RESET_ZOOM_STORAGE_KEY,
+      String(resetZoomTarget),
+    );
+  }, [resetZoomTarget]);
 
   useEffect(() => {
     const currentOrigin = toolbarTableInsertOriginRef.current;
@@ -1130,7 +1160,11 @@ export function Canvas({
   }
 
   function handleResetZoom() {
-    handleViewportZoom(getResetZoom());
+    handleViewportZoom(getResetZoom(resetZoomTarget));
+  }
+
+  function handleResetZoomAdjust(direction: -1 | 1) {
+    setResetZoomTarget((current) => adjustResetZoomByStep(current, direction));
   }
 
   function startSegmentDraft(
@@ -1280,9 +1314,11 @@ export function Canvas({
         onExportPage={onExportPage}
         importExportDisabled={importExportDisabled}
         zoom={getDisplayZoom(viewport.zoom)}
+        resetZoom={resetZoomTarget}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onResetZoom={handleResetZoom}
+        onResetZoomAdjust={handleResetZoomAdjust}
         magnetEnabled={magnetEnabled}
         onToggleMagnet={() => setMagnetEnabled((current) => !current)}
         canUndo={canUndo}

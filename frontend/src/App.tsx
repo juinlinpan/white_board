@@ -850,25 +850,100 @@ export function App() {
             {isSidebarCollapsed ? '>' : '<'}
           </button>
           <section className="sidebar-header">
-            <div className="section-title-row sidebar-title-row">
+            <div className="sidebar-brand-row">
               <div>
                 <h1>Whiteboard</h1>
                 <p className="sidebar-copy">
-                  {selectedProject !== null
-                    ? `目前 Project：${selectedProject.name}`
-                    : '回到首頁或建立新的規劃空間'}
+                  {selectedProject !== null ? 'Local workspace' : 'Select a project'}
                 </p>
+              </div>
               <button
-                  className="ghost-button sidebar-home-button"
-                aria-label="首頁"
+                className="ghost-button sidebar-home-button"
+                aria-label="Home"
                 disabled={isMutating}
                 onClick={() => goHome()}
-                title="首頁"
+                title="Home"
               >
-                首頁
-                </button>
-              </div>
+                Home
+              </button>
             </div>
+          </section>
+          <section className="sidebar-section sidebar-name-panel">
+            <div className="section-title-row">
+              <h2>Manage</h2>
+            </div>
+            {selectedProject !== null ? (
+              <div className="sidebar-name-stack">
+                <div className="sidebar-name-group">
+                  <label className="sidebar-name-label" htmlFor="sidebar-project-name-input">
+                    Project
+                  </label>
+                  <div className="sidebar-name-edit-row">
+                    <input
+                      id="sidebar-project-name-input"
+                      className="sidebar-name-input sidebar-project-name-input"
+                      disabled={isMutating}
+                      type="text"
+                      value={projectNameDraft}
+                      onChange={(event) => setProjectNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleSaveProjectName();
+                        }
+                      }}
+                    />
+                    <button
+                      className="ghost-button sidebar-inline-save"
+                      disabled={
+                        isMutating ||
+                        normalizedProjectNameDraft.length === 0 ||
+                        normalizedProjectNameDraft === selectedProject.name
+                      }
+                      onClick={() => void handleSaveProjectName()}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+                {selectedPage !== null ? (
+                  <div className="sidebar-name-group">
+                    <label className="sidebar-name-label" htmlFor="sidebar-page-name-input">
+                      Page
+                    </label>
+                    <div className="sidebar-name-edit-row">
+                      <input
+                        id="sidebar-page-name-input"
+                        className="sidebar-name-input sidebar-page-name-input"
+                        disabled={isMutating}
+                        type="text"
+                        value={pageNameDraft}
+                        onChange={(event) => setPageNameDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void handleSavePageName();
+                          }
+                        }}
+                      />
+                      <button
+                        className="ghost-button sidebar-inline-save"
+                        disabled={
+                          isMutating ||
+                          normalizedPageNameDraft.length === 0 ||
+                          normalizedPageNameDraft === selectedPage.name
+                        }
+                        onClick={() => void handleSavePageName()}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="empty-copy">Open a project to manage names.</p>
+            )}
           </section>
           <section className="sidebar-section">
             <div className="section-title-row">
@@ -876,11 +951,11 @@ export function App() {
               <span className="count-badge">{pages.length}</span>
             </div>
             {selectedProject === null ? (
-              <p className="empty-copy">先選擇一個 Project 才能管理 Page。</p>
+              <p className="empty-copy">Select a project to view pages.</p>
             ) : isLoadingPages ? (
-              <p className="empty-copy">正在載入 Page...</p>
+              <p className="empty-copy">Loading pages...</p>
             ) : pages.length === 0 ? (
-              <p className="empty-copy">這個 Project 還沒有 Page。</p>
+              <p className="empty-copy">This project has no pages yet.</p>
             ) : (
               <div className="list-stack">
                 {pages.map((page) => {
@@ -917,12 +992,12 @@ export function App() {
                         draggable={!isMutating && pages.length > 1}
                         aria-label={
                           pages.length > 1
-                            ? `按住拖拉排序 Page ${page.name}`
+                            ? `Move page ${page.name}`
                             : undefined
                         }
                         title={
                           pages.length > 1
-                            ? `按住拖拉排序 Page ${page.name}`
+                            ? `Move page ${page.name}`
                             : undefined
                         }
                         onDragStart={(event) =>
@@ -944,100 +1019,32 @@ export function App() {
               disabled={selectedProject === null || isMutating}
               onClick={() => void handleCreatePage()}
             >
-              ＋ 新增 Page
+              New page
             </button>
           </section>
         </aside>
 
         <section className="workspace">
-          <header className="workspace-header">
-            <div className="workspace-project-block">
-              {selectedProject !== null ? (
-                <div className="workspace-project-name-row">
-                  <label
-                    className="workspace-field-label"
-                    htmlFor="project-name-input"
-                  >
-                    project name:
-                  </label>
-                  <input
-                    id="project-name-input"
-                    className="workspace-project-name-input"
-                    disabled={isMutating}
-                    type="text"
-                    value={projectNameDraft}
-                    onChange={(event) => setProjectNameDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void handleSaveProjectName();
-                      }
-                    }}
-                  />
-                  <button
-                    className="ghost-button"
-                    disabled={
-                      isMutating ||
-                      normalizedProjectNameDraft.length === 0 ||
-                      normalizedProjectNameDraft === selectedProject.name
-                    }
-                    onClick={() => void handleSaveProjectName()}
-                  >
-                    Save
-                  </button>
-                </div>
-              ) : (
-                <h2>Select a project</h2>
-              )}
-              {selectedPage !== null ? (
-                <div className="workspace-page-name-row">
-                  <label className="workspace-field-label" htmlFor="page-name-input">
-                    page name:
-                  </label>
-                  <input
-                    id="page-name-input"
-                    className="workspace-page-name-input"
-                    disabled={isMutating}
-                    type="text"
-                    value={pageNameDraft}
-                    onChange={(event) => setPageNameDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void handleSavePageName();
-                      }
-                    }}
-                  />
-                  <button
-                    className="ghost-button"
-                    disabled={
-                      isMutating ||
-                      normalizedPageNameDraft.length === 0 ||
-                      normalizedPageNameDraft === selectedPage.name
-                    }
-                    onClick={() => void handleSavePageName()}
-                  >
-                    Save
-                  </button>
-                </div>
-              ) : null}
+          <header className="workspace-header workspace-header-compact">
+            <div className="workspace-current-path" aria-live="polite">
+              <span>{selectedProject?.name ?? 'No project'}</span>
+              <strong>{selectedPage?.name ?? 'No page selected'}</strong>
             </div>
             <div className="workspace-header-actions">
               <button
                 className="ghost-button danger-button trash-button"
                 disabled={selectedPage === null || isMutating}
                 onClick={() => void handleDeletePage()}
-                title={selectedPage !== null ? `刪除 Page「${selectedPage.name}」` : '刪除 Page'}
-                aria-label={selectedPage !== null ? `刪除 Page「${selectedPage.name}」` : '刪除 Page'}
+                title={selectedPage !== null ? `Delete page ${selectedPage.name}` : 'Delete page'}
+                aria-label={selectedPage !== null ? `Delete page ${selectedPage.name}` : 'Delete page'}
               >
-                🗑
+                Delete
               </button>
               <div className="status-pill">
                 <span className={`status-indicator status-${healthState}`} />
               </div>
             </div>
           </header>
-
           {errorMessage !== null ? (
             <div className="error-banner">{errorMessage}</div>
           ) : null}
@@ -1045,30 +1052,30 @@ export function App() {
           {selectedProject === null ? (
             <section className="hero-panel">
               <div className="hero-copy">
-                <h3>建立你的第一個 Project</h3>
-                <p className="hero-text">回到首頁建立或匯入新的規劃空間。</p>
+                <h3>Select a project</h3>
+                <p className="hero-text">Open a project from the home screen to start working on a board.</p>
                 <button
                   className="primary-button"
                   disabled={isMutating}
                   onClick={() => goHome()}
                 >
-                  回到首頁
+                  Go home
                 </button>
               </div>
             </section>
           ) : selectedPage === null ? (
             <section className="hero-panel">
               <div className="hero-copy">
-                <h3>新增 Page 到「{selectedProject.name}」</h3>
+                <h3>Create a page in {selectedProject.name}</h3>
                 <p className="hero-text">
-                  Page 是白板的承載單位，建立後即可開始規劃。
+                  Add a page to start arranging notes, tables, frames, and connectors.
                 </p>
                 <button
                   className="primary-button"
                   disabled={isMutating}
                   onClick={() => void handleCreatePage()}
                 >
-                  新增 Page
+                  New page
                 </button>
               </div>
             </section>

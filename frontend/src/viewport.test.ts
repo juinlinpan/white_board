@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  adjustResetZoomByStep,
   adjustZoomByStep,
   getDisplayZoom,
   getResetZoom,
+  normalizeResetZoom,
   zoomViewportAroundPoint,
 } from './viewport';
 
@@ -41,5 +43,15 @@ describe('viewport helpers', () => {
 
   it('returns the canonical reset zoom value', () => {
     expect(getResetZoom()).toBe(1);
+  });
+
+  it('normalizes custom reset zoom targets to tenth-step increments', () => {
+    expect(normalizeResetZoom(1.54)).toBe(1.5);
+    expect(normalizeResetZoom(1.55)).toBe(1.6);
+  });
+
+  it('adjusts custom reset zoom targets in tenth-step increments', () => {
+    expect(adjustResetZoomByStep(1, 1)).toBe(1.1);
+    expect(adjustResetZoomByStep(1, -1)).toBe(0.9);
   });
 });

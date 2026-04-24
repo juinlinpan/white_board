@@ -36,8 +36,19 @@ export function adjustZoomByStep(
   );
 }
 
-export function getResetZoom(): number {
-  return DEFAULT_ZOOM;
+export function normalizeResetZoom(zoom: number): number {
+  return clampZoom(roundToStep(zoom, TOOLBAR_ZOOM_STEP));
+}
+
+export function adjustResetZoomByStep(
+  currentZoom: number,
+  direction: -1 | 1,
+): number {
+  return normalizeResetZoom(currentZoom + direction * TOOLBAR_ZOOM_STEP);
+}
+
+export function getResetZoom(resetZoom = DEFAULT_ZOOM): number {
+  return normalizeResetZoom(resetZoom);
 }
 
 export function zoomViewportAroundPoint(
