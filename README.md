@@ -65,6 +65,18 @@ The app now opens on a dedicated home page. From there you can:
 Import always creates a new local project in SQLite and regenerates page / item /
 connector ids to avoid collisions with existing data.
 
+## Page JSON Export / Import
+
+Inside the workspace top header, the current `Page` now supports:
+
+- `Export JSON`: dump the current page viewport + board items + connectors to a
+  local `.whiteboard-page.json` file
+- `Import JSON`: import that page snapshot into the currently opened page
+
+Import behavior is additive: if the current page is empty it fills from the
+file, and if the current page already has content the imported items are layered
+on top with regenerated local ids.
+
 ## Project Import
 
 The home page accepts `.json` or `.whiteboard-project.json` files with a v1

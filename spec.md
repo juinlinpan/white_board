@@ -172,6 +172,8 @@ Project 匯入規則：
 - 重新命名 Page
 - 刪除 Page
 - 複製 Page
+- 匯出目前 Page 為 JSON snapshot
+- 從 JSON 匯入 Page 內容到目前 Page（若目前 Page 已有內容則直接疊加）
 - 以拖拉調整 Page 排序
 - 切換 Page
 

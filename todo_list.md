@@ -110,6 +110,8 @@
 - [x] 重新命名 Page
 - [x] 刪除 Page
 - [x] 複製 Page
+- [x] 在 workspace 上方橫幅提供 Page JSON export / import 按鈕
+- [x] 支援匯入 Page JSON 到空白 Page，並在非空白 Page 以疊加方式匯入
 - [x] 以拖拉調整 Page 排序
 - [x] 切換 Page
 
