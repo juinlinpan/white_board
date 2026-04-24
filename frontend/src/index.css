@@ -1744,7 +1744,7 @@ button {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .toolbar-left,
