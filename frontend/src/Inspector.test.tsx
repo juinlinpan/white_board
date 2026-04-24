@@ -80,8 +80,6 @@ describe('Inspector style palette', () => {
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
-        onBringToFront={() => {}}
-        onSendToBack={() => {}}
       />,
     );
 
@@ -104,8 +102,6 @@ describe('Inspector style palette', () => {
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
-        onBringToFront={() => {}}
-        onSendToBack={() => {}}
       />,
     );
 
@@ -141,8 +137,6 @@ describe('Inspector style palette', () => {
         onDelete={() => {}}
         onToggleInspector={() => {}}
         onToggleCollapse={() => {}}
-        onBringToFront={() => {}}
-        onSendToBack={() => {}}
       />,
     );
 
@@ -179,8 +173,6 @@ describe('Inspector style palette', () => {
       onDelete: () => {},
       onToggleInspector: () => {},
       onToggleCollapse: () => {},
-      onBringToFront: () => {},
-      onSendToBack: () => {},
     });
 
     const swatches = collectElements(
