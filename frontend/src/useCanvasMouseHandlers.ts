@@ -296,14 +296,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   }
 
   function handleCanvasMouseDown(e: React.MouseEvent) {
-    if (e.button === 1) {
-      e.preventDefault();
-      panRef.current = {
-        startMouseX: e.clientX,
-        startMouseY: e.clientY,
-        startVpX: viewportRef.current.x,
-        startVpY: viewportRef.current.y,
-      };
+    if (startViewportPan(e)) {
       return;
     }
 
@@ -312,12 +305,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     }
 
     if (isSpaceRef.current) {
-      panRef.current = {
-        startMouseX: e.clientX,
-        startMouseY: e.clientY,
-        startVpX: viewportRef.current.x,
-        startVpY: viewportRef.current.y,
-      };
+      startViewportPan(e, { preventDefault: false });
       return;
     }
 
@@ -361,7 +349,33 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     }
   }
 
+  function startViewportPan(
+    e: React.MouseEvent,
+    options: { preventDefault?: boolean } = {},
+  ) {
+    const shouldStartPan = e.button === 1 || (e.button === 0 && isSpaceRef.current);
+    if (!shouldStartPan) {
+      return false;
+    }
+
+    if (options.preventDefault !== false) {
+      e.preventDefault();
+    }
+    e.stopPropagation();
+    panRef.current = {
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startVpX: viewportRef.current.x,
+      startVpY: viewportRef.current.y,
+    };
+    return true;
+  }
+
   function handleItemMouseDown(e: React.MouseEvent, itemId: string) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
     if (e.button !== 0) {
       return;
     }
@@ -438,6 +452,7 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       selectedItemIds: draggedSelectionIds,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
+      hasMoved: false,
       startBoundsX: selectionBounds.x,
       startBoundsY: selectionBounds.y,
       itemPositions: draggedSelectionIds
@@ -460,6 +475,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     e: React.MouseEvent<SVGLineElement>,
     itemId: string,
   ) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
+    if (e.button !== 0) {
+      return;
+    }
+
     e.stopPropagation();
 
     if (activeTool === 'line' || activeTool === 'arrow') {
@@ -500,6 +523,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     itemId: string,
     endpoint: SegmentEndpoint,
   ) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
+    if (e.button !== 0) {
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     setSelection([itemId]);
@@ -517,6 +548,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     itemId: string,
     waypointIndex: number,
   ) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
+    if (e.button !== 0) {
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     setSelection([itemId]);
@@ -533,6 +572,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     itemId: string,
     segmentIndex: number,
   ) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
+    if (e.button !== 0) {
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -566,6 +613,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
   }
 
   function handleResizeMouseDown(e: React.MouseEvent, itemId: string) {
+    if (startViewportPan(e)) {
+      return;
+    }
+
+    if (e.button !== 0) {
+      return;
+    }
+
     e.stopPropagation();
     const item = itemsRef.current.find((candidate) => candidate.id === itemId);
     if (!item) {
@@ -849,6 +904,14 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
       const vp = viewportRef.current;
       const dx = (e.clientX - drag.startMouseX) / vp.zoom;
       const dy = (e.clientY - drag.startMouseY) / vp.zoom;
+      const movedScreenDistance = Math.hypot(
+        e.clientX - drag.startMouseX,
+        e.clientY - drag.startMouseY,
+      );
+      if (!drag.hasMoved && movedScreenDistance < 3) {
+        return;
+      }
+      drag.hasMoved = true;
       let baseItems = itemsRef.current;
 
       if (!drag.hasDetachedSegments) {
@@ -1266,6 +1329,9 @@ export function useCanvasMouseHandlers(params: UseCanvasMouseHandlersParams) {
     if (drag) {
       dragRef.current = null;
       setActiveFrameDropTargetId(null);
+      if (!drag.hasMoved) {
+        return;
+      }
       let nextItems = itemsRef.current;
       const movedItemIds = getUniqueItemIds(drag.selectedItemIds);
       const changedIds = new Set<string>(movedItemIds);

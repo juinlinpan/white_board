@@ -5,15 +5,16 @@
 - [x] Make the workspace left page sidebar and right inspector collapsible with a persistent restore handle.
 - [x] Opening a project from the home screen now lands on an actual page and creates a browser history entry.
 - [x] The workspace left sidebar stays focused on page navigation and no longer shows a project details panel.
-- [x] Basic project name editing now happens in the top workspace header.
-- [x] Basic page name editing now happens in the top workspace header.
-- [x] Page delete now uses a trash button beside each page in the left page list instead of the workspace header.
+- [x] Rework the sidebar header into a `Planvas` / `Home` top row plus a divided `Project` summary row with a settings icon trigger.
+- [x] Move all project controls into a dedicated settings modal that uses about 70% viewport width on desktop.
+- [x] Move page rename into a pencil action beside each page row.
+- [x] Refresh the page delete button beside each page row with a cleaner icon treatment.
 - [x] Project delete now appears under the project name controls and requires typing `delete {project_name}` before returning to the home screen.
 - [x] Added a project-level `Change theme color` dropdown above `Delete project`, with `default`, `sage`, `sunset`, and `ocean` themes persisted on each project.
-- [x] Organized the workspace Manage panel into separated Project and Page sections; Project now exposes name, theme, export, and delete together.
+- [x] Remove the old inline `Manage` panel from the left sidebar after moving project controls into the modal.
 - [x] Treat browser file picker cancellation during Project / Page export as a normal cancel without showing an error banner.
-- [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
-- [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
+- [x] Keep duplicate out of the left sidebar while allowing page rename and delete icon buttons there.
+- [x] The workspace `Home` button now sits beside the `Planvas` heading.
 - [x] Clicking `＋ 新增 Page` now creates `untitled_n` directly without a prompt dialog.
 
 ## Toolbar Menu Update Notes

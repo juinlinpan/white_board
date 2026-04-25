@@ -44,7 +44,6 @@ import { resolveProjectEntryPageId } from './workspaceNavigation';
 
 type AppView = 'home' | 'workspace';
 type LoadState = 'loading' | 'ready' | 'error';
-type HealthState = 'loading' | 'ready' | 'error';
 type SidebarListKind = 'pages';
 type DropPosition = 'before' | 'after';
 type SidebarDragState = {
@@ -67,6 +66,66 @@ const PROJECT_THEME_OPTIONS: Array<{
   { value: 'sunset', label: 'Sunset' },
   { value: 'ocean', label: 'Ocean' },
 ];
+
+function IconSettings() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.8 1.8 0 0 1-2.5 2.5l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1.8 1.8 0 0 1-3.6 0v-.2a1 1 0 0 0-.7-.9 1 1 0 0 0-1.1.2l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1.8 1.8 0 0 1 0-3.6h.2a1 1 0 0 0 .9-.7 1 1 0 0 0-.2-1.1l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V4a1.8 1.8 0 0 1 3.6 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H20a1.8 1.8 0 0 1 0 3.6h-.2a1 1 0 0 0-.9.6Z" />
+    </svg>
+  );
+}
+
+function IconPencil() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L8 20l-5 1 1-5Z" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 7h16" />
+      <path d="M9 3h6l1 2H8l1-2Z" />
+      <path d="M7 7v11a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  );
+}
 
 type SaveFilePickerWindow = Window & {
   showSaveFilePicker?: (options?: {
@@ -319,10 +378,6 @@ export function App() {
   const initialRoute = readAppRoute(window.location.search);
   const [appView, setAppView] = useState<AppView>(initialRoute.view);
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [healthState, setHealthState] = useState<HealthState>('loading');
-  const [healthMessage, setHealthMessage] = useState(
-    'Checking local backend health...',
-  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
@@ -332,8 +387,14 @@ export function App() {
   const [selectedPageId, setSelectedPageId] = useState<string | null>(
     initialRoute.view === 'workspace' ? initialRoute.pageId : null,
   );
+  const [openPageIds, setOpenPageIds] = useState<string[]>([]);
   const [projectNameDraft, setProjectNameDraft] = useState('');
-  const [pageNameDraft, setPageNameDraft] = useState('');
+  const [projectSettingsDialogOpen, setProjectSettingsDialogOpen] =
+    useState(false);
+  const [pageRenameTargetId, setPageRenameTargetId] = useState<string | null>(
+    null,
+  );
+  const [pageRenameDraft, setPageRenameDraft] = useState('');
   const [isMutating, setIsMutating] = useState(false);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
   const [pageRefreshTokenById, setPageRefreshTokenById] = useState<
@@ -358,7 +419,6 @@ export function App() {
     [pages, selectedPageId],
   );
   const normalizedProjectNameDraft = projectNameDraft.trim();
-  const normalizedPageNameDraft = pageNameDraft.trim();
   const projectDeletePhrase =
     selectedProject === null ? '' : `delete ${selectedProject.name}`;
   const canConfirmProjectDelete =
@@ -408,17 +468,13 @@ export function App() {
     async (signal?: AbortSignal): Promise<void> => {
     setLoadState('loading');
     setErrorMessage(null);
-    setHealthState('loading');
-    setHealthMessage('Checking local backend health...');
 
     try {
-      const [health, nextProjects] = await Promise.all([
+      const [, nextProjects] = await Promise.all([
         getHealth(signal),
         listProjects(signal),
       ]);
 
-      setHealthState('ready');
-      setHealthMessage(`${health.service} is ${health.status}`);
       setProjects(nextProjects);
       setSelectedProjectId((current) =>
         appView === 'workspace'
@@ -431,10 +487,6 @@ export function App() {
         return;
       }
 
-      setHealthState('error');
-      setHealthMessage(
-        `Backend health check failed: ${getErrorMessage(error)}`,
-      );
       setErrorMessage(getErrorMessage(error));
       setProjects([]);
       setPages([]);
@@ -518,13 +570,40 @@ export function App() {
 
   useEffect(() => {
     setProjectNameDraft(selectedProject?.name ?? '');
-    setProjectDeleteDialogOpen(false);
-    setProjectDeleteConfirmation('');
-  }, [selectedProject]);
+  }, [selectedProject?.name]);
 
   useEffect(() => {
-    setPageNameDraft(selectedPage?.name ?? '');
+    setProjectSettingsDialogOpen(false);
+    setProjectDeleteDialogOpen(false);
+    setProjectDeleteConfirmation('');
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    setOpenPageIds([]);
+    setPageRenameTargetId(null);
+    setPageRenameDraft('');
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (selectedPage !== null) {
+      setOpenPageIds((current) => {
+        if (!current.includes(selectedPage.id)) {
+          return [...current, selectedPage.id];
+        }
+        return current;
+      });
+    }
   }, [selectedPage]);
+
+  useEffect(() => {
+    if (
+      pageRenameTargetId !== null &&
+      !pages.some((page) => page.id === pageRenameTargetId)
+    ) {
+      setPageRenameTargetId(null);
+      setPageRenameDraft('');
+    }
+  }, [pageRenameTargetId, pages]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -638,26 +717,31 @@ export function App() {
     });
   }
 
-  async function handleSavePageName(): Promise<void> {
-    if (selectedPage === null) {
+  async function handleSavePageName(
+    pageToRename: Page | null,
+    nextName: string,
+  ): Promise<void> {
+    if (pageToRename === null) {
       return;
     }
 
-    if (
-      normalizedPageNameDraft.length === 0 ||
-      normalizedPageNameDraft === selectedPage.name
-    ) {
+    const normalizedName = nextName.trim();
+
+    if (normalizedName.length === 0 || normalizedName === pageToRename.name) {
+      setPageRenameTargetId(null);
+      setPageRenameDraft('');
       return;
     }
 
     await runMutation(async () => {
-      const updatedPage = await updatePage(selectedPage.id, normalizedPageNameDraft);
+      const updatedPage = await updatePage(pageToRename.id, normalizedName);
       setPages((current) =>
         current.map((page) =>
           page.id === updatedPage.id ? updatedPage : page,
         ),
       );
-      setPageNameDraft(updatedPage.name);
+      setPageRenameTargetId(null);
+      setPageRenameDraft('');
     });
   }
 
@@ -679,6 +763,9 @@ export function App() {
     await runMutation(async () => {
       await deletePage(selectedPage.id);
       setPages(remainingPages);
+      setOpenPageIds((current) =>
+        current.filter((pageId) => pageId !== selectedPage.id),
+      );
       setSelectedPageId((current) =>
         current === selectedPage.id ? remainingPages[0]?.id ?? null : current,
       );
@@ -732,8 +819,39 @@ export function App() {
       return;
     }
 
+    setProjectSettingsDialogOpen(false);
     setProjectDeleteConfirmation('');
     setProjectDeleteDialogOpen(true);
+  }
+
+  function openProjectSettingsDialog(): void {
+    if (selectedProject === null || isMutating) {
+      return;
+    }
+
+    setProjectSettingsDialogOpen(true);
+  }
+
+  function closeProjectSettingsDialog(): void {
+    if (isMutating) {
+      return;
+    }
+
+    setProjectSettingsDialogOpen(false);
+  }
+
+  function beginPageRename(page: Page): void {
+    if (isMutating) {
+      return;
+    }
+
+    setPageRenameTargetId(page.id);
+    setPageRenameDraft(page.name);
+  }
+
+  function cancelPageRename(): void {
+    setPageRenameTargetId(null);
+    setPageRenameDraft('');
   }
 
   function closeProjectDeleteDialog(): void {
@@ -955,6 +1073,29 @@ export function App() {
     });
   }
 
+  function handleCloseTab(pageIdToClose: string): void {
+    setOpenPageIds((current) => {
+      const closedIndex = current.indexOf(pageIdToClose);
+      const next = current.filter((id) => id !== pageIdToClose);
+
+      if (selectedPageId === pageIdToClose && selectedProject !== null) {
+        const fallbackId =
+          next[Math.min(Math.max(closedIndex, 0), next.length - 1)] ?? null;
+        syncBrowserRoute(
+          {
+            view: 'workspace',
+            projectId: selectedProject.id,
+            pageId: fallbackId,
+          },
+          'push',
+        );
+        setSelectedPageId(fallbackId);
+      }
+
+      return next;
+    });
+  }
+
   if (loadState === 'error' || appView === 'home') {
     return (
       <>
@@ -967,8 +1108,6 @@ export function App() {
         />
         <HomeView
           errorMessage={errorMessage}
-          healthMessage={healthMessage}
-          healthState={healthState}
           isBusy={isMutating}
           isLoading={loadState === 'loading'}
           projects={projects}
@@ -976,7 +1115,6 @@ export function App() {
           onCreateProject={() => void handleCreateProject()}
           onImportProject={handleImportButtonClick}
           onOpenProject={(projectId) => openProject(projectId, null)}
-          onRetry={() => void loadWorkspace()}
         />
       </>
     );
@@ -1021,7 +1159,7 @@ export function App() {
           <section className="sidebar-header">
             <div className="sidebar-brand-row">
               <div>
-                <h1>Whiteboard</h1>
+                <h1>Planvas</h1>
                 <p className="sidebar-copy">
                   {selectedProject !== null ? 'Local workspace' : 'Select a project'}
                 </p>
@@ -1033,132 +1171,42 @@ export function App() {
                 onClick={() => goHome()}
                 title="Home"
               >
-                Home
+                <span className="sidebar-home-button-label">Home</span>
               </button>
             </div>
-          </section>
-          <section className="sidebar-section sidebar-name-panel">
-            <div className="section-title-row">
-              <h2>Manage</h2>
-            </div>
-            {selectedProject !== null ? (
-              <div className="sidebar-name-stack">
-                <div className="sidebar-manage-group">
-                  <div className="sidebar-manage-heading">Project</div>
-                  <div className="sidebar-name-group">
-                    <label className="sidebar-name-label" htmlFor="sidebar-project-name-input">
-                      Name
-                    </label>
-                    <div className="sidebar-name-edit-row">
-                      <input
-                        id="sidebar-project-name-input"
-                        className="sidebar-name-input sidebar-project-name-input"
-                        disabled={isMutating}
-                        type="text"
-                        value={projectNameDraft}
-                        onChange={(event) => setProjectNameDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            void handleSaveProjectName();
-                          }
-                        }}
-                      />
-                      <button
-                        className="ghost-button sidebar-inline-save"
-                        disabled={
-                          isMutating ||
-                          normalizedProjectNameDraft.length === 0 ||
-                          normalizedProjectNameDraft === selectedProject.name
-                        }
-                        onClick={() => void handleSaveProjectName()}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                  <label className="sidebar-project-theme-control">
-                    <span className="sidebar-name-label">Theme</span>
-                    <select
-                      disabled={isMutating}
-                      value={selectedProject.theme_color}
-                      onChange={(event) =>
-                        void handleChangeProjectTheme(
-                          event.target.value as ProjectThemeColor,
-                        )
-                      }
-                    >
-                      {PROJECT_THEME_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="sidebar-project-action-row">
-                    <button
-                      type="button"
-                      className="ghost-button sidebar-project-export-button"
-                      disabled={isMutating}
-                      onClick={handleExportProjectClick}
-                    >
-                      Export
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button danger-button sidebar-project-delete-button"
-                      disabled={isMutating}
-                      onClick={openProjectDeleteDialog}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                {selectedPage !== null ? (
-                  <div className="sidebar-manage-group sidebar-page-manage-group">
-                    <div className="sidebar-manage-heading">Page</div>
-                    <div className="sidebar-name-group">
-                      <label className="sidebar-name-label" htmlFor="sidebar-page-name-input">
-                        Name
-                      </label>
-                      <div className="sidebar-name-edit-row">
-                        <input
-                          id="sidebar-page-name-input"
-                          className="sidebar-name-input sidebar-page-name-input"
-                          disabled={isMutating}
-                          type="text"
-                          value={pageNameDraft}
-                          onChange={(event) => setPageNameDraft(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              void handleSavePageName();
-                            }
-                          }}
-                        />
-                        <button
-                          className="ghost-button sidebar-inline-save"
-                          disabled={
-                            isMutating ||
-                            normalizedPageNameDraft.length === 0 ||
-                            normalizedPageNameDraft === selectedPage.name
-                          }
-                          onClick={() => void handleSavePageName()}
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+            <div className="sidebar-project-strip">
+              <div className="sidebar-project-strip-label">Project</div>
+              <div className="sidebar-project-strip-row">
+                <strong
+                  className="sidebar-project-strip-name"
+                  title={selectedProject?.name ?? 'No project selected'}
+                >
+                  {selectedProject?.name ?? 'No project selected'}
+                </strong>
+                <button
+                  type="button"
+                  className="ghost-button sidebar-project-settings-button"
+                  disabled={selectedProject === null || isMutating}
+                  aria-label={
+                    selectedProject !== null
+                      ? `Open settings for ${selectedProject.name}`
+                      : 'Project settings unavailable'
+                  }
+                  title={
+                    selectedProject !== null
+                      ? `Project settings for ${selectedProject.name}`
+                      : 'Project settings unavailable'
+                  }
+                  onClick={openProjectSettingsDialog}
+                >
+                  <IconSettings />
+                </button>
               </div>
-            ) : (
-              <p className="empty-copy">Open a project to manage names.</p>
-            )}
+            </div>
           </section>
           <section className="sidebar-section">
             <div className="section-title-row">
-              <h2>Pages</h2>
+              <h2 className="sidebar-pages-heading">Pages</h2>
               <span className="count-badge">{pages.length}</span>
             </div>
             {selectedProject === null ? (
@@ -1172,6 +1220,7 @@ export function App() {
                 {pages.map((page) => {
                   const isDragging =
                     dragState?.kind === 'pages' && dragState.itemId === page.id;
+                  const isRenaming = pageRenameTargetId === page.id;
                   const isDropBefore =
                     dropState?.kind === 'pages' &&
                     dropState.itemId === page.id &&
@@ -1194,45 +1243,109 @@ export function App() {
                         handleSidebarDrop('pages', page.id, event)
                       }
                     >
-                      <button
-                        className={`list-button ${
-                          page.id === selectedPageId ? 'is-selected' : ''
-                        } ${isDragging ? 'is-dragging' : ''} ${
-                          pages.length > 1 ? 'is-sortable' : ''
-                        }`}
-                        draggable={!isMutating && pages.length > 1}
-                        aria-label={
-                          pages.length > 1
-                            ? `Move page ${page.name}`
-                            : undefined
-                        }
-                        title={
-                          pages.length > 1
-                            ? `Move page ${page.name}`
-                            : undefined
-                        }
-                        onDragStart={(event) =>
-                          handleSidebarDragStart('pages', page.id, event)
-                        }
-                        onDragEnd={clearDragState}
-                        onClick={() => setSelectedPageId(page.id)}
-                      >
-                        <span>{page.name}</span>
-                        <small>zoom {page.zoom.toFixed(1)}x</small>
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button danger-button page-trash-button"
-                        disabled={isMutating}
-                        title={`Delete page ${page.name}`}
-                        aria-label={`Delete page ${page.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleDeletePage(page);
-                        }}
-                      >
-                        <span className="visually-hidden">Delete page</span>
-                      </button>
+                      {isRenaming ? (
+                        <div
+                          className={`list-button list-button-rename is-editing ${
+                            page.id === selectedPageId ? 'is-selected' : ''
+                          }`}
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            className="page-rename-input"
+                            aria-label={`Rename page ${page.name}`}
+                            disabled={isMutating}
+                            value={pageRenameDraft}
+                            placeholder="Page name"
+                            autoFocus
+                            onChange={(event) => setPageRenameDraft(event.target.value)}
+                            onBlur={() => {
+                              void handleSavePageName(page, pageRenameDraft);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                void handleSavePageName(page, pageRenameDraft);
+                              }
+
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                cancelPageRename();
+                              }
+                            }}
+                          />
+                          <small>zoom {page.zoom.toFixed(1)}x</small>
+                        </div>
+                      ) : (
+                        <button
+                          className={`list-button ${
+                            page.id === selectedPageId ? 'is-selected' : ''
+                          } ${isDragging ? 'is-dragging' : ''} ${
+                            pages.length > 1 ? 'is-sortable' : ''
+                          }`}
+                          draggable={!isMutating && pages.length > 1}
+                          aria-label={
+                            pages.length > 1
+                              ? `Move page ${page.name}`
+                              : undefined
+                          }
+                          title={
+                            pages.length > 1
+                              ? `Move page ${page.name}`
+                              : undefined
+                          }
+                          onDragStart={(event) =>
+                            handleSidebarDragStart('pages', page.id, event)
+                          }
+                          onDragEnd={clearDragState}
+                          onClick={() => setSelectedPageId(page.id)}
+                        >
+                          <span>{page.name}</span>
+                          <small>zoom {page.zoom.toFixed(1)}x</small>
+                        </button>
+                      )}
+                      <div className="page-row-actions">
+                        <button
+                          type="button"
+                          className={`ghost-button page-icon-button page-rename-button ${
+                            isRenaming ? 'is-active' : ''
+                          }`}
+                          disabled={isMutating}
+                          title={
+                            isRenaming
+                              ? `Save page name for ${page.name}`
+                              : `Rename page ${page.name}`
+                          }
+                          aria-label={
+                            isRenaming
+                              ? `Save page name for ${page.name}`
+                              : `Rename page ${page.name}`
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (isRenaming) {
+                              void handleSavePageName(page, pageRenameDraft);
+                              return;
+                            }
+
+                            beginPageRename(page);
+                          }}
+                        >
+                          <IconPencil />
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button danger-button page-icon-button page-trash-button"
+                          disabled={isMutating}
+                          title={`Delete page ${page.name}`}
+                          aria-label={`Delete page ${page.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDeletePage(page);
+                          }}
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1250,14 +1363,51 @@ export function App() {
 
         <section className="workspace">
           <header className="workspace-header workspace-header-compact">
-            <div className="workspace-current-path" aria-live="polite">
-              <span>{selectedProject?.name ?? 'No project'}</span>
-              <strong>{selectedPage?.name ?? 'No page selected'}</strong>
-            </div>
-            <div className="workspace-header-actions">
-              <div className="status-pill">
-                <span className={`status-indicator status-${healthState}`} />
-              </div>
+            <div className="workspace-tabs" role="tablist" aria-label="Open pages">
+              <span
+                className="workspace-tabs-project-name"
+                title={selectedProject?.name ?? 'No project'}
+              >
+                {selectedProject?.name ?? 'No project'}
+              </span>
+              {openPageIds.map((tabId) => {
+                const page = pages.find((p) => p.id === tabId);
+                if (!page) return null;
+                const isActive = tabId === selectedPageId;
+                return (
+                  <div
+                    key={tabId}
+                    className={`workspace-tab ${isActive ? 'is-active' : ''}`}
+                  >
+                    <button
+                      className="workspace-tab-button"
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
+                      onClick={() => {
+                        if (selectedProject && tabId !== selectedPageId) {
+                          openProject(selectedProject.id, tabId, 'push');
+                        }
+                      }}
+                    >
+                      {page.name}
+                    </button>
+                    <button
+                      className="workspace-tab-close"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCloseTab(tabId);
+                      }}
+                      aria-label={`Close ${page.name} tab`}
+                      title={`Close ${page.name}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </header>
           {errorMessage !== null ? (
@@ -1281,9 +1431,11 @@ export function App() {
           ) : selectedPage === null ? (
             <section className="hero-panel">
               <div className="hero-copy">
-                <h3>Create a page in {selectedProject.name}</h3>
+                <h3>{pages.length === 0 ? `Create a page in ${selectedProject.name}` : 'Select a page'}</h3>
                 <p className="hero-text">
-                  Add a page to start arranging notes, tables, frames, and connectors.
+                  {pages.length === 0
+                    ? 'Add a page to start arranging notes, tables, frames, and connectors.'
+                    : 'Open a page from the sidebar to continue working.'}
                 </p>
                 <button
                   className="primary-button"
@@ -1308,6 +1460,120 @@ export function App() {
           )}
         </section>
       </main>
+      {projectSettingsDialogOpen && selectedProject !== null ? (
+        <div
+          className="confirmation-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeProjectSettingsDialog();
+            }
+          }}
+        >
+          <section
+            className="project-settings-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="project-settings-dialog-title"
+          >
+            <div className="project-settings-dialog-header">
+              <div>
+                <div className="project-settings-dialog-kicker">Project settings</div>
+                <h2 id="project-settings-dialog-title">{selectedProject.name}</h2>
+              </div>
+              <button
+                type="button"
+                className="ghost-button confirmation-dialog-close"
+                disabled={isMutating}
+                onClick={closeProjectSettingsDialog}
+                aria-label="Close project settings dialog"
+              >
+                X
+              </button>
+            </div>
+            <div className="project-settings-dialog-grid">
+              <section className="project-settings-panel">
+                <div className="project-settings-panel-heading">Name</div>
+                <label className="sidebar-name-group" htmlFor="sidebar-project-name-input">
+                  <span className="sidebar-name-label">Project name</span>
+                  <div className="sidebar-name-edit-row">
+                    <input
+                      id="sidebar-project-name-input"
+                      className="sidebar-name-input project-settings-name-input"
+                      disabled={isMutating}
+                      type="text"
+                      value={projectNameDraft}
+                      onChange={(event) => setProjectNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleSaveProjectName();
+                        }
+                      }}
+                    />
+                    <button
+                      className="ghost-button sidebar-inline-save"
+                      disabled={
+                        isMutating ||
+                        normalizedProjectNameDraft.length === 0 ||
+                        normalizedProjectNameDraft === selectedProject.name
+                      }
+                      onClick={() => void handleSaveProjectName()}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </label>
+              </section>
+              <section className="project-settings-panel">
+                <div className="project-settings-panel-heading">Appearance</div>
+                <label className="sidebar-project-theme-control">
+                  <span className="sidebar-name-label">Theme</span>
+                  <select
+                    disabled={isMutating}
+                    value={selectedProject.theme_color}
+                    onChange={(event) =>
+                      void handleChangeProjectTheme(
+                        event.target.value as ProjectThemeColor,
+                      )
+                    }
+                  >
+                    {PROJECT_THEME_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </section>
+              <section className="project-settings-panel project-settings-panel-actions">
+                <div className="project-settings-panel-heading">Actions</div>
+                <p className="confirmation-dialog-copy">
+                  Export the whole project or remove it from this local workspace.
+                </p>
+                <div className="sidebar-project-action-row">
+                  <button
+                    type="button"
+                    className="ghost-button sidebar-project-export-button"
+                    disabled={isMutating}
+                    onClick={handleExportProjectClick}
+                  >
+                    Export project
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button danger-button sidebar-project-delete-button"
+                    disabled={isMutating}
+                    onClick={openProjectDeleteDialog}
+                  >
+                    Delete project
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {projectDeleteDialogOpen && selectedProject !== null ? (
         <div
           className="confirmation-dialog-backdrop"

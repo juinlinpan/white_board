@@ -6,15 +6,17 @@
 - Opening a `Project` from the dedicated home screen must create a browser history entry and enter a concrete `Page` immediately.
 - If the target project is already loaded in memory, the workspace should keep the current page when possible and otherwise fall back to that project's first page.
 - The workspace left sidebar should stay focused on page navigation and should not render a project details panel.
-- Basic project name editing should happen in the top workspace header.
-- Basic page name editing should happen in the top workspace header.
-- Page delete action should be shown as a trash button beside each page in the left page list, not in the workspace header.
+- The workspace sidebar header should show a top row with `Planvas` and `Home`, then a divided project summary row with `Project`, the current project name, and a settings icon button.
+- Project settings should open from that sidebar header settings button in a modal that uses about 70% of the viewport width on desktop.
+- All project-level controls should live in that settings modal: project rename, theme color, export, and delete.
+- Basic page name editing should happen inline from a pencil icon beside each page in the left page list.
+- Page delete action should stay beside each page in the left page list, using a refreshed icon treatment instead of the previous trash shape.
 - Project delete action should be shown under the project name controls and must open a confirmation dialog that requires typing `delete {project_name}` before deletion; after deletion the app returns to the home screen.
 - Project management should include a `Change theme color` dropdown above `Delete project`; the selected theme is stored on the project and changes non-canvas workspace chrome so users can visually distinguish projects.
-- The workspace Manage panel should visually separate Project and Page controls; Project controls include name, theme, export, and delete, while Page controls stay in a separate section.
+- The workspace should no longer render an inline `Manage` panel in the left sidebar once those controls move into the project settings modal.
 - Canceling a browser file picker during Project or Page export should be treated as a normal cancellation and must not show an error banner.
-- The left sidebar should not render page rename / duplicate / delete action buttons.
-- The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
+- The left sidebar should render page rename and delete action buttons beside each page row, while duplicate remains out of the sidebar.
+- The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Planvas` title.
 - Clicking `＋ 新增 Page` should create a new page immediately with auto-generated name `untitled_n` (no prompt dialog).
 
 ## Toolbar Menu Update Notes

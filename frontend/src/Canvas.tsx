@@ -1274,7 +1274,7 @@ export function Canvas({
   const worldTransform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
 
   return (
-    <div className="canvas-root">
+    <div className={`canvas-root ${isInspectorCollapsed ? 'is-inspector-collapsed' : ''}`}>
       {toolbarTableInsertPreview !== null ? (
         <div
           className={`table-insert-preview table-insert-preview-fixed ${
@@ -1313,14 +1313,6 @@ export function Canvas({
         onImportPage={onImportPage}
         onExportPage={onExportPage}
         importExportDisabled={importExportDisabled}
-        zoom={getDisplayZoom(viewport.zoom)}
-        resetZoom={resetZoomTarget}
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onResetZoom={handleResetZoom}
-        onResetZoomAdjust={handleResetZoomAdjust}
-        magnetEnabled={magnetEnabled}
-        onToggleMagnet={() => setMagnetEnabled((current) => !current)}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={() => void handleUndo()}
@@ -1661,6 +1653,70 @@ export function Canvas({
                 className="canvas-background-picker"
                 onMouseDown={(event) => event.stopPropagation()}
               >
+                <button
+                  type="button"
+                  aria-pressed={magnetEnabled}
+                  className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
+                  title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
+                  onClick={() => setMagnetEnabled((current) => !current)}
+                >
+                  <span className="tool-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z" /></svg>
+                  </span>
+                  <span className="tool-label">Magnet</span>
+                </button>
+
+                <div className="toolbar-zoom-group" aria-label="Zoom controls">
+                  <div className="toolbar-zoom-stepper" aria-label="Current zoom controls">
+                    <button
+                      type="button"
+                      className="tool-button tool-button-compact toolbar-zoom-step"
+                      title="Zoom in"
+                      onClick={handleZoomIn}
+                    >
+                      <span className="tool-label">+</span>
+                    </button>
+                    <div className="toolbar-zoom-readout" aria-live="polite">
+                      <span className="toolbar-zoom-value">{getDisplayZoom(viewport.zoom).toFixed(1)}x</span>
+                      <span className="toolbar-zoom-caption">Zoom</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="tool-button tool-button-compact toolbar-zoom-step"
+                      title="Zoom out"
+                      onClick={handleZoomOut}
+                    >
+                      <span className="tool-label">-</span>
+                    </button>
+                  </div>
+                  <div className="toolbar-zoom-reset-tools">
+                    <button
+                      type="button"
+                      className="tool-button toolbar-zoom-reset-button"
+                      title={'Reset zoom to ' + resetZoomTarget.toFixed(1) + 'x'}
+                      onClick={handleResetZoom}
+                    >
+                      <span className="toolbar-zoom-reset-action">Reset</span>
+                      <span className="toolbar-zoom-reset-target">
+                        {resetZoomTarget.toFixed(1)}x
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="tool-button toolbar-zoom-adjust-button"
+                      title="Adjust reset zoom target"
+                      onClick={() => {
+                        // Using a prompt or simple handler for adjusting
+                        handleResetZoomAdjust(1); // Simplification or need state?
+                      }}
+                    >
+                      <span className="tool-label">Adjust</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ width: '1px', height: '24px', background: 'var(--toolbar-line)', margin: '0 8px' }} />
+
                 <span className="canvas-background-picker-label">背景</span>
                 <div className="canvas-background-picker-options">
                   {(

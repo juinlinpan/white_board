@@ -85,14 +85,6 @@ type Props = {
   onImportPage: () => void;
   onExportPage: () => void;
   importExportDisabled: boolean;
-  zoom: number;
-  resetZoom: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onResetZoom: () => void;
-  onResetZoomAdjust: (direction: -1 | 1) => void;
-  magnetEnabled: boolean;
-  onToggleMagnet: () => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -101,6 +93,28 @@ type Props = {
 };
 
 type ToolbarMenuId = 'file' | 'edit' | null;
+export type ToolbarPosition = 'top' | 'bottom' | 'left' | 'right';
+
+type RectLike = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>;
+
+export function getToolbarDockPosition(
+  clientX: number,
+  clientY: number,
+  parentRect: RectLike,
+): ToolbarPosition {
+  const relX = (clientX - parentRect.left) / parentRect.width;
+  const relY = (clientY - parentRect.top) / parentRect.height;
+  const distances: Array<{ position: ToolbarPosition; distance: number }> = [
+    { position: 'top', distance: relY },
+    { position: 'bottom', distance: 1 - relY },
+    { position: 'left', distance: relX },
+    { position: 'right', distance: 1 - relX },
+  ];
+
+  return distances.reduce((closest, candidate) =>
+    candidate.distance < closest.distance ? candidate : closest,
+  ).position;
+}
 
 export function Toolbar({
   activeTool,
@@ -109,14 +123,6 @@ export function Toolbar({
   onImportPage,
   onExportPage,
   importExportDisabled,
-  zoom,
-  resetZoom,
-  onZoomIn,
-  onZoomOut,
-  onResetZoom,
-  onResetZoomAdjust,
-  magnetEnabled,
-  onToggleMagnet,
   canUndo,
   canRedo,
   onUndo,
@@ -126,14 +132,18 @@ export function Toolbar({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<ToolbarMenuId>(null);
   const [fileSubmenuOpen, setFileSubmenuOpen] = useState(false);
-  const [resetZoomEditorOpen, setResetZoomEditorOpen] = useState(false);
+  const [position, setPosition] = useState<ToolbarPosition>('top');
+  const [previewPosition, setPreviewPosition] = useState<ToolbarPosition | null>(null);
+  const [dragCoords, setDragCoords] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingPositionRef = useRef<ToolbarPosition>('top');
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       if (!toolbarRef.current?.contains(event.target as Node)) {
         setOpenMenu(null);
         setFileSubmenuOpen(false);
-        setResetZoomEditorOpen(false);
       }
     }
 
@@ -141,7 +151,6 @@ export function Toolbar({
       if (event.key === 'Escape') {
         setOpenMenu(null);
         setFileSubmenuOpen(false);
-        setResetZoomEditorOpen(false);
       }
     }
 
@@ -153,13 +162,91 @@ export function Toolbar({
     };
   }, []);
 
+  const handleDragStart = (event: React.PointerEvent) => {
+    if (!toolbarRef.current) return;
+    event.preventDefault();
+    const rect = toolbarRef.current.getBoundingClientRect();
+    const parentRect = toolbarRef.current.parentElement?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+    pendingPositionRef.current = position;
+    isDraggingRef.current = true;
+
+    // Pointer capture: ALL subsequent pointermove/pointerup go to this element
+    // even if the pointer leaves it — no timing gaps, no missed events.
+    toolbarRef.current.setPointerCapture(event.pointerId);
+
+    setPreviewPosition(position);
+    setDragCoords({ x: rect.left - parentRect.left, y: rect.top - parentRect.top });
+  };
+
+  const handlePointerMove = (event: React.PointerEvent) => {
+    if (!isDraggingRef.current || !dragOffsetRef.current || !toolbarRef.current) return;
+    const parentRect = toolbarRef.current.parentElement?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+
+    const newX = event.clientX - dragOffsetRef.current.x - parentRect.left;
+    const newY = event.clientY - dragOffsetRef.current.y - parentRect.top;
+    setDragCoords({ x: newX, y: newY });
+
+    const closest = getToolbarDockPosition(event.clientX, event.clientY, parentRect);
+    pendingPositionRef.current = closest;
+    setPreviewPosition(closest);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    toolbarRef.current?.releasePointerCapture(event.pointerId);
+
+    setPosition(pendingPositionRef.current);
+    setDragCoords(null);
+    setPreviewPosition(null);
+    dragOffsetRef.current = null;
+  };
+
   function toggleMenu(menuId: Exclude<ToolbarMenuId, null>) {
     setFileSubmenuOpen(false);
     setOpenMenu((current) => (current === menuId ? null : menuId));
   }
 
+  const activePosition = (isDraggingRef.current && previewPosition) ? previewPosition : position;
+  const dragStyles: React.CSSProperties = dragCoords
+    ? {
+        top: dragCoords.y,
+        left: dragCoords.x,
+        right: 'auto',
+        bottom: 'auto',
+        transform: 'none',
+      }
+    : {};
+
   return (
-    <div ref={toolbarRef} className="toolbar">
+    <div
+      ref={toolbarRef}
+      className={`toolbar toolbar-position-${activePosition} ${dragCoords ? 'is-dragging' : ''}`}
+      style={dragStyles}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
+      <div
+        className="toolbar-drag-handle"
+        onPointerDown={handleDragStart}
+        title="Drag to move toolbar"
+      >
+        <span className="toolbar-drag-dots">
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+            <circle cx="4" cy="2" r="1.5" />
+            <circle cx="8" cy="2" r="1.5" />
+            <circle cx="4" cy="8" r="1.5" />
+            <circle cx="8" cy="8" r="1.5" />
+            <circle cx="4" cy="14" r="1.5" />
+            <circle cx="8" cy="14" r="1.5" />
+          </svg>
+        </span>
+      </div>
       <div className="toolbar-left">
         <div className="toolbar-menu-dropdown" aria-label="File">
           <button
@@ -308,96 +395,6 @@ export function Toolbar({
               <span className="tool-label">{tool.label}</span>
             </button>
           ))}
-        </div>
-      </div>
-
-      <div className="toolbar-spacer" />
-
-      <div className="toolbar-right">
-        <button
-          type="button"
-          aria-pressed={magnetEnabled}
-          className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-          title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
-          onClick={onToggleMagnet}
-        >
-          <span className="tool-icon">
-            {icon('M7 4h4v6H7a3 3 0 0 0 0 6h3v4H7a7 7 0 0 1 0-14zm6 0h4a7 7 0 0 1 0 14h-3v-4h3a3 3 0 0 0 0-6h-4z')}
-          </span>
-          <span className="tool-label">Magnet</span>
-        </button>
-
-        <div className="toolbar-zoom-group" aria-label="Zoom controls">
-          <div className="toolbar-zoom-stepper" aria-label="Current zoom controls">
-            <button
-              type="button"
-              className="tool-button tool-button-compact toolbar-zoom-step"
-              title="Zoom in"
-              onClick={onZoomIn}
-            >
-              <span className="tool-label">+</span>
-            </button>
-            <div className="toolbar-zoom-readout" aria-live="polite">
-              <span className="toolbar-zoom-value">{zoom.toFixed(1)}x</span>
-              <span className="toolbar-zoom-caption">Zoom</span>
-            </div>
-            <button
-              type="button"
-              className="tool-button tool-button-compact toolbar-zoom-step"
-              title="Zoom out"
-              onClick={onZoomOut}
-            >
-              <span className="tool-label">-</span>
-            </button>
-          </div>
-          <div className="toolbar-zoom-reset-tools">
-            <button
-              type="button"
-              className="tool-button toolbar-zoom-reset-button"
-              title={'Reset zoom to ' + resetZoom.toFixed(1) + 'x'}
-              onClick={onResetZoom}
-            >
-              <span className="toolbar-zoom-reset-action">Reset</span>
-              <span className="toolbar-zoom-reset-target">
-                {resetZoom.toFixed(1)}x
-              </span>
-            </button>
-            <button
-              type="button"
-              className="tool-button toolbar-zoom-adjust-button"
-              title="Adjust reset zoom target"
-              aria-expanded={resetZoomEditorOpen}
-              onClick={() => setResetZoomEditorOpen((current) => !current)}
-            >
-              <span className="tool-label">Adjust</span>
-            </button>
-            {resetZoomEditorOpen ? (
-              <div className="toolbar-zoom-reset-panel" aria-label="Reset zoom target controls">
-                <span className="toolbar-zoom-reset-panel-label">
-                  Reset target
-                </span>
-                <button
-                  type="button"
-                  className="tool-button tool-button-compact"
-                  title="Lower reset zoom target by 0.1x"
-                  onClick={() => onResetZoomAdjust(-1)}
-                >
-                  <span className="tool-label">-</span>
-                </button>
-                <span className="toolbar-zoom-reset-value">
-                  {resetZoom.toFixed(1)}x
-                </span>
-                <button
-                  type="button"
-                  className="tool-button tool-button-compact"
-                  title="Raise reset zoom target by 0.1x"
-                  onClick={() => onResetZoomAdjust(1)}
-                >
-                  <span className="tool-label">+</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
         </div>
       </div>
     </div>

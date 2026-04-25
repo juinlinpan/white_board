@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { Toolbar } from './Toolbar';
+import { getToolbarDockPosition, Toolbar } from './Toolbar';
 
 describe('Toolbar', () => {
-  it('renders zoom and magnet controls together', () => {
+  it('renders file, edit, and tool controls', () => {
     const markup = renderToStaticMarkup(
       <Toolbar
         activeTool="select"
@@ -13,14 +13,6 @@ describe('Toolbar', () => {
         onImportPage={() => {}}
         onExportPage={() => {}}
         importExportDisabled={false}
-        zoom={1.7}
-        resetZoom={1.5}
-        onZoomIn={() => {}}
-        onZoomOut={() => {}}
-        onResetZoom={() => {}}
-        onResetZoomAdjust={() => {}}
-        magnetEnabled
-        onToggleMagnet={() => {}}
         canUndo
         canRedo
         onUndo={() => {}}
@@ -29,11 +21,18 @@ describe('Toolbar', () => {
       />,
     );
 
-    expect(markup).toContain('1.7x');
-    expect(markup).toContain('1.5x');
-    expect(markup).toContain('Adjust reset zoom target');
-    expect(markup).toContain('Magnet');
     expect(markup).toContain('File');
     expect(markup).toContain('Edit');
+    expect(markup).toContain('Select');
+    expect(markup).toContain('Table');
+  });
+
+  it('chooses the closest dock edge from the cursor position', () => {
+    const parentRect = { left: 100, top: 50, width: 800, height: 600 };
+
+    expect(getToolbarDockPosition(500, 60, parentRect)).toBe('top');
+    expect(getToolbarDockPosition(500, 640, parentRect)).toBe('bottom');
+    expect(getToolbarDockPosition(110, 350, parentRect)).toBe('left');
+    expect(getToolbarDockPosition(890, 350, parentRect)).toBe('right');
   });
 });

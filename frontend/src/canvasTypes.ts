@@ -8,6 +8,7 @@ export type DragState = {
   selectedItemIds: string[];
   startMouseX: number;
   startMouseY: number;
+  hasMoved: boolean;
   startBoundsX: number;
   startBoundsY: number;
   itemPositions: Array<{ id: string; x: number; y: number }>;

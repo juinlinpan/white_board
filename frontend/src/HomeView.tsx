@@ -76,12 +76,8 @@ function IconSpark() {
   );
 }
 
-type HealthState = 'loading' | 'ready' | 'error';
-
 type Props = {
   errorMessage: string | null;
-  healthMessage: string;
-  healthState: HealthState;
   isBusy: boolean;
   isLoading: boolean;
   projects: Project[];
@@ -89,7 +85,6 @@ type Props = {
   onCreateProject: () => void;
   onImportProject: () => void;
   onOpenProject: (projectId: string) => void;
-  onRetry: () => void;
 };
 
 function formatDate(value: string): string {
@@ -108,8 +103,6 @@ function latestProject(projects: Project[]): Project | null {
 
 export function HomeView({
   errorMessage,
-  healthMessage,
-  healthState,
   isBusy,
   isLoading,
   projects,
@@ -117,20 +110,19 @@ export function HomeView({
   onCreateProject,
   onImportProject,
   onOpenProject,
-  onRetry,
 }: Props) {
   const recentProject = latestProject(projects);
 
   return (
     <main className="home-shell">
-      <section className="home-hero-panel" aria-label="Whiteboard home">
+      <section className="home-hero-panel" aria-label="Planvas home">
         <div className="home-copy">
           <div className="home-brand">
             <span className="home-brand-mark" aria-hidden="true">
               <IconSpark />
             </span>
             <div>
-              <span className="home-brand-name">Whiteboard</span>
+              <span className="home-brand-name">Planvas</span>
               <span className="home-brand-kicker">Local-first planning</span>
             </div>
           </div>
@@ -149,16 +141,6 @@ export function HomeView({
               <IconImport />
               匯入 Project
             </button>
-          </div>
-
-          <div className={`home-status-strip is-${healthState}`}>
-            <span className={`status-indicator status-${healthState}`} />
-            <span>{healthMessage}</span>
-            {healthState === 'error' ? (
-              <button type="button" onClick={onRetry}>
-                Retry
-              </button>
-            ) : null}
           </div>
         </div>
 

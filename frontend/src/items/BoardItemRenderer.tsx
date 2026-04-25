@@ -74,6 +74,11 @@ export function BoardItemRenderer({
   const wrapperClass = `board-item board-item-type-${item.type} ${
     isSelected ? 'is-selected' : ''
   } ${className}`.trim();
+  const handleMouseDownCapture = (e: React.MouseEvent) => {
+    if (e.button === 1) {
+      onMouseDown(e);
+    }
+  };
   const resizeHandle =
     isSelected && !isEditing && !isSegmentItem ? (
       <button
@@ -91,6 +96,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={`${wrapperClass} board-item-segment`}
+          onMouseDownCapture={handleMouseDownCapture}
         >
           <SegmentShape
             item={item}
@@ -112,6 +118,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={wrapperClass}
+          onMouseDownCapture={handleMouseDownCapture}
           onMouseDown={onMouseDown}
           onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
@@ -131,6 +138,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={`${wrapperClass} board-item-table`}
+          onMouseDownCapture={handleMouseDownCapture}
           onContextMenu={onContextMenu}
         >
           <Table
@@ -185,6 +193,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={wrapperClass}
+          onMouseDownCapture={handleMouseDownCapture}
           onMouseDown={onMouseDown}
           onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
@@ -204,6 +213,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={wrapperClass}
+          onMouseDownCapture={handleMouseDownCapture}
           onMouseDown={onMouseDown}
           onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
@@ -223,6 +233,7 @@ export function BoardItemRenderer({
         <div
           style={baseStyle}
           className={wrapperClass}
+          onMouseDownCapture={handleMouseDownCapture}
           onMouseDown={onMouseDown}
           onContextMenu={onContextMenu}
           onDoubleClick={onDoubleClick}
@@ -252,6 +263,7 @@ export function BoardItemRenderer({
             color: '#555',
           }}
           className={wrapperClass}
+          onMouseDownCapture={handleMouseDownCapture}
           onMouseDown={onMouseDown}
           onContextMenu={onContextMenu}
         >
