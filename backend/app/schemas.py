@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+PROJECT_THEME_COLORS = {"default", "sage", "sunset", "ocean"}
 
 
 class NamedPayload(BaseModel):
@@ -16,11 +19,46 @@ class NamedPayload(BaseModel):
 
 
 class ProjectCreatePayload(NamedPayload):
-    pass
+    theme_color: str = "default"
+
+    @field_validator("theme_color")
+    @classmethod
+    def validate_theme_color(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in PROJECT_THEME_COLORS:
+            raise ValueError("Project theme color is not supported.")
+        return normalized
 
 
-class ProjectUpdatePayload(NamedPayload):
-    pass
+class ProjectUpdatePayload(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    theme_color: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Name cannot be blank.")
+        return normalized
+
+    @field_validator("theme_color")
+    @classmethod
+    def validate_theme_color(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if normalized not in PROJECT_THEME_COLORS:
+            raise ValueError("Project theme color is not supported.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_update(self) -> "ProjectUpdatePayload":
+        if self.name is None and self.theme_color is None:
+            raise ValueError("Project update requires a name or theme color.")
+        return self
 
 
 class PageCreatePayload(NamedPayload):
@@ -54,6 +92,7 @@ class OrderedIdsPayload(BaseModel):
 class Project(BaseModel):
     id: str
     name: str
+    theme_color: str
     sort_order: int
     created_at: str
     updated_at: str

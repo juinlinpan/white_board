@@ -8,7 +8,11 @@
 - The workspace left sidebar should stay focused on page navigation and should not render a project details panel.
 - Basic project name editing should happen in the top workspace header.
 - Basic page name editing should happen in the top workspace header.
-- Page delete action should be shown as a trash button on the right side of the workspace header.
+- Page delete action should be shown as a trash button beside each page in the left page list, not in the workspace header.
+- Project delete action should be shown under the project name controls and must open a confirmation dialog that requires typing `delete {project_name}` before deletion; after deletion the app returns to the home screen.
+- Project management should include a `Change theme color` dropdown above `Delete project`; the selected theme is stored on the project and changes non-canvas workspace chrome so users can visually distinguish projects.
+- The workspace Manage panel should visually separate Project and Page controls; Project controls include name, theme, export, and delete, while Page controls stay in a separate section.
+- Canceling a browser file picker during Project or Page export should be treated as a normal cancellation and must not show an error banner.
 - The left sidebar should not render page rename / duplicate / delete action buttons.
 - The workspace `Home` button belongs in the sidebar header, positioned to the right of the `Whiteboard` title.
 - Clicking `＋ 新增 Page` should create a new page immediately with auto-generated name `untitled_n` (no prompt dialog).
@@ -181,9 +185,17 @@ Project 至少包含：
 
 - `id`
 - `name`
+- `theme_color`
 - `created_at`
 - `updated_at`
 - `sort_order`
+
+Project theme color rules:
+
+- `theme_color` defaults to `default`.
+- Supported values are `default`, `sage`, `sunset`, and `ocean`.
+- The theme applies to workspace chrome outside the canvas, including the sidebar, workspace header, toolbar, and inspector surfaces.
+- Canvas content, canvas item styling, and canvas grid/background controls remain independent from project theme color.
 
 Project 匯入規則：
 
@@ -391,6 +403,7 @@ Page 匯出補充規則：
 
 - `id`
 - `name`
+- `theme_color`
 - `sort_order`
 - `created_at`
 - `updated_at`

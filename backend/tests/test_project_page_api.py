@@ -53,6 +53,7 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
         create_project_response = client.post("/projects", json={"name": "Roadmap"})
         assert create_project_response.status_code == 201
         project = response_data(create_project_response)
+        assert project["theme_color"] == "default"
 
         list_projects_response = client.get("/projects")
         assert list_projects_response.status_code == 200
@@ -65,6 +66,16 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
         assert update_project_response.status_code == 200
         updated_project = response_data(update_project_response)
         assert updated_project["name"] == "Roadmap 2026"
+        assert updated_project["theme_color"] == "default"
+
+        update_theme_response = client.patch(
+            f"/projects/{project['id']}",
+            json={"theme_color": "sunset"},
+        )
+        assert update_theme_response.status_code == 200
+        themed_project = response_data(update_theme_response)
+        assert themed_project["name"] == "Roadmap 2026"
+        assert themed_project["theme_color"] == "sunset"
 
         create_page_response = client.post(
             f"/projects/{project['id']}/pages",

@@ -11,6 +11,7 @@ import {
   createPage,
   createProject,
   deletePage,
+  deleteProject,
   getPageBoardData,
   getHealth,
   listPages,
@@ -19,8 +20,12 @@ import {
   reorderPages,
   updatePage,
   updateProject,
+  type BoardItem,
+  type ConnectorLink,
   type Page,
+  type PageBoardData,
   type Project,
+  type ProjectThemeColor,
 } from './api';
 import { Canvas } from './Canvas';
 import { HomeView } from './HomeView';
@@ -52,6 +57,16 @@ type SidebarDropState = SidebarDragState & {
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY =
   'whiteboard.workspaceSidebarCollapsed';
+
+const PROJECT_THEME_OPTIONS: Array<{
+  value: ProjectThemeColor;
+  label: string;
+}> = [
+  { value: 'default', label: 'Default' },
+  { value: 'sage', label: 'Sage' },
+  { value: 'sunset', label: 'Sunset' },
+  { value: 'ocean', label: 'Ocean' },
+];
 
 type SaveFilePickerWindow = Window & {
   showSaveFilePicker?: (options?: {
@@ -87,20 +102,62 @@ async function savePageSnapshotWithPicker(
     throw new Error('目前瀏覽器不支援「選擇儲存位置」匯出，請改用支援 File System Access API 的瀏覽器。');
   }
 
-  const fileHandle = await pickerWindow.showSaveFilePicker({
-    suggestedName,
-    types: [
-      {
-        description: 'Whiteboard Page JSON',
-        accept: {
-          'application/json': ['.json'],
+  let fileHandle: Awaited<
+    ReturnType<NonNullable<SaveFilePickerWindow['showSaveFilePicker']>>
+  >;
+  try {
+    fileHandle = await pickerWindow.showSaveFilePicker({
+      suggestedName,
+      types: [
+        {
+          description: 'Whiteboard JSON',
+          accept: {
+            'application/json': ['.json'],
+          },
         },
-      },
-    ],
-  });
+      ],
+    });
+  } catch (error) {
+    if (isUserCancelledFilePickerError(error)) {
+      return;
+    }
+
+    throw error;
+  }
+
   const writable = await fileHandle.createWritable();
   await writable.write(payload);
   await writable.close();
+}
+
+function buildProjectExportSnapshot(
+  project: Project,
+  boardDataByPage: PageBoardData[],
+): string {
+  const payload = {
+    version: 1,
+    kind: 'whiteboard-project',
+    project: {
+      name: project.name,
+      theme_color: project.theme_color,
+      pages: boardDataByPage.map((boardData) => ({
+        name: boardData.page.name,
+        viewport: {
+          x: boardData.page.viewport_x,
+          y: boardData.page.viewport_y,
+          zoom: boardData.page.zoom,
+        },
+        board_items: boardData.board_items.map(
+          ({ page_id, created_at, updated_at, ...item }: BoardItem) => item,
+        ),
+        connector_links: boardData.connector_links.map(
+          ({ id, ...connector }: ConnectorLink) => connector,
+        ),
+      })),
+    },
+  };
+
+  return JSON.stringify(payload, null, 2);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -113,6 +170,22 @@ function getErrorMessage(error: unknown): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function isUserCancelledFilePickerError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    const normalizedMessage = error.message.toLowerCase();
+    return (
+      normalizedMessage.includes('user aborted') ||
+      normalizedMessage.includes('aborted a request')
+    );
+  }
+
+  return false;
 }
 
 function askForName(label: string, initialValue: string): string | null {
@@ -268,6 +341,8 @@ export function App() {
   >({});
   const [dragState, setDragState] = useState<SidebarDragState | null>(null);
   const [dropState, setDropState] = useState<SidebarDropState | null>(null);
+  const [projectDeleteDialogOpen, setProjectDeleteDialogOpen] = useState(false);
+  const [projectDeleteConfirmation, setProjectDeleteConfirmation] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
     readStoredBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY, false),
   );
@@ -284,6 +359,12 @@ export function App() {
   );
   const normalizedProjectNameDraft = projectNameDraft.trim();
   const normalizedPageNameDraft = pageNameDraft.trim();
+  const projectDeletePhrase =
+    selectedProject === null ? '' : `delete ${selectedProject.name}`;
+  const canConfirmProjectDelete =
+    selectedProject !== null &&
+    projectDeleteConfirmation === projectDeletePhrase &&
+    !isMutating;
 
   const handlePageViewportChange = useCallback(
     (pageId: string, viewport: { x: number; y: number; zoom: number }) => {
@@ -437,6 +518,8 @@ export function App() {
 
   useEffect(() => {
     setProjectNameDraft(selectedProject?.name ?? '');
+    setProjectDeleteDialogOpen(false);
+    setProjectDeleteConfirmation('');
   }, [selectedProject]);
 
   useEffect(() => {
@@ -529,10 +612,9 @@ export function App() {
     }
 
     await runMutation(async () => {
-      const updatedProject = await updateProject(
-        selectedProject.id,
-        normalizedProjectNameDraft,
-      );
+      const updatedProject = await updateProject(selectedProject.id, {
+        name: normalizedProjectNameDraft,
+      });
       setProjects((current) =>
         current.map((project) =>
           project.id === updatedProject.id ? updatedProject : project,
@@ -579,10 +661,13 @@ export function App() {
     });
   }
 
-  async function handleDeletePage(): Promise<void> {
-    if (selectedPage === null) {
+  async function handleDeletePage(
+    pageToDelete: Page | null = selectedPage,
+  ): Promise<void> {
+    if (pageToDelete === null) {
       return;
     }
+    const selectedPage = pageToDelete;
 
     const confirmed = window.confirm(`刪除 Page「${selectedPage.name}」？`);
     if (!confirmed) {
@@ -594,7 +679,90 @@ export function App() {
     await runMutation(async () => {
       await deletePage(selectedPage.id);
       setPages(remainingPages);
-      setSelectedPageId(remainingPages[0]?.id ?? null);
+      setSelectedPageId((current) =>
+        current === selectedPage.id ? remainingPages[0]?.id ?? null : current,
+      );
+    });
+  }
+
+  async function handleChangeProjectTheme(
+    nextThemeColor: ProjectThemeColor,
+  ): Promise<void> {
+    if (selectedProject === null) {
+      return;
+    }
+
+    if (nextThemeColor === selectedProject.theme_color) {
+      return;
+    }
+
+    await runMutation(async () => {
+      const updatedProject = await updateProject(selectedProject.id, {
+        theme_color: nextThemeColor,
+      });
+      setProjects((current) =>
+        current.map((project) =>
+          project.id === updatedProject.id ? updatedProject : project,
+        ),
+      );
+    });
+  }
+
+  function handleExportProjectClick(): void {
+    if (selectedProject === null || isMutating) {
+      return;
+    }
+
+    void runMutation(async () => {
+      const projectPages = await listPages(selectedProject.id);
+      const boardDataByPage = await Promise.all(
+        projectPages.map((page) => getPageBoardData(page.id)),
+      );
+      const payload = buildProjectExportSnapshot(selectedProject, boardDataByPage);
+      const safeProjectName = sanitizeExportName(selectedProject.name);
+      await savePageSnapshotWithPicker(
+        payload,
+        `${safeProjectName}.whiteboard-project.json`,
+      );
+    });
+  }
+
+  function openProjectDeleteDialog(): void {
+    if (selectedProject === null || isMutating) {
+      return;
+    }
+
+    setProjectDeleteConfirmation('');
+    setProjectDeleteDialogOpen(true);
+  }
+
+  function closeProjectDeleteDialog(): void {
+    if (isMutating) {
+      return;
+    }
+
+    setProjectDeleteDialogOpen(false);
+    setProjectDeleteConfirmation('');
+  }
+
+  async function handleDeleteProject(): Promise<void> {
+    if (selectedProject === null || !canConfirmProjectDelete) {
+      return;
+    }
+
+    const projectToDelete = selectedProject;
+
+    await runMutation(async () => {
+      await deleteProject(projectToDelete.id);
+      setProjects((current) =>
+        current.filter((project) => project.id !== projectToDelete.id),
+      );
+      setPages([]);
+      setSelectedProjectId(null);
+      setSelectedPageId(null);
+      setProjectDeleteDialogOpen(false);
+      setProjectDeleteConfirmation('');
+      goHome('replace');
     });
   }
 
@@ -833,6 +1001,7 @@ export function App() {
 
       <main
         className={`app-shell ${isSidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}
+        data-project-theme={selectedProject?.theme_color ?? 'default'}
       >
         <aside className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
           <button
@@ -874,55 +1043,24 @@ export function App() {
             </div>
             {selectedProject !== null ? (
               <div className="sidebar-name-stack">
-                <div className="sidebar-name-group">
-                  <label className="sidebar-name-label" htmlFor="sidebar-project-name-input">
-                    Project
-                  </label>
-                  <div className="sidebar-name-edit-row">
-                    <input
-                      id="sidebar-project-name-input"
-                      className="sidebar-name-input sidebar-project-name-input"
-                      disabled={isMutating}
-                      type="text"
-                      value={projectNameDraft}
-                      onChange={(event) => setProjectNameDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void handleSaveProjectName();
-                        }
-                      }}
-                    />
-                    <button
-                      className="ghost-button sidebar-inline-save"
-                      disabled={
-                        isMutating ||
-                        normalizedProjectNameDraft.length === 0 ||
-                        normalizedProjectNameDraft === selectedProject.name
-                      }
-                      onClick={() => void handleSaveProjectName()}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-                {selectedPage !== null ? (
+                <div className="sidebar-manage-group">
+                  <div className="sidebar-manage-heading">Project</div>
                   <div className="sidebar-name-group">
-                    <label className="sidebar-name-label" htmlFor="sidebar-page-name-input">
-                      Page
+                    <label className="sidebar-name-label" htmlFor="sidebar-project-name-input">
+                      Name
                     </label>
                     <div className="sidebar-name-edit-row">
                       <input
-                        id="sidebar-page-name-input"
-                        className="sidebar-name-input sidebar-page-name-input"
+                        id="sidebar-project-name-input"
+                        className="sidebar-name-input sidebar-project-name-input"
                         disabled={isMutating}
                         type="text"
-                        value={pageNameDraft}
-                        onChange={(event) => setPageNameDraft(event.target.value)}
+                        value={projectNameDraft}
+                        onChange={(event) => setProjectNameDraft(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') {
                             event.preventDefault();
-                            void handleSavePageName();
+                            void handleSaveProjectName();
                           }
                         }}
                       />
@@ -930,13 +1068,86 @@ export function App() {
                         className="ghost-button sidebar-inline-save"
                         disabled={
                           isMutating ||
-                          normalizedPageNameDraft.length === 0 ||
-                          normalizedPageNameDraft === selectedPage.name
+                          normalizedProjectNameDraft.length === 0 ||
+                          normalizedProjectNameDraft === selectedProject.name
                         }
-                        onClick={() => void handleSavePageName()}
+                        onClick={() => void handleSaveProjectName()}
                       >
                         Save
                       </button>
+                    </div>
+                  </div>
+                  <label className="sidebar-project-theme-control">
+                    <span className="sidebar-name-label">Theme</span>
+                    <select
+                      disabled={isMutating}
+                      value={selectedProject.theme_color}
+                      onChange={(event) =>
+                        void handleChangeProjectTheme(
+                          event.target.value as ProjectThemeColor,
+                        )
+                      }
+                    >
+                      {PROJECT_THEME_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="sidebar-project-action-row">
+                    <button
+                      type="button"
+                      className="ghost-button sidebar-project-export-button"
+                      disabled={isMutating}
+                      onClick={handleExportProjectClick}
+                    >
+                      Export
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button danger-button sidebar-project-delete-button"
+                      disabled={isMutating}
+                      onClick={openProjectDeleteDialog}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {selectedPage !== null ? (
+                  <div className="sidebar-manage-group sidebar-page-manage-group">
+                    <div className="sidebar-manage-heading">Page</div>
+                    <div className="sidebar-name-group">
+                      <label className="sidebar-name-label" htmlFor="sidebar-page-name-input">
+                        Name
+                      </label>
+                      <div className="sidebar-name-edit-row">
+                        <input
+                          id="sidebar-page-name-input"
+                          className="sidebar-name-input sidebar-page-name-input"
+                          disabled={isMutating}
+                          type="text"
+                          value={pageNameDraft}
+                          onChange={(event) => setPageNameDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              void handleSavePageName();
+                            }
+                          }}
+                        />
+                        <button
+                          className="ghost-button sidebar-inline-save"
+                          disabled={
+                            isMutating ||
+                            normalizedPageNameDraft.length === 0 ||
+                            normalizedPageNameDraft === selectedPage.name
+                          }
+                          onClick={() => void handleSavePageName()}
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -1009,6 +1220,19 @@ export function App() {
                         <span>{page.name}</span>
                         <small>zoom {page.zoom.toFixed(1)}x</small>
                       </button>
+                      <button
+                        type="button"
+                        className="ghost-button danger-button page-trash-button"
+                        disabled={isMutating}
+                        title={`Delete page ${page.name}`}
+                        aria-label={`Delete page ${page.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDeletePage(page);
+                        }}
+                      >
+                        <span className="visually-hidden">Delete page</span>
+                      </button>
                     </div>
                   );
                 })}
@@ -1031,15 +1255,6 @@ export function App() {
               <strong>{selectedPage?.name ?? 'No page selected'}</strong>
             </div>
             <div className="workspace-header-actions">
-              <button
-                className="ghost-button danger-button trash-button"
-                disabled={selectedPage === null || isMutating}
-                onClick={() => void handleDeletePage()}
-                title={selectedPage !== null ? `Delete page ${selectedPage.name}` : 'Delete page'}
-                aria-label={selectedPage !== null ? `Delete page ${selectedPage.name}` : 'Delete page'}
-              >
-                Delete
-              </button>
               <div className="status-pill">
                 <span className={`status-indicator status-${healthState}`} />
               </div>
@@ -1093,6 +1308,83 @@ export function App() {
           )}
         </section>
       </main>
+      {projectDeleteDialogOpen && selectedProject !== null ? (
+        <div
+          className="confirmation-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeProjectDeleteDialog();
+            }
+          }}
+        >
+          <section
+            className="confirmation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="project-delete-dialog-title"
+          >
+            <div className="confirmation-dialog-header">
+              <h2 id="project-delete-dialog-title">Delete project</h2>
+              <button
+                type="button"
+                className="ghost-button confirmation-dialog-close"
+                disabled={isMutating}
+                onClick={closeProjectDeleteDialog}
+                aria-label="Close delete project dialog"
+              >
+                X
+              </button>
+            </div>
+            <p className="confirmation-dialog-copy">
+              This will delete the project, its pages, and all board content.
+            </p>
+            <label
+              className="confirmation-dialog-label"
+              htmlFor="project-delete-confirmation-input"
+            >
+              Type <strong>{projectDeletePhrase}</strong> to confirm.
+            </label>
+            <input
+              id="project-delete-confirmation-input"
+              className="confirmation-dialog-input"
+              disabled={isMutating}
+              value={projectDeleteConfirmation}
+              onChange={(event) => setProjectDeleteConfirmation(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && canConfirmProjectDelete) {
+                  event.preventDefault();
+                  void handleDeleteProject();
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeProjectDeleteDialog();
+                }
+              }}
+              autoFocus
+            />
+            <div className="confirmation-dialog-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={isMutating}
+                onClick={closeProjectDeleteDialog}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ghost-button danger-button"
+                disabled={!canConfirmProjectDelete}
+                onClick={() => void handleDeleteProject()}
+              >
+                Delete project
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }

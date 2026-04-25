@@ -9,10 +9,13 @@ export type HealthResponse = {
 export type Project = {
   id: string;
   name: string;
+  theme_color: ProjectThemeColor;
   sort_order: number;
   created_at: string;
   updated_at: string;
 };
+
+export type ProjectThemeColor = 'default' | 'sage' | 'sunset' | 'ocean';
 
 export type Page = {
   id: string;
@@ -103,10 +106,13 @@ export async function createProject(name: string): Promise<Project> {
   });
 }
 
-export async function updateProject(id: string, name: string): Promise<Project> {
+export async function updateProject(
+  id: string,
+  payload: { name?: string; theme_color?: ProjectThemeColor },
+): Promise<Project> {
   return requestJson<Project>(`/projects/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(payload),
   });
 }
 

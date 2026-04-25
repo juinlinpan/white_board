@@ -7,7 +7,11 @@
 - [x] The workspace left sidebar stays focused on page navigation and no longer shows a project details panel.
 - [x] Basic project name editing now happens in the top workspace header.
 - [x] Basic page name editing now happens in the top workspace header.
-- [x] Page delete now uses a trash button on the right side of the workspace header.
+- [x] Page delete now uses a trash button beside each page in the left page list instead of the workspace header.
+- [x] Project delete now appears under the project name controls and requires typing `delete {project_name}` before returning to the home screen.
+- [x] Added a project-level `Change theme color` dropdown above `Delete project`, with `default`, `sage`, `sunset`, and `ocean` themes persisted on each project.
+- [x] Organized the workspace Manage panel into separated Project and Page sections; Project now exposes name, theme, export, and delete together.
+- [x] Treat browser file picker cancellation during Project / Page export as a normal cancel without showing an error banner.
 - [x] Removed page rename / duplicate / delete action buttons from the left sidebar.
 - [x] The workspace `Home` button now sits beside the `Whiteboard` heading.
 - [x] Clicking `＋ 新增 Page` now creates `untitled_n` directly without a prompt dialog.

@@ -25,6 +25,7 @@ from app.schemas import (
     Project,
     ProjectCreatePayload,
     ProjectUpdatePayload,
+    PROJECT_THEME_COLORS,
 )
 from app.settings import AppSettings
 
@@ -43,6 +44,7 @@ SCHEMA_STATEMENTS = (
     CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        theme_color TEXT NOT NULL DEFAULT 'default',
         sort_order INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -128,6 +130,7 @@ def initialize_storage(settings: AppSettings) -> None:
             connection.execute("PRAGMA foreign_keys = ON")
             for statement in SCHEMA_STATEMENTS:
                 connection.execute(statement)
+            _ensure_project_theme_column(connection)
             connection.commit()
     except sqlite3.Error as exc:
         raise StorageInitializationError(
@@ -135,6 +138,15 @@ def initialize_storage(settings: AppSettings) -> None:
         ) from exc
 
     LOGGER.info("Storage initialized at %s", settings.sqlite_path)
+
+
+def _ensure_project_theme_column(connection: sqlite3.Connection) -> None:
+    rows = connection.execute("PRAGMA table_info(projects)").fetchall()
+    column_names = {row[1] for row in rows}
+    if "theme_color" not in column_names:
+        connection.execute(
+            "ALTER TABLE projects ADD COLUMN theme_color TEXT NOT NULL DEFAULT 'default'"
+        )
 
 
 def _ensure_directory(path: Path, label: str) -> None:
@@ -195,7 +207,7 @@ class WhiteboardRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, name, sort_order, created_at, updated_at
+                SELECT id, name, theme_color, sort_order, created_at, updated_at
                 FROM projects
                 ORDER BY sort_order ASC, created_at ASC
                 """
@@ -206,7 +218,7 @@ class WhiteboardRepository:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT id, name, sort_order, created_at, updated_at
+                SELECT id, name, theme_color, sort_order, created_at, updated_at
                 FROM projects
                 WHERE id = ?
                 """,
@@ -228,14 +240,28 @@ class WhiteboardRepository:
             sort_order = self._next_sort_order(connection, "projects")
             connection.execute(
                 """
-                INSERT INTO projects (id, name, sort_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO projects (
+                    id,
+                    name,
+                    theme_color,
+                    sort_order,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (project_id, payload.name, sort_order, timestamp, timestamp),
+                (
+                    project_id,
+                    payload.name,
+                    payload.theme_color,
+                    sort_order,
+                    timestamp,
+                    timestamp,
+                ),
             )
             row = connection.execute(
                 """
-                SELECT id, name, sort_order, created_at, updated_at
+                SELECT id, name, theme_color, sort_order, created_at, updated_at
                 FROM projects
                 WHERE id = ?
                 """,
@@ -253,13 +279,33 @@ class WhiteboardRepository:
     def update_project(self, project_id: str, payload: ProjectUpdatePayload) -> Project:
         timestamp = utc_timestamp()
         with self._connect() as connection:
+            current_row = connection.execute(
+                """
+                SELECT name, theme_color
+                FROM projects
+                WHERE id = ?
+                """,
+                (project_id,),
+            ).fetchone()
+            if current_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Project '{project_id}' was not found.",
+                )
+
+            next_name = payload.name if payload.name is not None else current_row["name"]
+            next_theme_color = (
+                payload.theme_color
+                if payload.theme_color is not None
+                else current_row["theme_color"]
+            )
             cursor = connection.execute(
                 """
                 UPDATE projects
-                SET name = ?, updated_at = ?
+                SET name = ?, theme_color = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (payload.name, timestamp, project_id),
+                (next_name, next_theme_color, timestamp, project_id),
             )
             if cursor.rowcount == 0:
                 raise HTTPException(
@@ -269,7 +315,7 @@ class WhiteboardRepository:
 
             row = connection.execute(
                 """
-                SELECT id, name, sort_order, created_at, updated_at
+                SELECT id, name, theme_color, sort_order, created_at, updated_at
                 FROM projects
                 WHERE id = ?
                 """,
@@ -319,7 +365,7 @@ class WhiteboardRepository:
             )
             reordered_rows = connection.execute(
                 """
-                SELECT id, name, sort_order, created_at, updated_at
+                SELECT id, name, theme_color, sort_order, created_at, updated_at
                 FROM projects
                 ORDER BY sort_order ASC, created_at ASC
                 """
@@ -1187,7 +1233,10 @@ class WhiteboardRepository:
         return int(row["next_sort_order"])
 
     def _project_from_row(self, row: sqlite3.Row) -> Project:
-        return Project.model_validate(dict(row))
+        payload = dict(row)
+        if payload["theme_color"] not in PROJECT_THEME_COLORS:
+            payload["theme_color"] = "default"
+        return Project.model_validate(payload)
 
     def _page_from_row(self, row: sqlite3.Row) -> Page:
         return Page.model_validate(dict(row))
