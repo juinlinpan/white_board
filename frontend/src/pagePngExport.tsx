@@ -13,13 +13,6 @@ import {
   sortItemsByLayer,
   summarizeFrameChild,
 } from './canvasHelpers';
-import { CANVAS_GRID_SIZE } from './canvasConstants';
-import {
-  CANVAS_BACKGROUND_STORAGE_KEY,
-  DEFAULT_CANVAS_BACKGROUND_MODE,
-  parseCanvasBackgroundMode,
-  type CanvasBackgroundMode,
-} from './canvasBackground';
 import { BoardItemRenderer } from './items/BoardItemRenderer';
 import { ArrowConnector } from './items/ArrowConnector';
 
@@ -55,16 +48,6 @@ export function getPagePngExportBounds(items: BoardItem[]): Rect | null {
     width: Math.max(1, right - left),
     height: Math.max(1, bottom - top),
   };
-}
-
-function getCanvasBackgroundMode(): CanvasBackgroundMode {
-  if (typeof window === 'undefined') {
-    return DEFAULT_CANVAS_BACKGROUND_MODE;
-  }
-
-  return parseCanvasBackgroundMode(
-    window.localStorage.getItem(CANVAS_BACKGROUND_STORAGE_KEY),
-  );
 }
 
 function waitForNextFrame(): Promise<void> {
@@ -133,11 +116,9 @@ function createExportHost(width: number, height: number): HTMLDivElement {
 function ExportSurface({
   boardData,
   bounds,
-  backgroundMode,
 }: {
   boardData: PageBoardData;
   bounds: Rect;
-  backgroundMode: CanvasBackgroundMode;
 }) {
   const visibleItems = getVisibleItems(boardData.board_items);
   const connectorByItemId = new Map(
@@ -148,7 +129,7 @@ function ExportSurface({
     width: bounds.width,
     height: bounds.height,
     overflow: 'hidden',
-    background: '#f6f4ef',
+    background: '#ffffff',
   };
   const worldStyle: CSSProperties = {
     position: 'absolute',
@@ -159,27 +140,6 @@ function ExportSurface({
 
   return (
     <div style={surfaceStyle}>
-      <div
-        className={`canvas-background canvas-background-${backgroundMode}`}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundSize: `${CANVAS_GRID_SIZE}px ${CANVAS_GRID_SIZE}px`,
-          backgroundPosition: `${-bounds.x}px ${-bounds.y}px`,
-        }}
-      />
-      <div
-        className="canvas-zero-axis canvas-zero-axis-y"
-        style={{ left: `${-bounds.x}px` }}
-      >
-        <span className="canvas-zero-axis-label">Y=0</span>
-      </div>
-      <div
-        className="canvas-zero-axis canvas-zero-axis-x"
-        style={{ top: `${-bounds.y}px` }}
-      >
-        <span className="canvas-zero-axis-label">X=0</span>
-      </div>
       <div className="canvas-world" style={worldStyle}>
         {visibleItems.map((item) => {
           if (isLegacyConnectorArrow(item)) {
@@ -271,7 +231,6 @@ export async function exportPageAsPng(
     <ExportSurface
       boardData={boardData}
       bounds={bounds}
-      backgroundMode={getCanvasBackgroundMode()}
     />,
     bounds,
   );
