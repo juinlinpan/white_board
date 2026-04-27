@@ -27,7 +27,7 @@
 ## Export And Read-Only Sharing Planning Notes
 
 - [ ] Keep `JSON` export as the shared canonical snapshot source for future export targets.
-- [ ] Add `PNG` export for quick sharing, with `current viewport` and `whole page` variants.
+- [x] Add `PNG` export for quick sharing, cropped to the visible item bounds instead of the whole canvas.
 - [ ] Add `PPTX` export with an initial `one page => one slide` mapping and defined raster fallback boundaries.
 - [ ] Add a project-level read-only `viewer` export that recipients can open without installing the app or backend.
 - [ ] Make the read-only `viewer` self-contained (prefer single HTML or equivalent packaging) so recipients are not required to run a local server.
@@ -340,8 +340,8 @@
 ### 21. 匯出與唯讀分享
 
 - [ ] 抽出共用 export pipeline，統一讀取 Page / Project snapshot、viewport、背景與 item hierarchy
-- [ ] 定義 PNG 匯出 UI：`目前 viewport` / `整張 Page`
-- [ ] 實作 PNG 匯出並補上基本視覺驗收
+- [x] 定義 PNG 匯出 UI 與裁切規則：自動輸出有物件的區域
+- [x] 實作 PNG 匯出並補上基本視覺驗收
 - [ ] 研究並選定 PPTX 產生方案，確認瀏覽器端或 backend 端的責任邊界
 - [ ] 定義 PPTX slide layout、字型 / 色彩對應與 raster fallback 規則
 - [ ] 實作 PPTX 匯出並驗證多種 item 組合

@@ -248,7 +248,7 @@ Page 匯出補充規則：
 
 - 匯出的 JSON 需同時保留 `board_items[].parent_item_id` 與可直接遍歷的 `item_hierarchy`（樹狀 children 結構）
 - `item_hierarchy` 與 `parent_item_id` 必須互相一致，避免後續 MCP / agent 消費時出現歧義
-- PNG 匯出優先支援「目前 viewport」與「整張 Page」兩種模式，作為快速分享與文件貼圖用途
+- PNG 匯出先以「自動裁切到有物件的區域」為主，無需輸出整張畫布
 - PNG 匯出應盡量忠實保留畫布背景、物件顏色、線條與文字可讀性
 - PPTX 匯出優先以「每個 Page 對應一張 slide」規劃，保留 Page 名稱、物件相對位置與主要視覺層次
 - 若個別白板物件在 PPTX 中難以原生重建，允許以 page-level 或 item-level rasterized snapshot 作為相容 fallback，但輸出流程需明確定義 fallback 邊界

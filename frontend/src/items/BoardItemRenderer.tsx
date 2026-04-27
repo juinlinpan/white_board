@@ -12,6 +12,7 @@ type Props = {
   childSummaries: FrameSummaryEntry[];
   childCount: number;
   className?: string;
+  renderMode?: 'interactive' | 'static';
   isSelected: boolean;
   isEditing: boolean;
   canTranslateSegment?: boolean;
@@ -40,6 +41,7 @@ export function BoardItemRenderer({
   childSummaries,
   childCount,
   className = '',
+  renderMode = 'interactive',
   isSelected,
   isEditing,
   canTranslateSegment = false,
@@ -60,6 +62,7 @@ export function BoardItemRenderer({
   magnetEnabled,
 }: Props) {
   const isSegmentItem = item.type === 'line' || item.type === 'arrow';
+  const isStatic = renderMode === 'static';
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
     left: item.x,
@@ -80,7 +83,7 @@ export function BoardItemRenderer({
     }
   };
   const resizeHandle =
-    isSelected && !isEditing && !isSegmentItem ? (
+    !isStatic && isSelected && !isEditing && !isSegmentItem ? (
       <button
         type="button"
         className="board-item-resize-handle"
@@ -152,38 +155,42 @@ export function BoardItemRenderer({
             dropTargetCellId={tableDropTargetCellId}
             magnetEnabled={magnetEnabled}
           />
-          <button
-            type="button"
-            className="board-item-table-edge board-item-table-edge-top"
-            aria-label="Move table"
-            tabIndex={-1}
-            onMouseDown={onMouseDown}
-            onContextMenu={onContextMenu}
-          />
-          <button
-            type="button"
-            className="board-item-table-edge board-item-table-edge-right"
-            aria-label="Move table"
-            tabIndex={-1}
-            onMouseDown={onMouseDown}
-            onContextMenu={onContextMenu}
-          />
-          <button
-            type="button"
-            className="board-item-table-edge board-item-table-edge-bottom"
-            aria-label="Move table"
-            tabIndex={-1}
-            onMouseDown={onMouseDown}
-            onContextMenu={onContextMenu}
-          />
-          <button
-            type="button"
-            className="board-item-table-edge board-item-table-edge-left"
-            aria-label="Move table"
-            tabIndex={-1}
-            onMouseDown={onMouseDown}
-            onContextMenu={onContextMenu}
-          />
+          {isStatic ? null : (
+            <>
+              <button
+                type="button"
+                className="board-item-table-edge board-item-table-edge-top"
+                aria-label="Move table"
+                tabIndex={-1}
+                onMouseDown={onMouseDown}
+                onContextMenu={onContextMenu}
+              />
+              <button
+                type="button"
+                className="board-item-table-edge board-item-table-edge-right"
+                aria-label="Move table"
+                tabIndex={-1}
+                onMouseDown={onMouseDown}
+                onContextMenu={onContextMenu}
+              />
+              <button
+                type="button"
+                className="board-item-table-edge board-item-table-edge-bottom"
+                aria-label="Move table"
+                tabIndex={-1}
+                onMouseDown={onMouseDown}
+                onContextMenu={onContextMenu}
+              />
+              <button
+                type="button"
+                className="board-item-table-edge board-item-table-edge-left"
+                aria-label="Move table"
+                tabIndex={-1}
+                onMouseDown={onMouseDown}
+                onContextMenu={onContextMenu}
+              />
+            </>
+          )}
           {resizeHandle}
         </div>
       );
@@ -243,6 +250,7 @@ export function BoardItemRenderer({
             childCount={childCount}
             childSummaries={childSummaries}
             onToggleCollapse={onToggleCollapse}
+            showToggle={!isStatic}
           />
           {resizeHandle}
         </div>
