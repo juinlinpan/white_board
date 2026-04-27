@@ -17,6 +17,7 @@ type Props = {
   childCount: number;
   childSummaries: FrameSummaryEntry[];
   onToggleCollapse: () => void;
+  showToggle?: boolean;
 };
 
 export function Frame({
@@ -24,6 +25,7 @@ export function Frame({
   childCount,
   childSummaries,
   onToggleCollapse,
+  showToggle = true,
 }: Props) {
   const title = item.title?.trim() || 'Untitled Frame';
   const resolvedStyle = resolveBoardItemStyle(item);
@@ -56,13 +58,15 @@ export function Frame({
         </div>
         <div className="frame-header-actions">
           <span className="frame-count">{childCount} items</span>
-          <button
-            className="frame-toggle"
-            onClick={handleToggleClick}
-            onMouseDown={handleToggleMouseDown}
-          >
-            {item.is_collapsed ? '展開' : '縮回'}
-          </button>
+          {showToggle ? (
+            <button
+              className="frame-toggle"
+              onClick={handleToggleClick}
+              onMouseDown={handleToggleMouseDown}
+            >
+              {item.is_collapsed ? '展開' : '縮回'}
+            </button>
+          ) : null}
         </div>
       </div>
 

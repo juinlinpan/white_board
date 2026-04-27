@@ -39,6 +39,7 @@ import {
   mergeImportedPageBoardState,
   parsePageImportText,
 } from './pageTransfer';
+import { exportPageAsPng } from './pagePngExport';
 import { buildAppRouteUrl, readAppRoute, type AppRoute } from './appRoute';
 import { resolveProjectEntryPageId } from './workspaceNavigation';
 
@@ -152,10 +153,17 @@ function sanitizeExportName(name: string): string {
   return normalized.length > 0 ? normalized : 'page';
 }
 
-async function savePageSnapshotWithPicker(
-  payload: string,
-  suggestedName: string,
-): Promise<void> {
+async function saveFileWithPicker({
+  data,
+  suggestedName,
+  description,
+  accept,
+}: {
+  data: Blob | string;
+  suggestedName: string;
+  description: string;
+  accept: Record<string, string[]>;
+}): Promise<void> {
   const pickerWindow = window as SaveFilePickerWindow;
   if (pickerWindow.showSaveFilePicker === undefined) {
     throw new Error('目前瀏覽器不支援「選擇儲存位置」匯出，請改用支援 File System Access API 的瀏覽器。');
@@ -169,10 +177,8 @@ async function savePageSnapshotWithPicker(
       suggestedName,
       types: [
         {
-          description: 'Whiteboard JSON',
-          accept: {
-            'application/json': ['.json'],
-          },
+          description,
+          accept,
         },
       ],
     });
@@ -185,7 +191,7 @@ async function savePageSnapshotWithPicker(
   }
 
   const writable = await fileHandle.createWritable();
-  await writable.write(payload);
+  await writable.write(data);
   await writable.close();
 }
 
@@ -807,10 +813,14 @@ export function App() {
       );
       const payload = buildProjectExportSnapshot(selectedProject, boardDataByPage);
       const safeProjectName = sanitizeExportName(selectedProject.name);
-      await savePageSnapshotWithPicker(
-        payload,
-        `${safeProjectName}.whiteboard-project.json`,
-      );
+      await saveFileWithPicker({
+        data: payload,
+        suggestedName: `${safeProjectName}.whiteboard-project.json`,
+        description: 'Whiteboard JSON',
+        accept: {
+          'application/json': ['.json'],
+        },
+      });
     });
   }
 
@@ -1013,7 +1023,7 @@ export function App() {
     });
   }
 
-  function handleExportPageClick(): void {
+  function handleExportPageClick(format: 'json' | 'png'): void {
     if (selectedPage === null || isMutating) {
       return;
     }
@@ -1021,13 +1031,29 @@ export function App() {
     void runMutation(async () => {
       try {
         const boardData = await getPageBoardData(selectedPage.id);
-        const payload = buildPageExportSnapshot(boardData);
         const safePageName = sanitizeExportName(selectedPage.name);
-        const suggestedFileName = `${safePageName}.whiteboard-page.json`;
-        await savePageSnapshotWithPicker(
-          payload,
-          suggestedFileName,
-        );
+        if (format === 'json') {
+          const payload = buildPageExportSnapshot(boardData);
+          await saveFileWithPicker({
+            data: payload,
+            suggestedName: `${safePageName}.whiteboard-page.json`,
+            description: 'Whiteboard JSON',
+            accept: {
+              'application/json': ['.json'],
+            },
+          });
+          return;
+        }
+
+        const pngBlob = await exportPageAsPng(boardData);
+        await saveFileWithPicker({
+          data: pngBlob,
+          suggestedName: `${safePageName}.png`,
+          description: 'PNG image',
+          accept: {
+            'image/png': ['.png'],
+          },
+        });
       } catch (error) {
         if (isAbortError(error)) {
           return;

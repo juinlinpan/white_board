@@ -71,6 +71,8 @@ Inside the workspace top header, the current `Page` now supports:
 
 - `Export JSON`: dump the current page viewport + board items + connectors to a
   local `.whiteboard-page.json` file
+- `Export PNG`: export a `.png` snapshot automatically cropped to the area that
+  contains visible board items
 - `Import JSON`: import that page snapshot into the currently opened page
 
 Import behavior is additive: if the current page is empty it fills from the
