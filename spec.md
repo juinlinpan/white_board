@@ -24,6 +24,8 @@
 - The top toolbar should follow an Office-like menu pattern where `檔案` and `編輯` open dropdown menus after clicking the menu name.
 - `檔案` dropdown should contain `import` and `export` entries instead of direct always-visible buttons.
 - `export` should open a right-side submenu on hover so future formats can be extended without changing menu hierarchy.
+- The `export` submenu should be planned around multiple targets: existing `JSON`, quick-share `PNG`, presentation-oriented `PPTX`, and a read-only `Viewer` deliverable.
+- New export targets should reuse a shared snapshot source so format-specific output does not diverge from the persisted page / project model.
 - `magnet` and `zoom` controls should stay aligned at the far-right end of the top toolbar.
 
 ## Zoom And Grid Update Notes
@@ -181,6 +183,7 @@
 - 重新命名 Project
 - 刪除 Project
 - 以拖拉調整 Project 排序
+- 匯出 Project 為唯讀 viewer 分享檔
 - 切換目前 Project
 
 Project 至少包含：
@@ -206,6 +209,14 @@ Project 匯入規則：
 - 匯入時會建立新的本機 Project，不覆寫既有 Project
 - 匯入時需重建 Page、board item 與 connector 的本機 id，避免與既有 SQLite 資料衝突
 
+Project 匯出 / 分享規劃：
+
+- viewer 匯出以 Project 為單位，需保留多個 Page 與基本導覽能力
+- viewer 輸出應以「對方不用安裝 whiteboard app 或 backend」為前提，優先規劃為可直接開啟的靜態唯讀網頁檔案 / 封裝
+- viewer 需內嵌對應 snapshot，不依賴雲端服務，也不要求收件者額外安裝資料庫
+- viewer 僅提供唯讀瀏覽：Page 切換、pan / zoom、frame 展開狀態與內容閱讀；不提供編輯、匯入、登入或回存
+- viewer 輸出需避免 `file://` 額外抓檔限制，應優先採單一 HTML 或等效自包含封裝，而非要求收件者先架 server
+
 ### 5.2 Page
 
 每個 Project 底下可以：
@@ -215,6 +226,8 @@ Project 匯入規則：
 - 刪除 Page
 - 複製 Page
 - 匯出目前 Page 為 JSON snapshot
+- 匯出目前 Page 為 PNG
+- 匯出目前 Page 為 PPTX
 - 從 JSON 匯入 Page 內容到目前 Page（若目前 Page 已有內容則直接疊加）
 - 以拖拉調整 Page 排序
 - 切換 Page
@@ -235,6 +248,11 @@ Page 匯出補充規則：
 
 - 匯出的 JSON 需同時保留 `board_items[].parent_item_id` 與可直接遍歷的 `item_hierarchy`（樹狀 children 結構）
 - `item_hierarchy` 與 `parent_item_id` 必須互相一致，避免後續 MCP / agent 消費時出現歧義
+- PNG 匯出優先支援「目前 viewport」與「整張 Page」兩種模式，作為快速分享與文件貼圖用途
+- PNG 匯出應盡量忠實保留畫布背景、物件顏色、線條與文字可讀性
+- PPTX 匯出優先以「每個 Page 對應一張 slide」規劃，保留 Page 名稱、物件相對位置與主要視覺層次
+- 若個別白板物件在 PPTX 中難以原生重建，允許以 page-level 或 item-level rasterized snapshot 作為相容 fallback，但輸出流程需明確定義 fallback 邊界
+- PNG、PPTX、viewer 應共用同一份版面計算與匯出中繼資料，避免不同格式對 frame 摘要、文字截斷與 item hierarchy 的解讀不一致
 
 ### 5.3 白板通用能力
 
@@ -540,6 +558,7 @@ MVP 至少包含：
 - Markdown rich preview
 - table 進階排版
 - Undo / Redo 歷史優化
+- PNG / PPTX / viewer 匯出
 - 多人協作
 
 ## 13. 驗收條件
@@ -564,6 +583,9 @@ MVP 至少包含：
 9. 資料可寫入並重讀 SQLite
 10. 前端可成功呼叫 `GET /healthz`
 11. 背景色與文字色只能從系統提供的固定色票中選擇
+12. 可將目前 Page 匯出為可讀的 PNG
+13. 可將目前 Page 匯出為可分享的 PPTX，至少保持 page-by-slide 對應
+14. 可將 Project 匯出為不需安裝 app/backend 的唯讀 viewer，並可離線開啟與切換 Page
 
 ## 14. 建議實作順序
 
