@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
-import html2canvas from 'html2canvas';
 
 import type { BoardItem, PageBoardData } from './api';
 import {
@@ -82,38 +81,94 @@ async function waitForExportLayout(): Promise<void> {
   await waitForNextFrame();
 }
 
-async function renderCanvasToPngBlob(
+function copyComputedStyle(source: Element, target: Element): void {
+  const computedStyle = window.getComputedStyle(source);
+  const styleText = Array.from(computedStyle)
+    .map((property) => `${property}:${computedStyle.getPropertyValue(property)};`)
+    .join('');
+
+  if (target instanceof HTMLElement) {
+    target.style.cssText = styleText;
+    return;
+  }
+
+  target.setAttribute('style', styleText);
+}
+
+function cloneNodeWithComputedStyles(node: Node): Node {
+  if (node instanceof Text) {
+    return document.createTextNode(node.textContent ?? '');
+  }
+
+  if (!(node instanceof Element)) {
+    return node.cloneNode(false);
+  }
+
+  const clone = node.cloneNode(false) as Element;
+  copyComputedStyle(node, clone);
+
+  if (clone instanceof HTMLElement) {
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+  }
+
+  for (const child of Array.from(node.childNodes)) {
+    clone.appendChild(cloneNodeWithComputedStyles(child));
+  }
+
+  return clone;
+}
+
+async function renderSvgToPngBlob(
   content: Element,
   width: number,
   height: number,
 ): Promise<Blob> {
-  if (!(content instanceof HTMLElement)) {
-    throw new Error('PNG 匯出失敗，無法建立畫面內容。');
-  }
-
-  const scale = Math.min(
-    MAX_EXPORT_SCALE,
-    Math.max(1, window.devicePixelRatio || 1),
-  );
-  const canvas = await html2canvas(content, {
-    backgroundColor: null,
-    height,
-    logging: false,
-    scale,
-    useCORS: true,
-    width,
-    windowHeight: Math.ceil(height),
-    windowWidth: Math.ceil(width),
+  const serializedContent = new XMLSerializer().serializeToString(content);
+  const svgMarkup = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <foreignObject width="100%" height="100%">${serializedContent}</foreignObject>
+    </svg>
+  `;
+  const svgBlob = new Blob([svgMarkup], {
+    type: 'image/svg+xml;charset=utf-8',
   });
+  const svgUrl = URL.createObjectURL(svgBlob);
 
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/png');
-  });
-  if (blob === null) {
-    throw new Error('PNG 匯出失敗，無法產生檔案。');
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error('PNG 匯出失敗，無法建立畫面快照。'));
+      nextImage.src = svgUrl;
+    });
+
+    const scale = Math.min(
+      MAX_EXPORT_SCALE,
+      Math.max(1, window.devicePixelRatio || 1),
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(width * scale);
+    canvas.height = Math.ceil(height * scale);
+
+    const context = canvas.getContext('2d');
+    if (context === null) {
+      throw new Error('PNG 匯出失敗，無法建立畫布。');
+    }
+
+    context.scale(scale, scale);
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/png');
+    });
+    if (blob === null) {
+      throw new Error('PNG 匯出失敗，無法產生檔案。');
+    }
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(svgUrl);
   }
-
-  return blob;
 }
 
 function createExportHost(width: number, height: number): HTMLDivElement {
@@ -252,7 +307,16 @@ async function renderExportSurfaceToBlob(
       throw new Error('PNG 匯出失敗，無法建立畫面內容。');
     }
 
-    return await renderCanvasToPngBlob(content, bounds.width, bounds.height);
+    const clonedContent = cloneNodeWithComputedStyles(content);
+    if (!(clonedContent instanceof Element)) {
+      throw new Error('PNG 匯出失敗，無法複製畫面內容。');
+    }
+
+    return await renderSvgToPngBlob(
+      clonedContent,
+      bounds.width,
+      bounds.height,
+    );
   } finally {
     root.unmount();
     host.remove();
