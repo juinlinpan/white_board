@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 
-import type { BoardItem, ConnectorLink, PageBoardData } from './api';
+import type { BoardItem, PageBoardData } from './api';
 import {
   getConnectorPoints,
   getFrameChildren,
@@ -241,7 +241,7 @@ function ExportSurface({
             const connector = connectorByItemId.get(item.id);
             const connectorPoints =
               connector !== undefined
-                ? getConnectorPoints(connector as ConnectorLink, boardData.board_items)
+                ? getConnectorPoints(connector, boardData.board_items)
                 : null;
 
             if (!connector || !connectorPoints) {
