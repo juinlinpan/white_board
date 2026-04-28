@@ -123,7 +123,7 @@ type Props = {
   page: Page;
   onViewportChange?: (viewport: Viewport) => void;
   onImportPage: () => void;
-  onExportPage: (format: 'json' | 'png') => void;
+  onExportPage: (format: 'json' | 'png' | 'pptx') => void;
   importExportDisabled: boolean;
 };
 

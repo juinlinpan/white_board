@@ -83,7 +83,7 @@ type Props = {
   onToolChange: (tool: ActiveTool) => void;
   onTableToolClick: (clientX: number, clientY: number) => void;
   onImportPage: () => void;
-  onExportPage: (format: 'json' | 'png') => void;
+  onExportPage: (format: 'json' | 'png' | 'pptx') => void;
   importExportDisabled: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -330,8 +330,18 @@ export function Toolbar({
                     >
                       PNG (.png)
                     </button>
-                    <button type="button" className="toolbar-dropdown-item" role="menuitem" disabled>
-                      PPTX (coming soon)
+                    <button
+                      type="button"
+                      className="toolbar-dropdown-item"
+                      role="menuitem"
+                      disabled={importExportDisabled}
+                      onClick={() => {
+                        onExportPage('pptx');
+                        setOpenMenu(null);
+                        setFileSubmenuOpen(false);
+                      }}
+                    >
+                      PPTX (.pptx)
                     </button>
                   </div>
                 ) : null}

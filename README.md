@@ -73,6 +73,8 @@ Inside the workspace top header, the current `Page` now supports:
   local `.whiteboard-page.json` file
 - `Export PNG`: export a `.png` snapshot automatically cropped to the area that
   contains visible board items
+- `Export PPTX`: export a `.pptx` deck with the current page rendered as a
+  single slide, keeping the page name plus a page-level raster snapshot fallback
 - `Import JSON`: import that page snapshot into the currently opened page
 
 Import behavior is additive: if the current page is empty it fills from the

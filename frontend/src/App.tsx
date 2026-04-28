@@ -20,8 +20,6 @@ import {
   reorderPages,
   updatePage,
   updateProject,
-  type BoardItem,
-  type ConnectorLink,
   type Page,
   type PageBoardData,
   type Project,
@@ -35,11 +33,13 @@ import {
   parseProjectImportText,
 } from './projectImport';
 import {
+  buildPageExportPayload,
   buildPageExportSnapshot,
   mergeImportedPageBoardState,
   parsePageImportText,
 } from './pageTransfer';
 import { exportPageAsPng } from './pagePngExport';
+import { exportPageAsPptx } from './pagePptxExport';
 import { buildAppRouteUrl, readAppRoute, type AppRoute } from './appRoute';
 import { resolveProjectEntryPageId } from './workspaceNavigation';
 
@@ -205,20 +205,7 @@ function buildProjectExportSnapshot(
     project: {
       name: project.name,
       theme_color: project.theme_color,
-      pages: boardDataByPage.map((boardData) => ({
-        name: boardData.page.name,
-        viewport: {
-          x: boardData.page.viewport_x,
-          y: boardData.page.viewport_y,
-          zoom: boardData.page.zoom,
-        },
-        board_items: boardData.board_items.map(
-          ({ page_id, created_at, updated_at, ...item }: BoardItem) => item,
-        ),
-        connector_links: boardData.connector_links.map(
-          ({ id, ...connector }: ConnectorLink) => connector,
-        ),
-      })),
+      pages: boardDataByPage.map((boardData) => buildPageExportPayload(boardData)),
     },
   };
 
@@ -1023,7 +1010,7 @@ export function App() {
     });
   }
 
-  function handleExportPageClick(format: 'json' | 'png'): void {
+  function handleExportPageClick(format: 'json' | 'png' | 'pptx'): void {
     if (selectedPage === null || isMutating) {
       return;
     }
@@ -1045,13 +1032,28 @@ export function App() {
           return;
         }
 
-        const pngBlob = await exportPageAsPng(boardData);
+        if (format === 'png') {
+          const pngBlob = await exportPageAsPng(boardData);
+          await saveFileWithPicker({
+            data: pngBlob,
+            suggestedName: `${safePageName}.png`,
+            description: 'PNG image',
+            accept: {
+              'image/png': ['.png'],
+            },
+          });
+          return;
+        }
+
+        const pptxBlob = await exportPageAsPptx(boardData);
         await saveFileWithPicker({
-          data: pngBlob,
-          suggestedName: `${safePageName}.png`,
-          description: 'PNG image',
+          data: pptxBlob,
+          suggestedName: `${safePageName}.pptx`,
+          description: 'PowerPoint presentation',
           accept: {
-            'image/png': ['.png'],
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': [
+              '.pptx',
+            ],
           },
         });
       } catch (error) {

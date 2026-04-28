@@ -5,19 +5,21 @@ type JsonObject = Record<string, unknown>;
 type ExportedPageSnapshot = {
   version: 1;
   kind: 'whiteboard-page';
-  page: {
-    name: string;
-    viewport: {
-      x: number;
-      y: number;
-      zoom: number;
-    };
-    board_items: Omit<BoardItem, 'page_id' | 'created_at' | 'updated_at'>[];
-    item_hierarchy: {
-      roots: ItemHierarchyNode[];
-    };
-    connector_links: Omit<ConnectorLink, 'id'>[];
+  page: ExportedPagePayload;
+};
+
+export type ExportedPagePayload = {
+  name: string;
+  viewport: {
+    x: number;
+    y: number;
+    zoom: number;
   };
+  board_items: Omit<BoardItem, 'page_id' | 'created_at' | 'updated_at'>[];
+  item_hierarchy: {
+    roots: ItemHierarchyNode[];
+  };
+  connector_links: Omit<ConnectorLink, 'id'>[];
 };
 
 type ItemHierarchyNode = {
@@ -238,7 +240,7 @@ function validateHierarchy(
   }
 }
 
-export function buildPageExportSnapshot(boardData: PageBoardData): string {
+export function buildPageExportPayload(boardData: PageBoardData): ExportedPagePayload {
   const boardItems = boardData.board_items.map((item) => ({
     id: item.id,
     parent_item_id: item.parent_item_id,
@@ -265,22 +267,26 @@ export function buildPageExportSnapshot(boardData: PageBoardData): string {
     to_anchor: connector.to_anchor,
   }));
 
+  return {
+    name: boardData.page.name,
+    viewport: {
+      x: boardData.page.viewport_x,
+      y: boardData.page.viewport_y,
+      zoom: boardData.page.zoom,
+    },
+    board_items: boardItems,
+    item_hierarchy: {
+      roots: buildItemHierarchy(boardItems),
+    },
+    connector_links: connectorLinks,
+  };
+}
+
+export function buildPageExportSnapshot(boardData: PageBoardData): string {
   const payload: ExportedPageSnapshot = {
     version: 1,
     kind: 'whiteboard-page',
-    page: {
-      name: boardData.page.name,
-      viewport: {
-        x: boardData.page.viewport_x,
-        y: boardData.page.viewport_y,
-        zoom: boardData.page.zoom,
-      },
-      board_items: boardItems,
-      item_hierarchy: {
-        roots: buildItemHierarchy(boardItems),
-      },
-      connector_links: connectorLinks,
-    },
+    page: buildPageExportPayload(boardData),
   };
 
   return JSON.stringify(payload, null, 2);
