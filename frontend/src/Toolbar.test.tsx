@@ -4,25 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { getToolbarDockPosition, Toolbar } from './Toolbar';
 
 describe('Toolbar', () => {
-  it('renders file, edit, and tool controls', () => {
+  it('renders tool controls only', () => {
     const markup = renderToStaticMarkup(
       <Toolbar
         activeTool="select"
         onToolChange={() => {}}
         onTableToolClick={() => {}}
-        onImportPage={() => {}}
-        onExportPage={() => {}}
-        importExportDisabled={false}
-        canUndo
-        canRedo
-        onUndo={() => {}}
-        onRedo={() => {}}
-        historyBusy={false}
       />,
     );
 
-    expect(markup).toContain('File');
-    expect(markup).toContain('Edit');
     expect(markup).toContain('Select');
     expect(markup).toContain('Table');
   });
