@@ -226,6 +226,7 @@ export function Canvas({
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(null);
   const [utilityMenuOpen, setUtilityMenuOpen] = useState<UtilityMenuId>(null);
   const [isExportSubmenuOpen, setIsExportSubmenuOpen] = useState(false);
+  const [isResetZoomPanelOpen, setIsResetZoomPanelOpen] = useState(false);
 
   const viewportRef = useRef<Viewport>(viewport);
   const itemsRef = useRef<BoardItem[]>(items);
@@ -250,6 +251,7 @@ export function Canvas({
   const editSessionRef = useRef<EditSessionState | null>(null);
   const toolbarTableInsertOriginRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const utilityMenuRef = useRef<HTMLDivElement | null>(null);
+  const resetZoomPanelRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     viewportRef.current = viewport;
@@ -535,12 +537,16 @@ export function Canvas({
         setUtilityMenuOpen(null);
         setIsExportSubmenuOpen(false);
       }
+      if (!resetZoomPanelRef.current?.contains(event.target as Node)) {
+        setIsResetZoomPanelOpen(false);
+      }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setUtilityMenuOpen(null);
         setIsExportSubmenuOpen(false);
+        setIsResetZoomPanelOpen(false);
       }
     }
 
@@ -1553,14 +1559,43 @@ export function Canvas({
           >
             {resetZoomTarget.toFixed(1)}x
           </button>
-          <button
-            type="button"
-            className="canvas-rbn-ctrl-btn canvas-rbn-ctrl-muted"
-            title="Adjust reset zoom target"
-            onClick={() => handleResetZoomAdjust(1)}
-          >
-            Adjust
-          </button>
+          <div className="canvas-rbn-reset-zoom-wrap" ref={resetZoomPanelRef}>
+            <button
+              type="button"
+              className="canvas-rbn-ctrl-btn canvas-rbn-ctrl-muted"
+              title="Adjust reset zoom target"
+              aria-haspopup="dialog"
+              aria-expanded={isResetZoomPanelOpen}
+              onClick={() =>
+                setIsResetZoomPanelOpen((currentOpen) => !currentOpen)
+              }
+            >
+              Adjust
+            </button>
+            {isResetZoomPanelOpen ? (
+              <div className="canvas-rbn-reset-zoom-panel" role="dialog" aria-label="Adjust reset zoom">
+                <button
+                  type="button"
+                  className="canvas-rbn-reset-zoom-step"
+                  title="Decrease reset zoom target"
+                  onClick={() => handleResetZoomAdjust(-1)}
+                >
+                  −
+                </button>
+                <div className="canvas-rbn-reset-zoom-value">
+                  {resetZoomTarget.toFixed(1)}x
+                </div>
+                <button
+                  type="button"
+                  className="canvas-rbn-reset-zoom-step"
+                  title="Increase reset zoom target"
+                  onClick={() => handleResetZoomAdjust(1)}
+                >
+                  +
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           <div className="canvas-rbn-sep" aria-hidden="true" />
 
