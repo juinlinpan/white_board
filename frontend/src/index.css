@@ -2433,32 +2433,71 @@ button {
   pointer-events: none;
 }
 
-.canvas-top-right-stack {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 4;
+.canvas-ribbon {
+  position: relative;
+  z-index: 5;
+  margin: 0 12px;
 }
 
-.canvas-background-picker {
+.canvas-ribbon-toggle-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(8px);
+  justify-content: space-between;
+  height: 20px;
 }
 
-.canvas-background-picker-label {
-  font-size: 0.72rem;
+.canvas-ribbon-toggle {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.86rem;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.canvas-ribbon-toggle:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.canvas-ribbon-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.canvas-ribbon-left,
+.canvas-ribbon-right,
+.canvas-ribbon-view-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.canvas-ribbon-view-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.canvas-ribbon-view-label,
+.canvas-ribbon-menu-label {
+  font-size: 0.68rem;
   font-weight: 700;
-  color: #475569;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.canvas-ribbon-view-label {
+  padding-top: 2px;
 }
 
 .canvas-background-picker-options {

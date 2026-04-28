@@ -82,17 +82,7 @@ type Props = {
   activeTool: ActiveTool;
   onToolChange: (tool: ActiveTool) => void;
   onTableToolClick: (clientX: number, clientY: number) => void;
-  onImportPage: () => void;
-  onExportPage: (format: 'json' | 'png' | 'pptx') => void;
-  importExportDisabled: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  historyBusy: boolean;
 };
-
-type ToolbarMenuId = 'file' | 'edit' | null;
 export type ToolbarPosition = 'top' | 'bottom' | 'left' | 'right';
 
 type RectLike = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>;
@@ -120,18 +110,8 @@ export function Toolbar({
   activeTool,
   onToolChange,
   onTableToolClick,
-  onImportPage,
-  onExportPage,
-  importExportDisabled,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  historyBusy,
 }: Props) {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const [openMenu, setOpenMenu] = useState<ToolbarMenuId>(null);
-  const [fileSubmenuOpen, setFileSubmenuOpen] = useState(false);
   const [position, setPosition] = useState<ToolbarPosition>('top');
   const [previewPosition, setPreviewPosition] = useState<ToolbarPosition | null>(null);
   const [dragCoords, setDragCoords] = useState<{ x: number; y: number } | null>(null);
@@ -140,24 +120,13 @@ export function Toolbar({
   const pendingPositionRef = useRef<ToolbarPosition>('top');
 
   useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!toolbarRef.current?.contains(event.target as Node)) {
-        setOpenMenu(null);
-        setFileSubmenuOpen(false);
-      }
-    }
-
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpenMenu(null);
-        setFileSubmenuOpen(false);
+        isDraggingRef.current = false;
       }
     }
-
-    window.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('keydown', handleEscape);
     return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
   }, []);
@@ -207,11 +176,6 @@ export function Toolbar({
     dragOffsetRef.current = null;
   };
 
-  function toggleMenu(menuId: Exclude<ToolbarMenuId, null>) {
-    setFileSubmenuOpen(false);
-    setOpenMenu((current) => (current === menuId ? null : menuId));
-  }
-
   const activePosition = (isDraggingRef.current && previewPosition) ? previewPosition : position;
   const showToolbarText = activePosition === 'top' || activePosition === 'bottom';
   const dragStyles: React.CSSProperties = dragCoords
@@ -249,160 +213,6 @@ export function Toolbar({
         </span>
       </div>
       <div className="toolbar-left">
-        <div className="toolbar-menu-dropdown" aria-label="File">
-          <button
-            type="button"
-            className={`tool-button toolbar-menu-trigger ${openMenu === 'file' ? 'is-active' : ''}`}
-            aria-label="File menu"
-            aria-expanded={openMenu === 'file'}
-            onClick={() => toggleMenu('file')}
-          >
-            <span className="tool-icon" aria-hidden="true">
-              {icon('M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z')}
-            </span>
-            {showToolbarText ? <span className="tool-label">File</span> : null}
-          </button>
-          {openMenu === 'file' ? (
-            <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
-              <button
-                type="button"
-                className="toolbar-dropdown-item"
-                role="menuitem"
-                disabled={importExportDisabled}
-                onMouseEnter={() => setFileSubmenuOpen(false)}
-                onClick={() => {
-                  onImportPage();
-                  setOpenMenu(null);
-                }}
-              >
-                Import
-              </button>
-              <div
-                className="toolbar-dropdown-item-submenu"
-                onMouseEnter={() => {
-                  if (!importExportDisabled) {
-                    setFileSubmenuOpen(true);
-                  }
-                }}
-                onMouseLeave={() => setFileSubmenuOpen(false)}
-              >
-                <button
-                  type="button"
-                  className="toolbar-dropdown-item toolbar-dropdown-item-submenu-trigger"
-                  role="menuitem"
-                  disabled={importExportDisabled}
-                  aria-haspopup="menu"
-                  aria-expanded={fileSubmenuOpen}
-                  onFocus={() => {
-                    if (!importExportDisabled) {
-                      setFileSubmenuOpen(true);
-                    }
-                  }}
-                  onClick={() => {
-                    if (!importExportDisabled) {
-                      setFileSubmenuOpen((current) => !current);
-                    }
-                  }}
-                >
-                  <span>Export</span>
-                  <span className="toolbar-submenu-chevron">&gt;</span>
-                </button>
-                {fileSubmenuOpen ? (
-                  <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      role="menuitem"
-                      disabled={importExportDisabled}
-                      onClick={() => {
-                        onExportPage('json');
-                        setOpenMenu(null);
-                        setFileSubmenuOpen(false);
-                      }}
-                    >
-                      JSON (.json)
-                    </button>
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      role="menuitem"
-                      disabled={importExportDisabled}
-                      onClick={() => {
-                        onExportPage('png');
-                        setOpenMenu(null);
-                        setFileSubmenuOpen(false);
-                      }}
-                    >
-                      PNG (.png)
-                    </button>
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      role="menuitem"
-                      disabled={importExportDisabled}
-                      onClick={() => {
-                        onExportPage('pptx');
-                        setOpenMenu(null);
-                        setFileSubmenuOpen(false);
-                      }}
-                    >
-                      PPTX (.pptx)
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="toolbar-menu-dropdown" aria-label="Edit">
-          <button
-            type="button"
-            className={`tool-button toolbar-menu-trigger ${openMenu === 'edit' ? 'is-active' : ''}`}
-            aria-label="Edit menu"
-            aria-expanded={openMenu === 'edit'}
-            onClick={() => toggleMenu('edit')}
-          >
-            <span className="tool-icon" aria-hidden="true">
-              {icon('m4 20 4.5-1 9.5-9.5a1.8 1.8 0 0 0 0-2.5l-1.5-1.5a1.8 1.8 0 0 0-2.5 0L4.5 15 4 20z')}
-            </span>
-            {showToolbarText ? <span className="tool-label">Edit</span> : null}
-          </button>
-          {openMenu === 'edit' ? (
-            <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
-              <button
-                type="button"
-                className="toolbar-dropdown-item"
-                title="Undo (Ctrl/Cmd + Z)"
-                role="menuitem"
-                disabled={!canUndo || historyBusy}
-                onClick={() => {
-                  onUndo();
-                  setOpenMenu(null);
-                }}
-              >
-                Undo
-              </button>
-
-              <button
-                type="button"
-                className="toolbar-dropdown-item"
-                title="Redo (Ctrl/Cmd + Shift + Z)"
-                role="menuitem"
-                disabled={!canRedo || historyBusy}
-                onClick={() => {
-                  onRedo();
-                  setOpenMenu(null);
-                }}
-              >
-                Redo
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="toolbar-divider" />
-
         <div className="toolbar-actions">
           {TOOLS.map((tool) => (
             <button

@@ -23,6 +23,9 @@
 - [x] Move page `import` / `export` under the `檔案` dropdown.
 - [x] Add hover-triggered right submenu under `export` to host current and future formats.
 - [x] Keep `magnet` and `zoom` controls pinned to the far-right side of the toolbar.
+- [x] Add an Office-like ribbon between workspace header and canvas, collapsed by default with compact `v` toggles on both sides.
+- [x] Place `檔案` / `編輯` menus on the left and `檢視` controls (`magnet` / `zoom` / `背景`) on the right when ribbon expands downward.
+- [x] Keep the draggable toolbar focused on tool buttons only.
 
 ## Export And Read-Only Sharing Planning Notes
 
