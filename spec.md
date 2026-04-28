@@ -26,7 +26,8 @@
 - `export` should open a right-side submenu on hover so future formats can be extended without changing menu hierarchy.
 - The `export` submenu should be planned around multiple targets: existing `JSON`, quick-share `PNG`, presentation-oriented `PPTX`, and a read-only `Viewer` deliverable.
 - New export targets should reuse a shared snapshot source so format-specific output does not diverge from the persisted page / project model.
-- `magnet` and `zoom` controls should stay aligned at the far-right end of the top toolbar.
+- Workspace header and canvas must have a right-aligned utility strip that is collapsed by default and can be expanded downward; this strip hosts `檔案` / `編輯` menus and grouped `magnet`, `zoom`, and `背景` controls under a visible `區分` section.
+- The draggable toolbar should keep tool shortcuts only (selection and item creation tools), while non-tool utility controls move to the utility strip.
 
 ## Zoom And Grid Update Notes
 
