@@ -29,6 +29,7 @@
 - [ ] Keep `JSON` export as the shared canonical snapshot source for future export targets.
 - [x] Add `PNG` export for quick sharing, cropped to the visible item bounds instead of the whole canvas.
 - [x] Add `PPTX` export with an initial `one page => one slide` mapping and defined raster fallback boundaries.
+- [x] Change PPTX export to editable native objects: `table` -> PowerPoint table, `frame` -> footer rectangle + title textbox, others -> textbox with original colors where possible.
 - [ ] Add a project-level read-only `viewer` export that recipients can open without installing the app or backend.
 - [ ] Make the read-only `viewer` self-contained (prefer single HTML or equivalent packaging) so recipients are not required to run a local server.
 - [ ] Reuse shared layout / summary rules across `PNG`, `PPTX`, and `viewer` outputs so frame summaries, text truncation, and hierarchy stay consistent.
