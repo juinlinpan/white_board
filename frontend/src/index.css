@@ -2433,71 +2433,85 @@ button {
   pointer-events: none;
 }
 
-.canvas-ribbon {
+.canvas-utility-strip {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 10px 12px 0;
+}
+
+.canvas-utility-strip-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   position: relative;
   z-index: 5;
-  margin: 0 12px;
 }
 
-.canvas-ribbon-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 20px;
-}
-
-.canvas-ribbon-toggle {
-  border: 0;
-  background: transparent;
-  color: #64748b;
-  font-size: 0.86rem;
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.canvas-ribbon-toggle:hover {
-  background: rgba(15, 23, 42, 0.06);
-}
-
-.canvas-ribbon-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 10px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+.canvas-utility-toggle {
+  border: 1px solid rgba(15, 23, 42, 0.12);
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e293b;
+  cursor: pointer;
 }
 
-.canvas-ribbon-left,
-.canvas-ribbon-right,
-.canvas-ribbon-view-controls {
+.canvas-utility-toggle.is-expanded {
+  color: var(--accent);
+}
+
+.canvas-utility-panel {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.canvas-utility-panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.08em;
+}
+
+.canvas-utility-groups {
+  display: flex;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 10px;
 }
 
-.canvas-ribbon-view-group {
+.canvas-utility-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(15, 23, 42, 0.1);
 }
 
-.canvas-ribbon-view-label,
-.canvas-ribbon-menu-label {
+.canvas-utility-group:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.canvas-utility-group-label {
   font-size: 0.68rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.canvas-ribbon-view-label {
-  padding-top: 2px;
 }
 
 .canvas-background-picker-options {
