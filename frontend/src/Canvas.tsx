@@ -224,7 +224,6 @@ export function Canvas({
     readStoredBoolean(INSPECTOR_COLLAPSED_STORAGE_KEY, false),
   );
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(null);
-  const [isUtilityPanelExpanded, setIsUtilityPanelExpanded] = useState(false);
   const [utilityMenuOpen, setUtilityMenuOpen] = useState<UtilityMenuId>(null);
   const [isExportSubmenuOpen, setIsExportSubmenuOpen] = useState(false);
 
@@ -1344,543 +1343,247 @@ export function Canvas({
         onToolChange={handleToolChange}
         onTableToolClick={handleToolbarTableClick}
       />
-      <div className="canvas-utility-strip">
-        <div className="canvas-utility-strip-right" ref={utilityMenuRef}>
-          <button
-            type="button"
-            className={`canvas-utility-toggle ${isUtilityPanelExpanded ? 'is-expanded' : ''}`}
-            aria-expanded={isUtilityPanelExpanded}
-            onClick={() => {
-              setIsUtilityPanelExpanded((current) => !current);
-              setUtilityMenuOpen(null);
-              setIsExportSubmenuOpen(false);
-            }}
-          >
-            <span>{isUtilityPanelExpanded ? '收合' : '展開'}</span>
-            <span aria-hidden="true">{isUtilityPanelExpanded ? '▴' : '▾'}</span>
-          </button>
-          {isUtilityPanelExpanded ? (
-            <section className="canvas-utility-panel" aria-label="Canvas utility controls">
-              <div className="canvas-utility-panel-title">區分</div>
-              <div className="canvas-utility-groups">
-                <div className="canvas-utility-group">
-                  <div className="canvas-utility-group-label">檔案</div>
-                  <div className="toolbar-menu-dropdown" aria-label="File">
-                    <button
-                      type="button"
-                      className={`tool-button toolbar-menu-trigger ${utilityMenuOpen === 'file' ? 'is-active' : ''}`}
-                      aria-label="File menu"
-                      aria-expanded={utilityMenuOpen === 'file'}
-                      onClick={() => toggleUtilityMenu('file')}
-                    >
-                      <span className="tool-label">檔案</span>
-                    </button>
-                    {utilityMenuOpen === 'file' ? (
-                      <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
-                        <button
-                          type="button"
-                          className="toolbar-dropdown-item"
-                          role="menuitem"
-                          disabled={importExportDisabled}
-                          onMouseEnter={() => setIsExportSubmenuOpen(false)}
-                          onClick={() => {
-                            onImportPage();
-                            setUtilityMenuOpen(null);
-                          }}
-                        >
-                          Import
-                        </button>
-                        <div
-                          className="toolbar-dropdown-item-submenu"
-                          onMouseEnter={() => {
-                            if (!importExportDisabled) {
-                              setIsExportSubmenuOpen(true);
-                            }
-                          }}
-                          onMouseLeave={() => setIsExportSubmenuOpen(false)}
-                        >
-                          <button
-                            type="button"
-                            className="toolbar-dropdown-item toolbar-dropdown-item-submenu-trigger"
-                            role="menuitem"
-                            disabled={importExportDisabled}
-                            aria-haspopup="menu"
-                            aria-expanded={isExportSubmenuOpen}
-                            onFocus={() => {
-                              if (!importExportDisabled) {
-                                setIsExportSubmenuOpen(true);
-                              }
-                            }}
-                            onClick={() => {
-                              if (!importExportDisabled) {
-                                setIsExportSubmenuOpen((current) => !current);
-                              }
-                            }}
-                          >
-                            <span>Export</span>
-                            <span className="toolbar-submenu-chevron">&gt;</span>
-                          </button>
-                          {isExportSubmenuOpen ? (
-                            <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
-                              <button
-                                type="button"
-                                className="toolbar-dropdown-item"
-                                role="menuitem"
-                                disabled={importExportDisabled}
-                                onClick={() => {
-                                  onExportPage('json');
-                                  setUtilityMenuOpen(null);
-                                  setIsExportSubmenuOpen(false);
-                                }}
-                              >
-                                JSON (.json)
-                              </button>
-                              <button
-                                type="button"
-                                className="toolbar-dropdown-item"
-                                role="menuitem"
-                                disabled={importExportDisabled}
-                                onClick={() => {
-                                  onExportPage('png');
-                                  setUtilityMenuOpen(null);
-                                  setIsExportSubmenuOpen(false);
-                                }}
-                              >
-                                PNG (.png)
-                              </button>
-                              <button
-                                type="button"
-                                className="toolbar-dropdown-item"
-                                role="menuitem"
-                                disabled={importExportDisabled}
-                                onClick={() => {
-                                  onExportPage('pptx');
-                                  setUtilityMenuOpen(null);
-                                  setIsExportSubmenuOpen(false);
-                                }}
-                              >
-                                PPTX (.pptx)
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="canvas-utility-group">
-                  <div className="canvas-utility-group-label">編輯</div>
-                  <div className="toolbar-menu-dropdown" aria-label="Edit">
-                    <button
-                      type="button"
-                      className={`tool-button toolbar-menu-trigger ${utilityMenuOpen === 'edit' ? 'is-active' : ''}`}
-                      aria-label="Edit menu"
-                      aria-expanded={utilityMenuOpen === 'edit'}
-                      onClick={() => toggleUtilityMenu('edit')}
-                    >
-                      <span className="tool-label">編輯</span>
-                    </button>
-                    {utilityMenuOpen === 'edit' ? (
-                      <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
-                        <button
-                          type="button"
-                          className="toolbar-dropdown-item"
-                          title="Undo (Ctrl/Cmd + Z)"
-                          role="menuitem"
-                          disabled={!canUndo || isHistorySyncing}
-                          onClick={() => {
-                            void handleUndo();
-                            setUtilityMenuOpen(null);
-                          }}
-                        >
-                          Undo
-                        </button>
-                        <button
-                          type="button"
-                          className="toolbar-dropdown-item"
-                          title="Redo (Ctrl/Cmd + Shift + Z)"
-                          role="menuitem"
-                          disabled={!canRedo || isHistorySyncing}
-                          onClick={() => {
-                            void handleRedo();
-                            setUtilityMenuOpen(null);
-                          }}
-                        >
-                          Redo
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="canvas-utility-group">
-                  <div className="canvas-utility-group-label">磁鐵</div>
-                  <button
-                    type="button"
-                    aria-pressed={magnetEnabled}
-                    className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-                    title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
-                    onClick={() => setMagnetEnabled((current) => !current)}
-                  >
-                    <span className="tool-label">Magnet</span>
-                  </button>
-                </div>
-                <div className="canvas-utility-group">
-                  <div className="canvas-utility-group-label">Zoom</div>
-                  <div className="toolbar-zoom-group" aria-label="Zoom controls">
-                    <div className="toolbar-zoom-stepper" aria-label="Current zoom controls">
-                      <button
-                        type="button"
-                        className="tool-button tool-button-compact toolbar-zoom-step"
-                        title="Zoom in"
-                        onClick={handleZoomIn}
-                      >
-                        <span className="tool-label">+</span>
-                      </button>
-                      <div className="toolbar-zoom-readout" aria-live="polite">
-                        <span className="toolbar-zoom-value">{getDisplayZoom(viewport.zoom).toFixed(1)}x</span>
-                        <span className="toolbar-zoom-caption">Zoom</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="tool-button tool-button-compact toolbar-zoom-step"
-                        title="Zoom out"
-                        onClick={handleZoomOut}
-                      >
-                        <span className="tool-label">-</span>
-                      </button>
-                    </div>
-                    <div className="toolbar-zoom-reset-tools">
-                      <button
-                        type="button"
-                        className="tool-button toolbar-zoom-reset-button"
-                        title={'Reset zoom to ' + resetZoomTarget.toFixed(1) + 'x'}
-                        onClick={handleResetZoom}
-                      >
-                        <span className="toolbar-zoom-reset-action">Reset</span>
-                        <span className="toolbar-zoom-reset-target">
-                          {resetZoomTarget.toFixed(1)}x
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="tool-button toolbar-zoom-adjust-button"
-                        title="Adjust reset zoom target"
-                        onClick={() => handleResetZoomAdjust(1)}
-                      >
-                        <span className="tool-label">Adjust</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="canvas-utility-group">
-                  <div className="canvas-utility-group-label">背景</div>
-                  <div className="canvas-background-picker-options">
-                    {(
-                      [
-                        ['dots', '點狀'],
-                        ['grid', '格線'],
-                      ] as const satisfies readonly [
-                        CanvasBackgroundMode,
-                        string,
-                      ][]
-                    ).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`canvas-background-option ${
-                          backgroundMode === mode
-                            ? 'canvas-background-option-active'
-                            : ''
-                        }`}
-                        aria-pressed={backgroundMode === mode}
-                        onClick={() => setBackgroundMode(mode)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-        </div>
-      </div>
       <div
-        className={`canvas-ribbon ${isUtilityPanelExpanded ? 'is-expanded' : 'is-collapsed'}`}
+        className="canvas-ribbon"
         ref={utilityMenuRef}
       >
-        <div className="canvas-ribbon-toggle-row">
-          <button
-            type="button"
-            className="canvas-ribbon-toggle canvas-ribbon-toggle-left"
-            aria-label={isUtilityPanelExpanded ? '收合檢視列' : '展開檢視列'}
-            aria-expanded={isUtilityPanelExpanded}
-            onClick={() => {
-              setIsUtilityPanelExpanded((current) => !current);
-              setUtilityMenuOpen(null);
-              setIsExportSubmenuOpen(false);
-            }}
-          >
-            <span aria-hidden="true">{isUtilityPanelExpanded ? '˄' : '˅'}</span>
-          </button>
-          <button
-            type="button"
-            className="canvas-ribbon-toggle canvas-ribbon-toggle-right"
-            aria-label={isUtilityPanelExpanded ? '收合檢視列' : '展開檢視列'}
-            aria-expanded={isUtilityPanelExpanded}
-            onClick={() => {
-              setIsUtilityPanelExpanded((current) => !current);
-              setUtilityMenuOpen(null);
-              setIsExportSubmenuOpen(false);
-            }}
-          >
-            <span aria-hidden="true">{isUtilityPanelExpanded ? '˄' : '˅'}</span>
-          </button>
-        </div>
-        {isUtilityPanelExpanded ? (
-          <section className="canvas-ribbon-content" aria-label="Canvas utility controls">
-            <div className="canvas-ribbon-left">
-              <div className="toolbar-menu-dropdown" aria-label="File">
-                <div className="canvas-ribbon-menu-label">檔案</div>
+        <div className="canvas-ribbon-bar">
+          {/* File menu */}
+          <div className="canvas-rbn-menu-wrap" aria-label="File">
+            <button
+              type="button"
+              className={`canvas-rbn-menu-btn ${utilityMenuOpen === 'file' ? 'is-active' : ''}`}
+              aria-label="File menu"
+              aria-expanded={utilityMenuOpen === 'file'}
+              onClick={() => toggleUtilityMenu('file')}
+            >
+              檔案
+            </button>
+            {utilityMenuOpen === 'file' ? (
+              <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
                 <button
                   type="button"
-                  className={`tool-button toolbar-menu-trigger ${utilityMenuOpen === 'file' ? 'is-active' : ''}`}
-                  aria-label="File menu"
-                  aria-expanded={utilityMenuOpen === 'file'}
-                  onClick={() => toggleUtilityMenu('file')}
+                  className="toolbar-dropdown-item"
+                  role="menuitem"
+                  disabled={importExportDisabled}
+                  onMouseEnter={() => setIsExportSubmenuOpen(false)}
+                  onClick={() => {
+                    onImportPage();
+                    setUtilityMenuOpen(null);
+                  }}
                 >
-                  <span className="tool-label">檔案</span>
+                  Import
                 </button>
-                {utilityMenuOpen === 'file' ? (
-                  <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      role="menuitem"
-                      disabled={importExportDisabled}
-                      onMouseEnter={() => setIsExportSubmenuOpen(false)}
-                      onClick={() => {
-                        onImportPage();
-                        setUtilityMenuOpen(null);
-                      }}
-                    >
-                      Import
-                    </button>
-                    <div
-                      className="toolbar-dropdown-item-submenu"
-                      onMouseEnter={() => {
-                        if (!importExportDisabled) {
-                          setIsExportSubmenuOpen(true);
-                        }
-                      }}
-                      onMouseLeave={() => setIsExportSubmenuOpen(false)}
-                    >
-                      <button
-                        type="button"
-                        className="toolbar-dropdown-item toolbar-dropdown-item-submenu-trigger"
-                        role="menuitem"
-                        disabled={importExportDisabled}
-                        aria-haspopup="menu"
-                        aria-expanded={isExportSubmenuOpen}
-                        onFocus={() => {
-                          if (!importExportDisabled) {
-                            setIsExportSubmenuOpen(true);
-                          }
-                        }}
-                        onClick={() => {
-                          if (!importExportDisabled) {
-                            setIsExportSubmenuOpen((current) => !current);
-                          }
-                        }}
-                      >
-                        <span>Export</span>
-                        <span className="toolbar-submenu-chevron">&gt;</span>
-                      </button>
-                      {isExportSubmenuOpen ? (
-                        <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
-                          <button
-                            type="button"
-                            className="toolbar-dropdown-item"
-                            role="menuitem"
-                            disabled={importExportDisabled}
-                            onClick={() => {
-                              onExportPage('json');
-                              setUtilityMenuOpen(null);
-                              setIsExportSubmenuOpen(false);
-                            }}
-                          >
-                            JSON (.json)
-                          </button>
-                          <button
-                            type="button"
-                            className="toolbar-dropdown-item"
-                            role="menuitem"
-                            disabled={importExportDisabled}
-                            onClick={() => {
-                              onExportPage('png');
-                              setUtilityMenuOpen(null);
-                              setIsExportSubmenuOpen(false);
-                            }}
-                          >
-                            PNG (.png)
-                          </button>
-                          <button
-                            type="button"
-                            className="toolbar-dropdown-item"
-                            role="menuitem"
-                            disabled={importExportDisabled}
-                            onClick={() => {
-                              onExportPage('pptx');
-                              setUtilityMenuOpen(null);
-                              setIsExportSubmenuOpen(false);
-                            }}
-                          >
-                            PPTX (.pptx)
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="toolbar-menu-dropdown" aria-label="Edit">
-                <div className="canvas-ribbon-menu-label">編輯</div>
-                <button
-                  type="button"
-                  className={`tool-button toolbar-menu-trigger ${utilityMenuOpen === 'edit' ? 'is-active' : ''}`}
-                  aria-label="Edit menu"
-                  aria-expanded={utilityMenuOpen === 'edit'}
-                  onClick={() => toggleUtilityMenu('edit')}
+                <div
+                  className="toolbar-dropdown-item-submenu"
+                  onMouseEnter={() => {
+                    if (!importExportDisabled) {
+                      setIsExportSubmenuOpen(true);
+                    }
+                  }}
+                  onMouseLeave={() => setIsExportSubmenuOpen(false)}
                 >
-                  <span className="tool-label">編輯</span>
-                </button>
-                {utilityMenuOpen === 'edit' ? (
-                  <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      title="Undo (Ctrl/Cmd + Z)"
-                      role="menuitem"
-                      disabled={!canUndo || isHistorySyncing}
-                      onClick={() => {
-                        void handleUndo();
-                        setUtilityMenuOpen(null);
-                      }}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      type="button"
-                      className="toolbar-dropdown-item"
-                      title="Redo (Ctrl/Cmd + Shift + Z)"
-                      role="menuitem"
-                      disabled={!canRedo || isHistorySyncing}
-                      onClick={() => {
-                        void handleRedo();
-                        setUtilityMenuOpen(null);
-                      }}
-                    >
-                      Redo
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="canvas-ribbon-right">
-              <div className="canvas-ribbon-view-label">檢視</div>
-              <div className="canvas-ribbon-view-controls">
-                <div className="canvas-ribbon-view-group">
-                  <div className="canvas-ribbon-menu-label">磁鐵</div>
                   <button
                     type="button"
-                    aria-pressed={magnetEnabled}
-                    className={`tool-button ${magnetEnabled ? 'is-active' : ''}`}
-                    title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
-                    onClick={() => setMagnetEnabled((current) => !current)}
+                    className="toolbar-dropdown-item toolbar-dropdown-item-submenu-trigger"
+                    role="menuitem"
+                    disabled={importExportDisabled}
+                    aria-haspopup="menu"
+                    aria-expanded={isExportSubmenuOpen}
+                    onFocus={() => {
+                      if (!importExportDisabled) {
+                        setIsExportSubmenuOpen(true);
+                      }
+                    }}
+                    onClick={() => {
+                      if (!importExportDisabled) {
+                        setIsExportSubmenuOpen((current) => !current);
+                      }
+                    }}
                   >
-                    <span className="tool-label">Magnet</span>
+                    <span>Export</span>
+                    <span className="toolbar-submenu-chevron">&gt;</span>
                   </button>
-                </div>
-                <div className="canvas-ribbon-view-group">
-                  <div className="canvas-ribbon-menu-label">Zoom</div>
-                  <div className="toolbar-zoom-group" aria-label="Zoom controls">
-                    <div className="toolbar-zoom-stepper" aria-label="Current zoom controls">
+                  {isExportSubmenuOpen ? (
+                    <div className="toolbar-submenu-panel" role="menu" aria-label="Export formats">
                       <button
                         type="button"
-                        className="tool-button tool-button-compact toolbar-zoom-step"
-                        title="Zoom in"
-                        onClick={handleZoomIn}
+                        className="toolbar-dropdown-item"
+                        role="menuitem"
+                        disabled={importExportDisabled}
+                        onClick={() => {
+                          onExportPage('json');
+                          setUtilityMenuOpen(null);
+                          setIsExportSubmenuOpen(false);
+                        }}
                       >
-                        <span className="tool-label">+</span>
-                      </button>
-                      <div className="toolbar-zoom-readout" aria-live="polite">
-                        <span className="toolbar-zoom-value">{getDisplayZoom(viewport.zoom).toFixed(1)}x</span>
-                        <span className="toolbar-zoom-caption">Zoom</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="tool-button tool-button-compact toolbar-zoom-step"
-                        title="Zoom out"
-                        onClick={handleZoomOut}
-                      >
-                        <span className="tool-label">-</span>
-                      </button>
-                    </div>
-                    <div className="toolbar-zoom-reset-tools">
-                      <button
-                        type="button"
-                        className="tool-button toolbar-zoom-reset-button"
-                        title={'Reset zoom to ' + resetZoomTarget.toFixed(1) + 'x'}
-                        onClick={handleResetZoom}
-                      >
-                        <span className="toolbar-zoom-reset-action">Reset</span>
-                        <span className="toolbar-zoom-reset-target">
-                          {resetZoomTarget.toFixed(1)}x
-                        </span>
+                        JSON (.json)
                       </button>
                       <button
                         type="button"
-                        className="tool-button toolbar-zoom-adjust-button"
-                        title="Adjust reset zoom target"
-                        onClick={() => handleResetZoomAdjust(1)}
+                        className="toolbar-dropdown-item"
+                        role="menuitem"
+                        disabled={importExportDisabled}
+                        onClick={() => {
+                          onExportPage('png');
+                          setUtilityMenuOpen(null);
+                          setIsExportSubmenuOpen(false);
+                        }}
                       >
-                        <span className="tool-label">Adjust</span>
+                        PNG (.png)
+                      </button>
+                      <button
+                        type="button"
+                        className="toolbar-dropdown-item"
+                        role="menuitem"
+                        disabled={importExportDisabled}
+                        onClick={() => {
+                          onExportPage('pptx');
+                          setUtilityMenuOpen(null);
+                          setIsExportSubmenuOpen(false);
+                        }}
+                      >
+                        PPTX (.pptx)
                       </button>
                     </div>
-                  </div>
-                </div>
-                <div className="canvas-ribbon-view-group">
-                  <div className="canvas-ribbon-menu-label">背景</div>
-                  <div className="canvas-background-picker-options">
-                    {(
-                      [
-                        ['dots', '點狀'],
-                        ['grid', '格線'],
-                      ] as const satisfies readonly [
-                        CanvasBackgroundMode,
-                        string,
-                      ][]
-                    ).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`canvas-background-option ${
-                          backgroundMode === mode
-                            ? 'canvas-background-option-active'
-                            : ''
-                        }`}
-                        aria-pressed={backgroundMode === mode}
-                        onClick={() => setBackgroundMode(mode)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  ) : null}
                 </div>
               </div>
+            ) : null}
+          </div>
+
+          {/* Edit menu */}
+          <div className="canvas-rbn-menu-wrap" aria-label="Edit">
+            <button
+              type="button"
+              className={`canvas-rbn-menu-btn ${utilityMenuOpen === 'edit' ? 'is-active' : ''}`}
+              aria-label="Edit menu"
+              aria-expanded={utilityMenuOpen === 'edit'}
+              onClick={() => toggleUtilityMenu('edit')}
+            >
+              編輯
+            </button>
+            {utilityMenuOpen === 'edit' ? (
+              <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
+                <button
+                  type="button"
+                  className="toolbar-dropdown-item"
+                  title="Undo (Ctrl/Cmd + Z)"
+                  role="menuitem"
+                  disabled={!canUndo || isHistorySyncing}
+                  onClick={() => {
+                    void handleUndo();
+                    setUtilityMenuOpen(null);
+                  }}
+                >
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-dropdown-item"
+                  title="Redo (Ctrl/Cmd + Shift + Z)"
+                  role="menuitem"
+                  disabled={!canRedo || isHistorySyncing}
+                  onClick={() => {
+                    void handleRedo();
+                    setUtilityMenuOpen(null);
+                  }}
+                >
+                  Redo
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Spacer pushes view controls to the right */}
+          <div className="canvas-rbn-grow" aria-hidden="true" />
+
+          {/* Magnet toggle */}
+          <button
+            type="button"
+            className={`canvas-rbn-ctrl-btn ${magnetEnabled ? 'is-active' : ''}`}
+            aria-pressed={magnetEnabled}
+            title={'Magnet ' + (magnetEnabled ? 'on' : 'off') + '; hold Alt to bypass'}
+            onClick={() => setMagnetEnabled((current) => !current)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 15A6 6 0 0 0 18 15" />
+              <path d="M6 15V6h12v9" />
+              <line x1="6" y1="3" x2="6" y2="6" />
+              <line x1="18" y1="3" x2="18" y2="6" />
+            </svg>
+            <span>磁鐵</span>
+          </button>
+
+          <div className="canvas-rbn-sep" aria-hidden="true" />
+
+          {/* Zoom controls */}
+          <div className="canvas-rbn-zoom" aria-label="Zoom controls">
+            <button
+              type="button"
+              className="canvas-rbn-zoom-btn"
+              title="Zoom out"
+              onClick={handleZoomOut}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+                <rect x="1" y="4.25" width="8" height="1.5" rx="0.75" />
+              </svg>
+            </button>
+            <div className="canvas-rbn-zoom-display" aria-live="polite">
+              {getDisplayZoom(viewport.zoom).toFixed(1)}x
             </div>
-          </section>
-        ) : null}
+            <button
+              type="button"
+              className="canvas-rbn-zoom-btn"
+              title="Zoom in"
+              onClick={handleZoomIn}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+                <rect x="4.25" y="1" width="1.5" height="8" rx="0.75" />
+                <rect x="1" y="4.25" width="8" height="1.5" rx="0.75" />
+              </svg>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="canvas-rbn-ctrl-btn"
+            title={'Reset zoom to ' + resetZoomTarget.toFixed(1) + 'x'}
+            onClick={handleResetZoom}
+          >
+            {resetZoomTarget.toFixed(1)}x
+          </button>
+          <button
+            type="button"
+            className="canvas-rbn-ctrl-btn canvas-rbn-ctrl-muted"
+            title="Adjust reset zoom target"
+            onClick={() => handleResetZoomAdjust(1)}
+          >
+            Adjust
+          </button>
+
+          <div className="canvas-rbn-sep" aria-hidden="true" />
+
+          {/* Background picker */}
+          <div className="canvas-rbn-bg-picker" role="group" aria-label="Background style">
+            {(
+              [
+                ['dots', '點狀'],
+                ['grid', '格線'],
+              ] as const satisfies readonly [CanvasBackgroundMode, string][]
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                className={`canvas-rbn-bg-btn ${backgroundMode === mode ? 'is-active' : ''}`}
+                aria-pressed={backgroundMode === mode}
+                onClick={() => setBackgroundMode(mode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <div
         className={`canvas-content ${isInspectorCollapsed ? 'is-inspector-collapsed' : ''}`}

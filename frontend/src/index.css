@@ -1448,16 +1448,28 @@ button {
 
 .workspace-header-compact {
   min-height: 0;
-  height: 48px;
-  padding: 0 12px;
+  height: 46px;
+  padding: 0 8px;
   align-items: stretch;
-  background: transparent;
+  background: var(--project-panel-soft, var(--surface-dim));
   box-shadow: none;
   border-bottom: none;
-  color: var(--ink);
+  color: var(--project-ink, var(--ink));
 }
 
 .workspace-tabs {
+  --workspace-tab-strip-bg: var(--project-panel-soft, var(--surface-dim));
+  --workspace-tab-active-bg: var(--project-panel-solid, var(--surface));
+  --workspace-tab-inactive-hover: color-mix(
+    in srgb,
+    var(--project-ink, var(--ink)) 8%,
+    var(--workspace-tab-strip-bg)
+  );
+  --workspace-tab-separator: color-mix(
+    in srgb,
+    var(--project-ink, var(--ink)) 18%,
+    transparent
+  );
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -1468,6 +1480,19 @@ button {
   scrollbar-width: none;
   flex: 1;
   padding: 0 2px;
+  position: relative;
+}
+
+/* Separator line — active tab covers it with z-index */
+.workspace-tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: transparent;
+  z-index: 1;
 }
 
 .workspace-tabs::-webkit-scrollbar {
@@ -1475,17 +1500,19 @@ button {
 }
 
 .workspace-tabs-project-name {
-  align-self: center;
-  color: var(--project-muted, var(--muted));
-  font-size: 0.86rem;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--project-ink, var(--ink)) 78%, white);
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0;
   margin: 0;
-  padding: 0 10px 0 4px;
+  padding: 0 12px 0 4px;
   border: none;
-  border-right: 1px solid var(--project-line, var(--line));
+  border-right: 1px solid var(--workspace-tab-separator);
   border-radius: 0;
-  background: none;
+  background: transparent;
   max-width: 148px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1496,37 +1523,33 @@ button {
 .workspace-tab {
   display: inline-flex;
   align-items: center;
-  min-width: 88px;
-  max-width: 220px;
+  min-width: 0;
+  max-width: 184px;
   background: transparent;
   border: none;
-  border-bottom: 3px solid transparent;
-  border-radius: 0;
+  border-left: 1px solid var(--workspace-tab-separator);
+  border-radius: 9px 9px 0 0;
   transition:
     background 120ms ease,
     border-color 120ms ease,
     color 120ms ease;
   flex-shrink: 0;
   position: relative;
-  z-index: 1;
-  height: 100%;
+  z-index: 2;
+  margin: 6px 0 0;
+  height: calc(100% - 6px);
   box-shadow: none;
   padding: 0 2px;
 }
 
 .workspace-tab:hover {
-  background: color-mix(in srgb, var(--project-ink, var(--ink)) 6%, transparent);
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--project-accent, var(--accent)) 35%,
-    transparent
-  );
+  background: var(--workspace-tab-inactive-hover);
 }
 
 .workspace-tab.is-active {
-  background: transparent;
-  border-bottom: 3px solid var(--project-accent, var(--accent));
-  z-index: 2;
+  background: var(--workspace-tab-active-bg);
+  border-left-color: var(--workspace-tab-separator);
+  z-index: 3;
   box-shadow: none;
 }
 
@@ -1536,15 +1559,16 @@ button {
 
 .workspace-tab-button {
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: 142px;
   background: transparent;
   border: none;
-  color: var(--project-muted, var(--muted));
-  font-size: 0.86rem;
+  color: color-mix(in srgb, var(--project-ink, var(--ink)) 82%, white);
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  padding: 0 4px 0 10px;
+  padding: 0 3px 0 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   height: 100%;
@@ -1553,7 +1577,7 @@ button {
 
 .workspace-tab.is-active .workspace-tab-button {
   color: var(--project-ink, var(--ink));
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -1566,7 +1590,7 @@ button {
   margin-right: 6px;
   border-radius: 5px;
   background: transparent;
-  color: var(--project-muted, var(--muted));
+  color: color-mix(in srgb, var(--project-ink, var(--ink)) 72%, white);
   border: none;
   padding: 0;
   cursor: pointer;
@@ -2433,11 +2457,200 @@ button {
   pointer-events: none;
 }
 
-.canvas-utility-strip {
+/* ── Canvas Ribbon (unified topbar) ─────────────────────── */
+.canvas-ribbon {
+  position: relative;
+  z-index: 18;
+  flex: 0 0 auto;
+  background: var(--project-panel-solid, var(--surface));
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.workspace-tab.is-active .workspace-tab-close {
+  color: var(--project-muted, var(--muted));
+}
+
+.canvas-ribbon-bar {
   display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 10px 12px 0;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  gap: 3px;
+}
+
+/* Toggle button */
+.canvas-rbn-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.canvas-rbn-toggle:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.canvas-ribbon.is-expanded .canvas-rbn-toggle {
+  color: var(--accent);
+}
+
+/* Vertical separator */
+.canvas-rbn-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line-strong);
+  flex-shrink: 0;
+  margin: 0 6px;
+}
+
+/* Grows to push right-side controls to the end */
+.canvas-rbn-grow {
+  flex: 1 1 0;
+  min-width: 8px;
+}
+
+/* Menu buttons: 檔案, 編輯 */
+.canvas-rbn-menu-wrap {
+  position: relative;
+}
+.canvas-rbn-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+.canvas-rbn-menu-btn:hover,
+.canvas-rbn-menu-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Generic control buttons (Magnet, Reset, Adjust) */
+.canvas-rbn-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+.canvas-rbn-ctrl-btn:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.canvas-rbn-ctrl-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.canvas-rbn-ctrl-muted {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.canvas-rbn-ctrl-muted:hover {
+  color: #475569;
+  background: var(--bg);
+}
+
+/* Zoom controls */
+.canvas-rbn-zoom {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.canvas-rbn-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.canvas-rbn-zoom-btn:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.canvas-rbn-zoom-display {
+  min-width: 56px;
+  text-align: center;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--ink);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 0 4px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Background style picker */
+.canvas-rbn-bg-picker {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg);
+  gap: 1px;
+}
+.canvas-rbn-bg-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+.canvas-rbn-bg-btn:hover {
+  color: var(--ink);
+}
+.canvas-rbn-bg-btn.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.canvas-utility-strip {
+  display: none;
 }
 
 .canvas-utility-strip-right {
@@ -2809,6 +3022,7 @@ button {
 
 .toolbar {
   --toolbar-dock-gap: 18px;
+  --toolbar-top-dock-gap: 56px;
   --toolbar-right-dock-gap: 332px;
   position: absolute;
   z-index: 10;
@@ -2832,7 +3046,7 @@ button {
 }
 
 .toolbar-position-top {
-  top: var(--toolbar-dock-gap);
+  top: var(--toolbar-top-dock-gap);
   bottom: auto;
   left: 50%;
   right: auto;
@@ -4427,7 +4641,7 @@ button {
 
 .workspace-header.workspace-header-compact {
   border-bottom: none;
-  background: transparent;
+  background: var(--project-panel-soft, var(--surface-dim));
   box-shadow: none;
 }
 
@@ -4750,15 +4964,22 @@ button {
 .app-shell[data-project-theme] .sidebar-header,
 .app-shell[data-project-theme] .sidebar-section,
 .app-shell[data-project-theme] .workspace-header,
+.app-shell[data-project-theme] .canvas-ribbon,
+.app-shell[data-project-theme] .canvas-ribbon-content,
 .app-shell[data-project-theme] .toolbar,
 .app-shell[data-project-theme] .canvas-inspector {
   background: var(--project-panel-bg);
 }
 
 .app-shell[data-project-theme] .workspace-header-compact {
-  background: transparent;
+  background: var(--project-panel-soft);
   box-shadow: none;
   border-bottom: none;
+}
+
+.app-shell[data-project-theme] .canvas-ribbon {
+  background: var(--project-panel-solid);
+  border-bottom-color: var(--project-line);
 }
 
 .app-shell[data-project-theme] .workspace,
@@ -4810,6 +5031,7 @@ button {
 
 .app-shell[data-project-theme] .sidebar .ghost-button,
 .app-shell[data-project-theme] .workspace-header .ghost-button,
+.app-shell[data-project-theme] .canvas-ribbon-toggle,
 .app-shell[data-project-theme] .toolbar-zoom-stepper,
 .app-shell[data-project-theme] .toolbar-zoom-reset-button,
 .app-shell[data-project-theme] .toolbar-zoom-adjust-button,
@@ -4821,6 +5043,7 @@ button {
 
 .app-shell[data-project-theme] .sidebar .ghost-button:hover,
 .app-shell[data-project-theme] .workspace-header .ghost-button:hover,
+.app-shell[data-project-theme] .canvas-ribbon-toggle:hover,
 .app-shell[data-project-theme] .tool-button:hover,
 .app-shell[data-project-theme] .toolbar-dropdown-item:hover:not(:disabled),
 .app-shell[data-project-theme] .toolbar-dropdown-item-submenu-trigger:hover:not(:disabled) {
@@ -4859,6 +5082,17 @@ button {
   background: var(--project-panel-soft);
 }
 
+.app-shell[data-project-theme] .canvas-ribbon-content,
+.app-shell[data-project-theme] .canvas-ribbon-left,
+.app-shell[data-project-theme] .canvas-ribbon-view-label {
+  border-color: var(--project-line);
+}
+
+.app-shell[data-project-theme] .canvas-ribbon-menu-label,
+.app-shell[data-project-theme] .canvas-ribbon-view-label {
+  color: var(--project-muted);
+}
+
 .app-shell[data-project-theme] .tool-button {
   color: var(--project-ink);
 }
@@ -4870,6 +5104,28 @@ button {
 }
 
 @media (max-width: 1180px) {
+  .canvas-ribbon-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .canvas-ribbon-left {
+    padding-right: 0;
+    padding-bottom: 10px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .canvas-ribbon-right,
+  .canvas-ribbon-view-controls {
+    justify-content: flex-start;
+  }
+
+  .canvas-ribbon-view-label {
+    min-height: 34px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
   .toolbar {
     left: 16px;
     right: 16px;
@@ -4907,6 +5163,24 @@ button {
 }
 
 @media (max-width: 760px) {
+  .canvas-ribbon {
+    padding: 6px 8px 0;
+  }
+
+  .canvas-ribbon-content {
+    padding: 8px;
+  }
+
+  .canvas-ribbon-left,
+  .canvas-ribbon-right,
+  .canvas-ribbon-view-controls {
+    flex-wrap: wrap;
+  }
+
+  .canvas-ribbon-view-label {
+    width: 100%;
+  }
+
   .toolbar {
     top: 10px;
     align-items: flex-start;
@@ -4925,7 +5199,7 @@ button {
 /* Keep toolbar docking coordinates last so later shell/theme toolbar rules do not
    force every docked state back to top-center. */
 .toolbar.toolbar-position-top {
-  top: var(--toolbar-dock-gap);
+  top: var(--toolbar-top-dock-gap);
   bottom: auto;
   left: 50%;
   right: auto;

@@ -17,6 +17,18 @@ describe('Toolbar', () => {
     expect(markup).toContain('Table');
   });
 
+  it('defaults to the left dock position', () => {
+    const markup = renderToStaticMarkup(
+      <Toolbar
+        activeTool="select"
+        onToolChange={() => {}}
+        onTableToolClick={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('toolbar-position-left');
+  });
+
   it('chooses the closest dock edge from the cursor position', () => {
     const parentRect = { left: 100, top: 50, width: 800, height: 600 };
 

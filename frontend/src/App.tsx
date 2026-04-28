@@ -380,7 +380,6 @@ export function App() {
   const [selectedPageId, setSelectedPageId] = useState<string | null>(
     initialRoute.view === 'workspace' ? initialRoute.pageId : null,
   );
-  const [openPageIds, setOpenPageIds] = useState<string[]>([]);
   const [projectNameDraft, setProjectNameDraft] = useState('');
   const [projectSettingsDialogOpen, setProjectSettingsDialogOpen] =
     useState(false);
@@ -572,21 +571,9 @@ export function App() {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    setOpenPageIds([]);
     setPageRenameTargetId(null);
     setPageRenameDraft('');
   }, [selectedProjectId]);
-
-  useEffect(() => {
-    if (selectedPage !== null) {
-      setOpenPageIds((current) => {
-        if (!current.includes(selectedPage.id)) {
-          return [...current, selectedPage.id];
-        }
-        return current;
-      });
-    }
-  }, [selectedPage]);
 
   useEffect(() => {
     if (
@@ -756,9 +743,6 @@ export function App() {
     await runMutation(async () => {
       await deletePage(selectedPage.id);
       setPages(remainingPages);
-      setOpenPageIds((current) =>
-        current.filter((pageId) => pageId !== selectedPage.id),
-      );
       setSelectedPageId((current) =>
         current === selectedPage.id ? remainingPages[0]?.id ?? null : current,
       );
@@ -1101,29 +1085,6 @@ export function App() {
     });
   }
 
-  function handleCloseTab(pageIdToClose: string): void {
-    setOpenPageIds((current) => {
-      const closedIndex = current.indexOf(pageIdToClose);
-      const next = current.filter((id) => id !== pageIdToClose);
-
-      if (selectedPageId === pageIdToClose && selectedProject !== null) {
-        const fallbackId =
-          next[Math.min(Math.max(closedIndex, 0), next.length - 1)] ?? null;
-        syncBrowserRoute(
-          {
-            view: 'workspace',
-            projectId: selectedProject.id,
-            pageId: fallbackId,
-          },
-          'push',
-        );
-        setSelectedPageId(fallbackId);
-      }
-
-      return next;
-    });
-  }
-
   if (loadState === 'error' || appView === 'home') {
     return (
       <>
@@ -1390,54 +1351,6 @@ export function App() {
         </aside>
 
         <section className="workspace">
-          <header className="workspace-header workspace-header-compact">
-            <div className="workspace-tabs" role="tablist" aria-label="Open pages">
-              <span
-                className="workspace-tabs-project-name"
-                title={selectedProject?.name ?? 'No project'}
-              >
-                {selectedProject?.name ?? 'No project'}
-              </span>
-              {openPageIds.map((tabId) => {
-                const page = pages.find((p) => p.id === tabId);
-                if (!page) return null;
-                const isActive = tabId === selectedPageId;
-                return (
-                  <div
-                    key={tabId}
-                    className={`workspace-tab ${isActive ? 'is-active' : ''}`}
-                  >
-                    <button
-                      className="workspace-tab-button"
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      tabIndex={isActive ? 0 : -1}
-                      onClick={() => {
-                        if (selectedProject && tabId !== selectedPageId) {
-                          openProject(selectedProject.id, tabId, 'push');
-                        }
-                      }}
-                    >
-                      {page.name}
-                    </button>
-                    <button
-                      className="workspace-tab-close"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCloseTab(tabId);
-                      }}
-                      aria-label={`Close ${page.name} tab`}
-                      title={`Close ${page.name}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </header>
           {errorMessage !== null ? (
             <div className="error-banner">{errorMessage}</div>
           ) : null}

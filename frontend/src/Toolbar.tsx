@@ -112,12 +112,12 @@ export function Toolbar({
   onTableToolClick,
 }: Props) {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<ToolbarPosition>('top');
+  const [position, setPosition] = useState<ToolbarPosition>('left');
   const [previewPosition, setPreviewPosition] = useState<ToolbarPosition | null>(null);
   const [dragCoords, setDragCoords] = useState<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
-  const pendingPositionRef = useRef<ToolbarPosition>('top');
+  const pendingPositionRef = useRef<ToolbarPosition>('left');
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
