@@ -213,6 +213,7 @@ export function Toolbar({
   }
 
   const activePosition = (isDraggingRef.current && previewPosition) ? previewPosition : position;
+  const showToolbarText = activePosition === 'top' || activePosition === 'bottom';
   const dragStyles: React.CSSProperties = dragCoords
     ? {
         top: dragCoords.y,
@@ -252,10 +253,14 @@ export function Toolbar({
           <button
             type="button"
             className={`tool-button toolbar-menu-trigger ${openMenu === 'file' ? 'is-active' : ''}`}
+            aria-label="File menu"
             aria-expanded={openMenu === 'file'}
             onClick={() => toggleMenu('file')}
           >
-            <span className="tool-label">File</span>
+            <span className="tool-icon" aria-hidden="true">
+              {icon('M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z')}
+            </span>
+            {showToolbarText ? <span className="tool-label">File</span> : null}
           </button>
           {openMenu === 'file' ? (
             <div className="toolbar-dropdown-panel" role="menu" aria-label="File menu">
@@ -354,10 +359,14 @@ export function Toolbar({
           <button
             type="button"
             className={`tool-button toolbar-menu-trigger ${openMenu === 'edit' ? 'is-active' : ''}`}
+            aria-label="Edit menu"
             aria-expanded={openMenu === 'edit'}
             onClick={() => toggleMenu('edit')}
           >
-            <span className="tool-label">Edit</span>
+            <span className="tool-icon" aria-hidden="true">
+              {icon('m4 20 4.5-1 9.5-9.5a1.8 1.8 0 0 0 0-2.5l-1.5-1.5a1.8 1.8 0 0 0-2.5 0L4.5 15 4 20z')}
+            </span>
+            {showToolbarText ? <span className="tool-label">Edit</span> : null}
           </button>
           {openMenu === 'edit' ? (
             <div className="toolbar-dropdown-panel" role="menu" aria-label="Edit menu">
@@ -412,7 +421,7 @@ export function Toolbar({
               }}
             >
               <span className="tool-icon">{tool.icon}</span>
-              <span className="tool-label">{tool.label}</span>
+              {showToolbarText ? <span className="tool-label">{tool.label}</span> : null}
             </button>
           ))}
         </div>
