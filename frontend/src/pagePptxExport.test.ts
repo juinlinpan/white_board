@@ -4,20 +4,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   PptxGenJSMock,
-  addImageMock,
   addNotesMock,
+  addShapeMock,
   addSlideMock,
+  addTableMock,
   addTextMock,
-  exportPageAsPngMock,
   getPagePngExportBoundsMock,
   writeMock,
 } = vi.hoisted(() => {
-  const addImageMock = vi.fn();
   const addNotesMock = vi.fn();
+  const addShapeMock = vi.fn();
+  const addTableMock = vi.fn();
   const addTextMock = vi.fn();
   const addSlideMock = vi.fn(() => ({
-    addImage: addImageMock,
     addNotes: addNotesMock,
+    addShape: addShapeMock,
+    addTable: addTableMock,
     addText: addTextMock,
     background: undefined,
   }));
@@ -34,11 +36,11 @@ const {
 
   return {
     PptxGenJSMock,
-    addImageMock,
     addNotesMock,
+    addShapeMock,
     addSlideMock,
+    addTableMock,
     addTextMock,
-    exportPageAsPngMock: vi.fn(),
     getPagePngExportBoundsMock: vi.fn(),
     writeMock,
   };
@@ -49,12 +51,11 @@ vi.mock('pptxgenjs', () => ({
 }));
 
 vi.mock('./pagePngExport', () => ({
-  exportPageAsPng: exportPageAsPngMock,
   getPagePngExportBounds: getPagePngExportBoundsMock,
 }));
 
 import type { PageBoardData } from './api';
-import { exportPageAsPptx, getPptxImagePlacement } from './pagePptxExport';
+import { exportPageAsPptx } from './pagePptxExport';
 
 const boardData: PageBoardData = {
   page: {
@@ -75,21 +76,13 @@ const boardData: PageBoardData = {
 describe('pagePptxExport', () => {
   beforeEach(() => {
     PptxGenJSMock.mockClear();
-    addImageMock.mockReset();
     addNotesMock.mockReset();
+    addShapeMock.mockReset();
     addSlideMock.mockClear();
+    addTableMock.mockReset();
     addTextMock.mockReset();
-    exportPageAsPngMock.mockReset();
     getPagePngExportBoundsMock.mockReset();
     writeMock.mockReset();
-  });
-
-  it('fits the exported raster inside the slide content area', () => {
-    const placement = getPptxImagePlacement({ width: 400, height: 200 });
-    expect(placement.x).toBeCloseTo(0.575, 6);
-    expect(placement.y).toBeCloseTo(0.9, 6);
-    expect(placement.w).toBeCloseTo(8.85, 6);
-    expect(placement.h).toBeCloseTo(4.425, 6);
   });
 
   it('rejects when the page has no exportable items', async () => {
@@ -98,41 +91,122 @@ describe('pagePptxExport', () => {
     await expect(exportPageAsPptx(boardData)).rejects.toThrow(
       '目前 Page 沒有可匯出的物件。',
     );
-    expect(exportPageAsPngMock).not.toHaveBeenCalled();
   });
 
-  it('builds a one-slide pptx with the page name and raster snapshot', async () => {
+  it('builds a one-slide editable pptx using native objects', async () => {
     getPagePngExportBoundsMock.mockReturnValue({
-      x: 96,
-      y: 64,
-      width: 400,
-      height: 200,
+      x: 0,
+      y: 0,
+      width: 480,
+      height: 240,
     });
-    exportPageAsPngMock.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
     writeMock.mockResolvedValue(new Blob(['pptx'], { type: 'application/zip' }));
 
-    const result = await exportPageAsPptx(boardData);
+    const result = await exportPageAsPptx({
+      ...boardData,
+      board_items: [
+        {
+          id: 'table-1',
+          page_id: 'page-1',
+          parent_item_id: null,
+          category: 'shape',
+          type: 'table',
+          title: null,
+          content: null,
+          content_format: null,
+          x: 0,
+          y: 0,
+          width: 240,
+          height: 120,
+          rotation: 0,
+          z_index: 1,
+          is_collapsed: false,
+          style_json: null,
+          data_json: JSON.stringify({
+            rows: 1,
+            cols: 2,
+            colWidths: [0.5, 0.5],
+            rowHeights: [1],
+            cells: [[
+              {
+                id: 'c1',
+                content: 'A1',
+                rowSpan: 1,
+                colSpan: 1,
+                isCollapsed: true,
+                childItemIds: [],
+              },
+              {
+                id: 'c2',
+                content: 'B1',
+                rowSpan: 1,
+                colSpan: 1,
+                isCollapsed: true,
+                childItemIds: [],
+              },
+            ]],
+          }),
+          created_at: '2026-04-27T00:00:00.000Z',
+          updated_at: '2026-04-27T00:00:00.000Z',
+        },
+        {
+          id: 'frame-1',
+          page_id: 'page-1',
+          parent_item_id: null,
+          category: 'large_item',
+          type: 'frame',
+          title: 'Roadmap',
+          content: null,
+          content_format: null,
+          x: 260,
+          y: 20,
+          width: 200,
+          height: 140,
+          rotation: 0,
+          z_index: 2,
+          is_collapsed: false,
+          style_json: null,
+          data_json: null,
+          created_at: '2026-04-27T00:00:00.000Z',
+          updated_at: '2026-04-27T00:00:00.000Z',
+        },
+        {
+          id: 'text-1',
+          page_id: 'page-1',
+          parent_item_id: null,
+          category: 'small_item',
+          type: 'text_box',
+          title: null,
+          content: 'Task owner',
+          content_format: null,
+          x: 60,
+          y: 140,
+          width: 160,
+          height: 80,
+          rotation: 0,
+          z_index: 3,
+          is_collapsed: false,
+          style_json: JSON.stringify({ textColor: '#334155' }),
+          data_json: null,
+          created_at: '2026-04-27T00:00:00.000Z',
+          updated_at: '2026-04-27T00:00:00.000Z',
+        },
+      ],
+    });
 
     expect(result.type).toBe(
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     );
     expect(PptxGenJSMock).toHaveBeenCalledTimes(1);
     expect(addSlideMock).toHaveBeenCalledTimes(1);
+    expect(addTableMock).toHaveBeenCalledTimes(1);
+    expect(addShapeMock).toHaveBeenCalledTimes(1);
     expect(addTextMock).toHaveBeenCalledWith(
-      'Sprint Plan',
+      'Task owner',
       expect.objectContaining({
-        bold: true,
-        fontSize: 20,
+        shapeName: 'rect',
       }),
     );
-    const imageCall = addImageMock.mock.calls[0]?.[0];
-    expect(imageCall).toBeDefined();
-    expect(imageCall?.altText).toBe('Sprint Plan page snapshot');
-    expect(imageCall?.data).toContain('data:image/png;base64,');
-    expect(imageCall?.x).toBeCloseTo(0.575, 6);
-    expect(imageCall?.y).toBeCloseTo(0.9, 6);
-    expect(imageCall?.w).toBeCloseTo(8.85, 6);
-    expect(imageCall?.h).toBeCloseTo(4.425, 6);
     expect(addNotesMock).toHaveBeenCalledWith('Whiteboard page export: Sprint Plan');
     expect(writeMock).toHaveBeenCalledWith({
       compression: true,

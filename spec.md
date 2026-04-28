@@ -251,7 +251,9 @@ Page 匯出補充規則：
 - PNG 匯出先以「自動裁切到有物件的區域」為主，無需輸出整張畫布
 - PNG 匯出應盡量忠實保留畫布背景、物件顏色、線條與文字可讀性
 - PPTX 匯出優先以「每個 Page 對應一張 slide」規劃，保留 Page 名稱、物件相對位置與主要視覺層次
-- 若個別白板物件在 PPTX 中難以原生重建，允許以 page-level 或 item-level rasterized snapshot 作為相容 fallback，但輸出流程需明確定義 fallback 邊界
+- PPTX 匯出預設使用可編輯原生物件：`table` 使用 PowerPoint 表格物件、`frame` 使用底部矩形 + 上方標題文字框、其餘白板物件使用文字框承載內容
+- PPTX 匯出需盡量沿用白板物件顏色（背景與文字色），僅在格式不支援時退回最接近色
+- 若個別白板物件在 PPTX 中難以原生重建，允許以 item-level rasterized snapshot 作為相容 fallback，但輸出流程需明確定義 fallback 邊界
 - PNG、PPTX、viewer 應共用同一份版面計算與匯出中繼資料，避免不同格式對 frame 摘要、文字截斷與 item hierarchy 的解讀不一致
 
 ### 5.3 白板通用能力
