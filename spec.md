@@ -558,7 +558,7 @@ MVP 至少包含：
 - Markdown rich preview
 - table 進階排版
 - Undo / Redo 歷史優化
-- PNG / PPTX / viewer 匯出
+- viewer 匯出
 - 多人協作
 
 ## 13. 驗收條件
