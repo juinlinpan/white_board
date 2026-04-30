@@ -766,18 +766,18 @@ body {
 
 .sidebar-project-strip-label {
   color: #55676f;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.74rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .sidebar-pages-heading {
   color: #55676f;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.74rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .sidebar-project-strip-row {
@@ -790,8 +790,8 @@ body {
   min-width: 0;
   flex: 1;
   color: #17262b;
-  font-size: 1.08rem;
-  font-weight: 900;
+  font-size: 1.0rem;
+  font-weight: 700;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1211,11 +1211,12 @@ h3 {
 
 .list-button span {
   font-size: 0.88rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .list-button small {
   font-size: 0.72rem;
+  opacity: 0.72;
 }
 
 .page-row-actions {
