@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,7 @@ def response_data(response: Any) -> Any:
     return payload["data"]
 
 
-def test_schema_initialization_creates_expected_tables(tmp_path: Path) -> None:
+def test_storage_initialization_creates_planvas_root(tmp_path: Path) -> None:
     client, settings = create_client(tmp_path)
 
     with client:
@@ -28,22 +27,8 @@ def test_schema_initialization_creates_expected_tables(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response_data(response)["status"] == "ok"
 
-    with sqlite3.connect(settings.sqlite_path) as connection:
-        rows = connection.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table'
-            ORDER BY name
-            """
-        ).fetchall()
-
-    assert [row[0] for row in rows] == [
-        "board_items",
-        "connector_links",
-        "pages",
-        "projects",
-    ]
+    assert settings.planvas_root == tmp_path / ".planvas"
+    assert settings.planvas_root.is_dir()
 
 
 def test_project_and_page_crud_flow(tmp_path: Path) -> None:

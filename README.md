@@ -1,6 +1,6 @@
 # Whiteboard Planner
 
-Local-first whiteboard planning app built with React, FastAPI, and SQLite.
+Local-first whiteboard planning app built with React, FastAPI, and file-based project storage.
 
 ## Navigation Notes
 
@@ -62,7 +62,7 @@ The app now opens on a dedicated home page. From there you can:
 - create a new `Project`
 - import a `Project` from a local JSON snapshot
 
-Import always creates a new local project in SQLite and regenerates page / item /
+Import always creates a new local project under the Planvas storage root and regenerates page / item /
 connector ids to avoid collisions with existing data.
 
 ## Page JSON Export / Import
@@ -156,20 +156,31 @@ port.
 
 ## Backend Storage
 
-By default the backend uses `backend/` as its writable root and creates:
+Project content is stored as regular files. By default the backend creates:
 
-- `backend/data/whiteboard.db`
+- `<user_home>/.planvas/<project_name>/metadata.json`
+- `<user_home>/.planvas/<project_name>/<page_name>.xml`
 - `backend/logs/app.log`
 - `backend/logs/backend.log`
 
-You can override the backend root with `WHITEBOARD_BACKEND_ROOT`:
+You can override the project storage root with `WHITEBOARD_PLANVAS_ROOT`:
 
 ```powershell
-$env:WHITEBOARD_BACKEND_ROOT = "C:\whiteboard-data"
+$env:WHITEBOARD_PLANVAS_ROOT = "D:\planvas-projects"
 npm run dev:backend
 ```
 
-Startup now validates that the backend root, `data/`, `logs/`, and the required files are writable. If a configured path is invalid, the backend exits with a clear initialization error instead of failing later during runtime.
+You can override the backend root for logs and runtime files with
+`WHITEBOARD_BACKEND_ROOT`:
+
+```powershell
+$env:WHITEBOARD_BACKEND_ROOT = "C:\whiteboard-runtime"
+npm run dev:backend
+```
+
+Startup validates that the backend root, Planvas root, `logs/`, and required log
+files are writable. If a configured path is invalid, the backend exits with a
+clear initialization error instead of failing later during runtime.
 
 If the frontend build output lives somewhere else, override it with
 `WHITEBOARD_FRONTEND_DIST` before running `npm run serve`:
@@ -192,17 +203,17 @@ Use `./scripts/smoke.ps1 -SkipBuild` if you already have a fresh `frontend/dist`
 
 ## Backup
 
-Create a timestamped local backup of the SQLite database and log files:
+Create a timestamped local backup of the Planvas project files and log files:
 
 ```powershell
 npm run backup
 ```
 
 By default backups land in `./backups/whiteboard-backup-<timestamp>/`. You can
-override the backend root or output directory:
+override the Planvas root, backend root, or output directory:
 
 ```powershell
-./scripts/backup.ps1 -BackendRoot C:\whiteboard-data -OutputDir D:\whiteboard-backups
+./scripts/backup.ps1 -PlanvasRoot D:\planvas-projects -BackendRoot C:\whiteboard-runtime -OutputDir D:\whiteboard-backups
 ```
 
 ## Validation

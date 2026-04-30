@@ -1,4 +1,13 @@
-# Whiteboard Planner Todo List
+﻿# Whiteboard Planner Todo List
+
+## Persistence Redesign Notes
+
+- [x] Replace SQLite-backed repository persistence with file-based Planvas project storage.
+- [x] Add default Planvas root resolution at `<user_home>/.planvas/`, with `WHITEBOARD_PLANVAS_ROOT` override.
+- [x] Store each Project as a working directory containing `metadata.json` and one XML file per Page.
+- [x] Preserve existing backend HTTP API shapes while replacing the underlying storage engine.
+- [x] Update backend tests for Planvas storage initialization and restart persistence.
+- [x] Replace DB access with a filesystem repository.
 
 ## Navigation Update Notes
 
@@ -15,16 +24,16 @@
 - [x] Treat browser file picker cancellation during Project / Page export as a normal cancel without showing an error banner.
 - [x] Keep duplicate out of the left sidebar while allowing page rename and delete icon buttons there.
 - [x] The workspace `Home` button now sits beside the `Planvas` heading.
-- [x] Clicking `＋ 新增 Page` now creates `untitled_n` directly without a prompt dialog.
+- [x] Clicking `嚗??啣? Page` now creates `untitled_n` directly without a prompt dialog.
 
 ## Toolbar Menu Update Notes
 
-- [x] Rework top toolbar into Office-like `檔案` / `編輯` clickable dropdown menus.
-- [x] Move page `import` / `export` under the `檔案` dropdown.
+- [x] Rework top toolbar into Office-like `瑼?` / `蝺刻摩` clickable dropdown menus.
+- [x] Move page `import` / `export` under the `瑼?` dropdown.
 - [x] Add hover-triggered right submenu under `export` to host current and future formats.
 - [x] Keep `magnet` and `zoom` controls pinned to the far-right side of the toolbar.
 - [x] Replace the right-upper floating utility strip with the expandable canvas header ribbon.
-- [x] Group `檔案`, `編輯`, and `檢視` in the expanded header ribbon, with `magnet` / `zoom` / `背景` under `檢視`.
+- [x] Group `瑼?`, `蝺刻摩`, and `瑼Ｚ?` in the expanded header ribbon, with `magnet` / `zoom` / `?` under `瑼Ｚ?`.
 - [x] Keep the draggable toolbar focused on tool buttons only.
 
 ## Export And Read-Only Sharing Planning Notes
@@ -75,291 +84,292 @@
 
 ## Table Text Layout And Inspector Update Notes
 
-- [x] 移除 `table` 右下角的列 × 欄標籤顯示。
-- [x] 讓 `text_box` 內容固定置中顯示。
-- [x] 讓 `note_paper` 內容維持由左上到右下的閱讀流向。
-- [x] 在右側 Inspector 為 `table` 新增 `文字` 區塊，集中文字相關調整。
+- [x] 蝘駁 `table` ?喃?閫???? 甈?蝐日＊蝷箝?
+- [x] 霈?`text_box` ?批捆?箏?蝵桐葉憿舐內??
+- [x] 霈?`note_paper` ?批捆蝬剜??勗椰銝?喃??霈瘚???
+- [x] ?典??Inspector ??`table` ?啣? `??` ?憛??葉???賊?隤踵??
 
 ## Minimap And New-Page Viewport Update Notes
 
-- [x] 在 Canvas 右下角新增 mini map，顯示整張白板縮圖。
-- [x] mini map 顯示目前 viewport 對應矩形框。
-- [x] mini map 以各物件背景色圓點顯示分布。
-- [x] 新增 Page 時預設 viewport 先落在約 80% 第一象限視角。
+- [x] ??Canvas ?喃?閫憓?mini map嚗＊蝷箸撘萇?輻葬??
+- [x] mini map 憿舐內?桀? viewport 撠??拙耦獢?
+- [x] mini map 隞亙??拐辣??脣?暺＊蝷箏?撣?
+- [x] ?啣? Page ??閮?viewport ??函? 80% 蝚砌?鞊⊿?閬???
 
-依照 `spec.md` 拆出的開發待辦，先以 MVP 為主，延後項目放到最後。
+靘 `spec.md` ????澆?颲佗??誑 MVP ?箔蜓嚗辣敺??格?唳?敺?
 
 ## MVP Todo
 
-### 1. 專案基礎建置
+### 1. 撠??箇?撱箇蔭
 
-- [x] 建立清楚的多目錄結構：`frontend/`、`backend/`
-- [x] 建立 React + TypeScript + Vite 前端專案
-- [x] 建立 Python 3.12 + FastAPI backend 專案
-- [x] 建立 root scripts：`npm run dev`、`dev:frontend`、`dev:backend`、`build`、`lint`、`format`、`typecheck`、`check`
-- [x] 固定前端 dev port `5173` 與 backend dev port `18000`
-- [x] 建立 `GET /healthz` 與前端健康檢查頁
-- [x] 建立 lint / formatter / type check
-- [x] 建立 Windows preflight / bootstrap scripts，至少涵蓋 Python 3.12 與本機開發環境檢查
+- [x] 撱箇?皜????桅?蝯?嚗frontend/`?backend/`
+- [x] 撱箇? React + TypeScript + Vite ?垢撠?
+- [x] 撱箇? Python 3.12 + FastAPI backend 撠?
+- [x] 撱箇? root scripts嚗npm run dev`?dev:frontend`?dev:backend`?build`?lint`?format`?typecheck`?check`
+- [x] ?箏??垢 dev port `5173` ??backend dev port `18000`
+- [x] 撱箇? `GET /healthz` ??蝡臬摨瑟炎?仿?
+- [x] 撱箇? lint / formatter / type check
+- [x] 撱箇? Windows preflight / bootstrap scripts嚗撠項??Python 3.12 ?璈??潛憓炎??
 
-### 2. 本機資料與路徑規則
+### 2. ?祆?鞈??楝敺???
 
-- [x] 定義 backend root 下的 `data/` 與 `logs/`
-- [x] 設定 SQLite 路徑為 `<backend_root>/data/whiteboard.db`
-- [x] 設定 log 路徑為 `<backend_root>/logs/`
-- [x] 啟動時自動建立缺少的資料夾
-- [x] 補上路徑初始化與錯誤處理
+- [x] Initialize `.planvas` project storage and `logs/` runtime output.
+- [x] 閮剖? Planvas file storage 頝臬???`<user_home>/.planvas/<project_name>/metadata.json and page XML files`
+- [x] 閮剖? log 頝臬???`<backend_root>/logs/`
+- [x] ????遣蝡撩撠?鞈?憭?
+- [x] 鋆?頝臬??????航炊??
 
-### 3. SQLite Schema
+### 3. Planvas File Storage
 
-- [x] 建立 `projects` table
-- [x] 建立 `pages` table
-- [x] 建立 `board_items` table
-- [x] 建立 `connector_links` table
-- [x] 建立 migration 或 schema 初始化流程
-- [x] 建立 DB 存取層
-- [x] 補上關聯欄位與索引：`project_id`、`page_id`、`parent_item_id`
+- [x] Store Project records in `<project_name>/metadata.json`.
+- [x] Store Page records in the Project metadata page list.
+- [x] Store board items inside each Page XML file.
+- [x] Store connector links inside each Page XML file.
+- [x] Keep page / item / connector ids stable inside metadata and XML files.
+- [x] Replace DB access with a filesystem repository.
+- [x] 鋆??甈??揣撘?`project_id`?page_id`?parent_item_id`
 
 ### 4. Backend API
 
-- [x] 實作 Project CRUD API
-- [x] 實作 Page CRUD API
-- [x] 實作 board item CRUD API
-- [x] 實作 connector CRUD API
-- [x] 實作 Page viewport API
-- [x] 實作 Page 全量載入 API
-- [x] 實作 Page board state replace API（供 Undo / Redo 還原）
-- [x] 統一 success response format
-- [x] 統一 error format
+- [x] 撖虫? Project CRUD API
+- [x] 撖虫? Page CRUD API
+- [x] 撖虫? board item CRUD API
+- [x] 撖虫? connector CRUD API
+- [x] 撖虫? Page viewport API
+- [x] 撖虫? Page ?券?頛 API
+- [x] 撖虫? Page board state replace API嚗? Undo / Redo ??嚗?
+- [x] 蝯曹? success response format
+- [x] 蝯曹? error format
 
 ### 5. Frontend App Shell
 
-- [x] 建立整體 app layout
-- [x] 實作首頁，集中提供 Project 選擇 / 建立 / 匯入入口
-- [x] 實作左側 Project / Page 導覽
-- [x] 提升左側導覽區對比與選取辨識
-- [x] 實作中央白板區域
-- [x] 實作基本工具列與側欄
-- [x] 畫布背景預設點狀加深，提高一般顯示器上的可見度
-- [x] 畫布右上角提供背景模式切換，可在點狀與格線間切換
-- [x] 串接 backend API
-- [x] 處理初次載入、空狀態與錯誤狀態
+- [x] 撱箇??湧? app layout
+- [x] 撖虫?擐?嚗?銝剜?靘?Project ?豢? / 撱箇? / ?臬?亙
+- [x] 撖虫?撌血 Project / Page 撠汗
+- [x] ??撌血撠汗?撠???儘霅?
+- [x] 撖虫?銝剖亢?賣???
+- [x] 撖虫??箸撌亙???湔?
+- [x] ?怠???身暺??楛嚗?擃??祇＊蝷箏銝??航?摨?
+- [x] ?怠??喃?閫?靘??舀芋撘????臬暺??蝺???
+- [x] 銝脫 backend API
+- [x] ???活頛?征????航炊???
 
 ### 6. Project / Page UI
 
-- [x] 啟動後先進入首頁，再進入工作區
-- [x] 新增 Project
-- [x] 匯入 Project JSON snapshot
-- [x] 重新命名 Project
-- [x] 刪除 Project
-- [x] 以拖拉調整 Project 排序
-- [x] 新增 Page
-- [x] 重新命名 Page
-- [x] 刪除 Page
-- [x] 複製 Page
-- [x] 在畫布 toolbar 的「檔案」群組提供 Page JSON export / import 按鈕
-- [x] 支援匯入 Page JSON 到空白 Page，並在非空白 Page 以疊加方式匯入
-- [x] Page JSON export 新增 `item_hierarchy` 樹狀從屬資料，並在 import 驗證與 `parent_item_id` 一致
-- [x] 以拖拉調整 Page 排序
-- [x] 切換 Page
+- [x] ??敺??脣擐?嚗??脣撌乩??
+- [x] ?啣? Project
+- [x] ?臬 Project JSON snapshot
+- [x] ??賢? Project
+- [x] ?芷 Project
+- [x] 隞交??矽??Project ??
+- [x] ?啣? Page
+- [x] ??賢? Page
+- [x] ?芷 Page
+- [x] 銴ˊ Page
+- [x] ?函撣?toolbar ??獢黎蝯?靘?Page JSON export / import ??
+- [x] ?舀?臬 Page JSON ?啁征??Page嚗蒂?券?蝛箇 Page 隞亦??撘??
+- [x] Page JSON export ?啣? `item_hierarchy` 璅寧?敺惇鞈?嚗蒂??import 撽???`parent_item_id` 銝??
+- [x] 隞交??矽??Page ??
+- [x] ?? Page
 
-### 7. 白板通用能力
+### 7. ?賣??賢?
 
-- [x] 建立白板畫布
-- [x] 支援拖曳與選取
-- [x] 支援白板空白處框選，且僅選取完全包含於框選範圍內的物件
-- [x] 支援 viewport 平移與縮放
-- [x] 支援多選
-- [x] 支援 resize
-- [x] 支援 z-index 調整
-- [x] 支援複製 / 貼上
-- [x] 支援右鍵選單（白板物件與白板空白區）與剪下 / 複製 / 貼上 / 刪除
-- [x] 支援 Delete
-- [x] 支援 Undo / Redo
-- [x] 支援自動儲存
+- [x] 撱箇??賣?怠?
+- [x] ?舀????
+- [x] ?舀?賣蝛箇???賂?銝??詨?摰??潭??貊???隞?
+- [x] ?舀 viewport 撟喟宏?葬??
+- [x] ?舀憭
+- [x] ?舀 resize
+- [x] ?舀 z-index 隤踵
+- [x] ?舀銴ˊ / 鞎潔?
+- [x] ?舀?喲?詨嚗?輻隞嗉??賣蝛箇?嚗??芯? / 銴ˊ / 鞎潔? / ?芷
+- [x] ?舀 Delete
+- [x] ?舀 Undo / Redo
+- [x] ?舀?芸??脣?
 
-### 8. 物件模型
+### 8. ?拐辣璅∪?
 
-- [x] 定義 item type 與 category 常數
-- [x] 定義前後端共用 item model
-- [x] 建立 toolbar 物件建立入口
-- [x] 建立物件基本序列化 / 反序列化
-- [x] 支援建立 `line`
-- [x] 支援建立 `table`
-- [x] 支援建立 `text_box`
-- [x] 支援建立 `sticky_note`
-- [x] 支援建立 `note_paper`
-- [x] 支援建立 `frame`
-- [x] 支援建立 `arrow`
+- [x] 摰儔 item type ??category 撣豢
+- [x] 摰儔??蝡臬??item model
+- [x] 撱箇? toolbar ?拐辣撱箇??亙
+- [x] 撱箇??拐辣?箸摨???/ ????
+- [x] ?舀撱箇? `line`
+- [x] ?舀撱箇? `table`
+- [x] ?舀撱箇? `text_box`
+- [x] ?舀撱箇? `sticky_note`
+- [x] ?舀撱箇? `note_paper`
+- [x] ?舀撱箇? `frame`
+- [x] ?舀撱箇? `arrow`
 
 ### 9. `shape`
 
-- [x] 放大 `line` / `arrow` 端點、折點與中段節點的滑鼠命中範圍，降低精準點擊需求
+- [x] ?曉之 `line` / `arrow` 蝡舫???暺?銝剜挾蝭暺?皛??賭葉蝭?嚗?雿移皞???瘙?
 
-- [x] 拖曳已綁定 anchor 的 `line` / `arrow` 線身時會先 detach，再轉成 freeform segment 平移
+- [x] ?撌脩?摰?anchor ??`line` / `arrow` 蝺澈????detach嚗?頧? freeform segment 撟喟宏
 
-- [x] `line` / freeform `arrow` 的命中區改為沿線段計算，不再讓整個外接矩形吃掉滑鼠事件
-- [x] segment 可直接拖曳線身平移；已綁定 anchor 的 segment 在拖曳線身時會先 detach 再移動
+- [x] `line` / freeform `arrow` ?銝剖??寧瘝輻?畾菔?蝞?銝?霈???亦敶Ｗ???曌?隞?
+- [x] segment ?舐?交??喟?頨怠像蝘鳴?撌脩?摰?anchor ??segment ?冽??喟?頨急??? detach ?宏??
 
-- [x] 實作 `line`
-- [x] 支援 `line` 以起點 / 終點控制長度與方向
-- [x] 支援 `line` 拖曳端點調整
-- [x] 支援 `line` 樣式設定
-- [x] 實作 `table`
-- [x] 支援列數 / 欄數調整（舊版 Inspector；現已改為白板內 inline 操作）
-- [x] 支援儲存 table 內容
-- [x] 支援 table 樣式設定
-- [x] **重設計 table v2**：全新資料模型 (`colWidths`/`rowHeights`/merge spans)
-- [x] 支援點一下工具列 `table` 按鈕後，以該點為固定原點顯示 `1 × 1` 預覽，滑鼠往右 / 下移動可擴張成 `n × m`，再點一下才建立表格
-- [x] 支援選取 table 後拖曳分格線調整列寬 / 欄高（zoom-agnostic fraction resize）
-- [x] 支援選取 table 後在直線 / 橫線上懸停並按 `+` 新增 row / col
-- [x] 支援滑鼠懸停分格線顯示新增 row / col 的 + 鈕（浮起動畫）
-- [x] 支援滑鼠框選多格並顯示「合併」按鈕
-- [x] 支援橫向 / 縱向分割已合併的儲存格
-- [x] 支援把 `small_item`（text_box、sticky_note、note_paper）拖進儲存格吸附（類 frame 邏輯）
-- [x] 支援 table resize 時同步 relayout 儲存格內已吸附的 `small_item`
-- [x] 支援儲存格 embedded item 展開 / 折疊預覽
-- [x] 支援向前相容解析舊版 `string[][]` 格式
-- [x] 支援分格線群組化：hover 時相連整條線一起高亮 + 中央顯示 `+`
-- [x] 支援合併儲存格造成的分格線獨立性（不連續的上下 / 左右線段各自獨立拖曳）
-- [x] 支援合併後儲存格視為新實體，不再回復原本被覆蓋格子的 identity
-- [x] 支援分割後線段獨立性（新產生的中間線段以目前合併格邊界重建，不回到原始欄列，也不自動與鄰行 / 鄰列重新連成同一群組）
-- [x] 支援最外圍擴增 table 時保留既有欄列獨立分格線結構，且原有區域 pixel layout exact 不變
-- [x] 儲存格改為 absolute positioning 排版，支援各行列分格線獨立偏移與顯式斷點
-- [x] 刪除 row / col 時改為縮小 table 外框，不放大其他未受影響儲存格；刪中間時兩側直接併鄰
-- [x] 刪除 row / col 後同步重排 cell 內 child items，讓其跟隨新儲存格位置移動
+- [x] 撖虫? `line`
+- [x] ?舀 `line` 隞亥絲暺?/ 蝯??批?瑕漲???
+- [x] ?舀 `line` ?蝡舫?隤踵
+- [x] ?舀 `line` 璅??閮剖?
+- [x] 撖虫? `table`
+- [x] ?舀? / 甈隤踵嚗???Inspector嚗撌脫?箇?踹 inline ??嚗?
+- [x] ?舀?脣? table ?批捆
+- [x] ?舀 table 璅??閮剖?
+- [x] **?身閮?table v2**嚗?啗??芋??(`colWidths`/`rowHeights`/merge spans)
+- [x] ?舀暺?銝極?瑕? `table` ??敺?隞亥府暺?箏???憿舐內 `1 ? 1` ?汗嚗?曌???/ 銝宏??游撐??`n ? m`嚗?暺?銝?撱箇?銵冽
+- [x] ?舀?詨? table 敺??喳??潛?隤踵?祝 / 甈?嚗oom-agnostic fraction resize嚗?
+- [x] ?舀?詨? table 敺?渡? / 璈怎?銝?蒂??`+` ?啣? row / col
+- [x] ?舀皛??詨??蝺＊蝷箸憓?row / col ??+ ??瘚株絲?嚗?
+- [x] ?舀皛?獢憭銝阡＊蝷箝?雿萸???
+- [x] ?舀璈怠? / 蝮勗??撌脣?雿萇??脣???
+- [x] ?舀??`small_item`嚗ext_box?ticky_note?ote_paper嚗??脣摮?賊?嚗? frame ?摩嚗?
+- [x] ?舀 table resize ??甇?relayout ?脣??澆撌脣?? `small_item`
+- [x] ?舀?脣???embedded item 撅? / ???汗
+- [x] ?舀???詨捆閫???? `string[][]` ?澆?
+- [x] ?舀?蝺黎蝯?嚗over ???璇?銝韏琿?鈭?+ 銝剖亢憿舐內 `+`
+- [x] ?舀?蔥?脣??潮????潛??函??改?銝????銝?/ 撌血蝺挾??函??嚗?
+- [x] ?舀?蔥敺摮閬?啣祕擃?銝??儔?鋡怨??摮? identity
+- [x] ?舀?敺?畾萇蝡改??啁??銝剝?蝺挾隞亦??雿菜???遣嚗????甈?嚗?銝???啗? / ?啣???????蝢斤?嚗?
+- [x] ?舀?憭??游? table ??????蝡??潛?蝯?嚗??????pixel layout exact 銝?
+- [x] ?脣??潭??absolute positioning ??嚗?游?銵??蝺蝡?蝘餉?憿臬??琿?
+- [x] ?芷 row / col ??箇葬撠?table 憭?嚗??曉之?嗡??芸?敶梢?脣??潘??芯葉???拙?湔雿菟
+- [x] ?芷 row / col 敺?甇仿???cell ??child items嚗??嗉??冽?脣??潔?蝵桃宏??
 
-- [x] table 僅在最外層邊框提供整體選取與移動游標；點擊表格內部直接反白單格，按住拖曳可延伸為多格選取
-- [x] table 反白單格或多格時，右側 Inspector 既有背景色可直接套用到反白儲存格（不新增彈出色彩選單）
+- [x] table ??憭惜?????湧??詨??宏?虜璅?暺?銵冽?折?湔??格嚗?雿??喳撱嗡撓?箏??潮??
+- [x] table ??格???潭?嚗??Inspector ?Ｘ???脣?湔憟?啣??賢摮嚗??啣?敶?脣蔗?詨嚗?
 
 ### 10. `small_item`
 
-- [x] 實作 `text_box`
-- [x] 支援 `text_box` 內容編輯
-- [x] 實作 `sticky_note`
-- [x] 支援 `sticky_note` 固定背景色票與固定文字色票
-- [x] 實作 `note_paper`
-- [x] 支援 Markdown 儲存
-- [x] 支援 `note_paper` 基本預覽
+- [x] 撖虫? `text_box`
+- [x] ?舀 `text_box` ?批捆蝺刻摩
+- [x] 撖虫? `sticky_note`
+- [x] ?舀 `sticky_note` ?箏???脩巨?摰?摮蟡?
+- [x] 撖虫? `note_paper`
+- [x] ?舀 Markdown ?脣?
+- [x] ?舀 `note_paper` ?箸?汗
 
 ### 11. `frame`
 
-- [x] 實作 `frame`
-- [x] 支援 `frame` 移動
-- [x] 支援 `frame` resize
-- [x] 支援 `frame` 展開 / 縮回
-- [x] 支援把 `small_item` 放入 `frame`
-- [x] 支援把 `small_item` 從 `frame` 移出
-- [x] 支援 frame 內物件版面更新
-- [x] 支援縮回摘要資料計算
-- [x] 支援展開中的 `frame` 在 overlap 達門檻時進入 focus mode
-- [x] 支援 oversized `small_item` 吸入前自動縮放到 `frame` 60% fit budget
-- [x] 支援 `small_item` 進出 `frame` 的短動畫回饋
-- [x] 支援 `small_item` 離開 `frame` 後自動彈到明確的 frame 外位置，避免停在邊界中間
-- [x] 支援 `frame` 內 item 可重疊，但仍強制完整留在 frame 內容區
-- [x] 支援從 `frame` 拖出 item 時，若未完整移出則自動彈回 frame 內
+- [x] 撖虫? `frame`
+- [x] ?舀 `frame` 蝘餃?
+- [x] ?舀 `frame` resize
+- [x] ?舀 `frame` 撅? / 蝮桀?
+- [x] ?舀??`small_item` ?曉 `frame`
+- [x] ?舀??`small_item` 敺?`frame` 蝘餃
+- [x] ?舀 frame ?抒隞嗥??Ｘ??
+- [x] ?舀蝮桀???鞈?閮?
+- [x] ?舀撅?銝剔? `frame` ??overlap ??瑼餅??脣 focus mode
+- [x] ?舀 oversized `small_item` ?詨??葬?曉 `frame` 60% fit budget
+- [x] ?舀 `small_item` ?脣 `frame` ????
+- [x] ?舀 `small_item` ?ａ? `frame` 敺???唳?蝣箇? frame 憭?蝵殷??踹????銝剝?
+- [x] ?舀 `frame` ??item ?舫???雿?撘瑕摰? frame ?批捆?
+- [x] ?舀敺?`frame` ? item ???交摰蝘餃?????frame ??
 
-### 12. 縮回摘要規則
+### 12. 蝮桀???閬?
 
-- [x] `text_box` 縮回時顯示完整文字
-- [x] `sticky_note` 縮回時顯示部分文字
-- [x] `note_paper` 縮回時只顯示第一個 Markdown H1
-- [x] 若沒有 H1，定義 fallback 顯示規則
-- [x] 定義 frame 縮回摘要的樣式與排序
+- [x] `text_box` 蝮桀??＊蝷箏??湔?摮?
+- [x] `sticky_note` 蝮桀??＊蝷粹??摮?
+- [x] `note_paper` 蝮桀??憿舐內蝚砌???Markdown H1
+- [x] ?交???H1嚗?蝢?fallback 憿舐內閬?
+- [x] 摰儔 frame 蝮桀????見撘???
 
 ### 13. `arrow`
 
-- [x] 實作 `arrow`
-- [x] 支援 `arrow` 以起點 / 終點建立
-- [x] 支援 `arrow` 拖曳建立方向與長度
-- [x] 支援 `arrow` 拖曳端點調整
-- [x] 支援 `arrow` 基本線條樣式
-- [x] 支援 `arrow` / `line` 磁性錨點吸附（draw.io 風格 connector anchor）
-- [x] 支援已連結的 `arrow` / `line` 端點在物件移動時即時跟隨
+- [x] 撖虫? `arrow`
+- [x] ?舀 `arrow` 隞亥絲暺?/ 蝯?撱箇?
+- [x] ?舀 `arrow` ?撱箇??孵??摨?
+- [x] ?舀 `arrow` ?蝡舫?隤踵
+- [x] ?舀 `arrow` ?箸蝺?璅??
+- [x] ?舀 `arrow` / `line` 蝤折暺??draw.io 憸冽 connector anchor嚗?
+- [x] ?舀撌脤????`arrow` / `line` 蝡舫??函隞嗥宏???單?頝
 
-### 14. Magnet / 網格吸附
+### 14. Magnet / 蝬脫?賊?
 
-- [x] 實作基礎 magnet 網格吸附
-- [x] 定義 magnet 容忍距離
-- [x] 僅在 magnet 開啟時吸附背景網格
-- [x] 支援按住 `Alt` 暫時停用 magnet
-- [x] 實作 connector anchor 磁性吸附指示器（anchor indicator）
+- [x] 撖虫??箇? magnet 蝬脫?賊?
+- [x] 摰儔 magnet 摰孵?頝
+- [x] ? magnet ??????舐雯??
+- [x] ?舀?? `Alt` ?急?? magnet
+- [x] 撖虫? connector anchor 蝤批??蝷箏嚗nchor indicator嚗?
 
-### 15. 右側編輯面板
+### 15. ?喳蝺刻摩?Ｘ
 
-- [x] 根據選取物件顯示不同內容
-- [x] 顯示位置資訊
-- [x] 顯示尺寸資訊
-- [x] 顯示樣式欄位
-- [x] 顯示文字或內容設定
-- [x] 支援固定背景色 7 選與固定文字色票
-- [x] 支援基本字體樣式
-- [x] 顯示目前物件型別
+- [x] ?寞??詨??拐辣憿舐內銝??批捆
+- [x] 憿舐內雿蔭鞈?
+- [x] 憿舐內撠箏站鞈?
+- [x] 憿舐內璅??甈?
+- [x] 憿舐內???摰寡身摰?
+- [x] ?舀?箏????7 ?貉??箏????脩巨
+- [x] ?舀?箸摮?璅??
+- [x] 憿舐內?桀??拐辣?
 
-### 16. 快捷鍵
+### 16. 敹急??
 
-- [x] `Delete` 刪除
-- [x] `Ctrl/Cmd + C` 複製
-- [x] `Ctrl/Cmd + X` 剪下
-- [x] `Ctrl/Cmd + V` 貼上
+- [x] `Delete` ?芷
+- [x] `Ctrl/Cmd + C` 銴ˊ
+- [x] `Ctrl/Cmd + X` ?芯?
+- [x] `Ctrl/Cmd + V` 鞎潔?
 - [x] `Ctrl/Cmd + Z` Undo
 - [x] `Ctrl/Cmd + Shift + Z` Redo
-- [x] `Space + Drag` 平移畫布
+- [x] `Space + Drag` 撟喟宏?怠?
 
-### 17. 本機啟動與部署流程
+### 17. ?祆????蝵脫?蝔?
 
-- [x] 定義 frontend / backend 的本機啟動流程
-- [x] 規劃前端靜態檔正式提供方式
-- [x] 初始化 `data/` 與 `logs/`
-- [x] 文件化設定、啟動與備份流程
-- [x] 補上基本 smoke test
+- [x] 摰儔 frontend / backend ?璈???蝔?
+- [x] 閬??垢??瑼迤撘?靘撘?
+- [x] Initialize `.planvas` project storage and `logs/` runtime output.
+- [x] ?辣?身摰????遢瘚?
+- [x] 鋆??箸 smoke test
 
-### 18. 驗收測試
+### 18. 撽皜祈岫
 
-- [x] 驗收 Project / Page CRUD
-- [x] 驗收物件建立 / 編輯 / 刪除
-- [x] 驗收 frame 展開 / 縮回
-- [x] 驗收縮回摘要規則
-- [x] 驗收 frame overlap focus mode / auto-ingest / auto-fit / enter-exit animation
-- [x] 驗收 item 放手後只會明確落在 frame 內或外，不會停在邊界半卡住
-- [x] 驗收 frame 內 item 可重疊但不會部分超出 frame
-- [x] 驗收 item 從 frame 拖出失敗時會自動彈回 frame 內
-- [x] 驗收 line / arrow 起終點建立與控制點調整
-- [x] 驗收 magnet 網格吸附
-- [x] 驗收 Undo / Redo
-- [x] 驗收本機持久化
-- [x] 對照 `spec.md` 驗收條件逐項確認
+- [x] 撽 Project / Page CRUD
+- [x] 撽?拐辣撱箇? / 蝺刻摩 / ?芷
+- [x] 撽 frame 撅? / 蝮桀?
+- [x] 撽蝮桀???閬?
+- [x] 撽 frame overlap focus mode / auto-ingest / auto-fit / enter-exit animation
+- [x] 撽 item ?暹?敺??蝣箄??frame ?扳?憭?銝?????雿?
+- [x] 撽 frame ??item ?舫???銝??典?頞 frame
+- [x] 撽 item 敺?frame ?憭望????芸?敶? frame ??
+- [x] 撽 line / arrow 韏瑞?暺遣蝡??批暺矽??
+- [x] 撽 magnet 蝬脫?賊?
+- [x] 撽 Undo / Redo
+- [x] 撽?祆?????
+- [x] 撠 `spec.md` 撽璇辣??蝣箄?
 
-## 延後項目
+## 撱嗅??
 
-### 19. 進階內容功能
+### 19. ?脤??批捆?
 
 - [x] Markdown rich preview
-- [x] Undo / Redo 歷史優化
+- [x] Undo / Redo 甇瑕?芸?
 
-### 20. 連線資料整理
+### 20. ???鞈??渡?
 
-- [ ] 清理或重構 legacy `connector_links` 的前後端流程，避免與新的自由箭頭模型混淆
+- [ ] 皜???瑽?legacy `connector_links` ??敺垢瘚?嚗???啁??芰蝞剝璅∪?瘛瑟?
 
-### 21. 匯出與唯讀分享
+### 21. ?臬?霈?澈
 
-- [ ] 抽出共用 export pipeline，統一讀取 Page / Project snapshot、viewport、背景與 item hierarchy
-- [x] 定義 PNG 匯出 UI 與裁切規則：自動輸出有物件的區域
-- [x] 實作 PNG 匯出並補上基本視覺驗收
-- [x] 研究並選定 PPTX 產生方案，確認瀏覽器端或 backend 端的責任邊界
-- [x] 定義 PPTX slide layout、字型 / 色彩對應與 raster fallback 規則
-- [x] 實作 PPTX 匯出並驗證多種 item 組合
-- [ ] 定義 Project viewer 封裝格式與檔名規則
-- [ ] 實作唯讀 viewer shell（Page list、畫布渲染、pan / zoom）
-- [ ] 確保 viewer 可離線開啟且不依賴 FastAPI、SQLite 或雲端服務
-- [ ] 文件化分享流程與限制（唯讀、無回存、相容性範圍）
+- [ ] ?賢?梁 export pipeline嚗絞銝霈??Page / Project snapshot?iewport???航? item hierarchy
+- [x] 摰儔 PNG ?臬 UI ???????芸?頛詨?隞嗥????
+- [x] 撖虫? PNG ?臬銝西?銝?祈?閬粹???
+- [x] ?弦銝阡摰?PPTX ?Ｙ??寞?嚗Ⅱ隤汗?函垢??backend 蝡舐?鞎砌遙??
+- [x] 摰儔 PPTX slide layout????/ ?脣蔗撠???raster fallback 閬?
+- [x] 撖虫? PPTX ?臬銝阡?霅?蝔?item 蝯?
+- [ ] 摰儔 Project viewer 撠??澆???????
+- [ ] 撖虫??航? viewer shell嚗age list?撣葡?an / zoom嚗?
+- [ ] 蝣箔? viewer ?舫蝺???銝?鞈?FastAPI?QLite ?蝡舀???
+- [ ] ?辣??鈭急?蝔??嚗霈????摰寞抒???
 
-## 建議實作順序
+## 撱箄降撖虫???
 
-1. 專案基礎建置
-2. SQLite Schema 與 backend CRUD
-3. Frontend App Shell 與 Project / Page UI
-4. 白板通用能力
-5. 物件模型與各型別實作
-6. Snap、connector 與驗收
-7. 本機部署流程與測試
+1. 撠??箇?撱箇蔭
+2. Planvas file storage ??backend CRUD
+3. Frontend App Shell ??Project / Page UI
+4. ?賣??賢?
+5. ?拐辣璅∪????撖虫?
+6. Snap?onnector ????
+7. ?祆??函蔡瘚??葫閰?
+

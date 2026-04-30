@@ -21,9 +21,8 @@ def test_healthz(tmp_path: Path) -> None:
             "status": "ok",
         }
     }
-    assert settings.data_dir.is_dir()
+    assert settings.planvas_root.is_dir()
     assert settings.logs_dir.is_dir()
-    assert settings.sqlite_path.is_file()
     assert settings.app_log_path.is_file()
     assert settings.backend_log_path.is_file()
 

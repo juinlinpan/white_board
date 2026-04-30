@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 PROJECT_THEME_COLORS = {"default", "sage", "sunset", "ocean"}
 
 
@@ -55,7 +54,7 @@ class ProjectUpdatePayload(BaseModel):
         return normalized
 
     @model_validator(mode="after")
-    def validate_update(self) -> "ProjectUpdatePayload":
+    def validate_update(self) -> ProjectUpdatePayload:
         if self.name is None and self.theme_color is None:
             raise ValueError("Project update requires a name or theme color.")
         return self

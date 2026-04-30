@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import json
 import logging
-import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
+import re
+import shutil
+import tempfile
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+from xml.etree import ElementTree
 
 from fastapi import HTTPException, status
 
 from app.schemas import (
+    PROJECT_THEME_COLORS,
     BoardItem,
     BoardItemCreatePayload,
     BoardItemUpdatePayload,
@@ -25,7 +29,6 @@ from app.schemas import (
     Project,
     ProjectCreatePayload,
     ProjectUpdatePayload,
-    PROJECT_THEME_COLORS,
 )
 from app.settings import AppSettings
 
@@ -34,125 +37,28 @@ CONNECTABLE_ITEM_TYPES = {"text_box", "sticky_note", "note_paper", "frame"}
 NEW_PAGE_VIEWPORT_X = 240.0
 NEW_PAGE_VIEWPORT_Y = 160.0
 NEW_PAGE_DEFAULT_ZOOM = 1.0
+METADATA_FILENAME = "metadata.json"
 
 
 class StorageInitializationError(RuntimeError):
     pass
 
-SCHEMA_STATEMENTS = (
-    """
-    CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        theme_color TEXT NOT NULL DEFAULT 'default',
-        sort_order INTEGER NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pages (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        sort_order INTEGER NOT NULL,
-        viewport_x REAL NOT NULL DEFAULT 0,
-        viewport_y REAL NOT NULL DEFAULT 0,
-        zoom REAL NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS board_items (
-        id TEXT PRIMARY KEY,
-        page_id TEXT NOT NULL,
-        parent_item_id TEXT,
-        category TEXT NOT NULL,
-        type TEXT NOT NULL,
-        title TEXT,
-        content TEXT,
-        content_format TEXT,
-        x REAL NOT NULL DEFAULT 0,
-        y REAL NOT NULL DEFAULT 0,
-        width REAL NOT NULL DEFAULT 0,
-        height REAL NOT NULL DEFAULT 0,
-        rotation REAL NOT NULL DEFAULT 0,
-        z_index INTEGER NOT NULL DEFAULT 0,
-        is_collapsed INTEGER NOT NULL DEFAULT 0,
-        style_json TEXT,
-        data_json TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE,
-        FOREIGN KEY(parent_item_id) REFERENCES board_items(id) ON DELETE SET NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS connector_links (
-        id TEXT PRIMARY KEY,
-        connector_item_id TEXT NOT NULL,
-        from_item_id TEXT,
-        to_item_id TEXT,
-        from_anchor TEXT,
-        to_anchor TEXT,
-        FOREIGN KEY(connector_item_id) REFERENCES board_items(id) ON DELETE CASCADE,
-        FOREIGN KEY(from_item_id) REFERENCES board_items(id) ON DELETE CASCADE,
-        FOREIGN KEY(to_item_id) REFERENCES board_items(id) ON DELETE CASCADE
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_pages_project_id ON pages(project_id)",
-    "CREATE INDEX IF NOT EXISTS idx_board_items_page_id ON board_items(page_id)",
-    "CREATE INDEX IF NOT EXISTS idx_board_items_parent_item_id ON board_items(parent_item_id)",
-    """
-    CREATE INDEX IF NOT EXISTS idx_connector_links_connector_item_id
-    ON connector_links(connector_item_id)
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_connector_links_from_item_id ON connector_links(from_item_id)",
-    "CREATE INDEX IF NOT EXISTS idx_connector_links_to_item_id ON connector_links(to_item_id)",
-)
-
 
 def initialize_storage(settings: AppSettings) -> None:
     _ensure_directory(settings.backend_root, "Backend root")
     _ensure_writable_directory(settings.backend_root, "Backend root")
-    _ensure_directory(settings.data_dir, "Data directory")
-    _ensure_writable_directory(settings.data_dir, "Data directory")
+    _ensure_directory(settings.planvas_root, "Planvas root")
+    _ensure_writable_directory(settings.planvas_root, "Planvas root")
     _ensure_directory(settings.logs_dir, "Logs directory")
     _ensure_writable_directory(settings.logs_dir, "Logs directory")
-    _ensure_writable_file(settings.sqlite_path, "SQLite database")
     _ensure_writable_file(settings.app_log_path, "App log")
     _ensure_writable_file(settings.backend_log_path, "Backend log")
-
-    try:
-        with sqlite3.connect(settings.sqlite_path) as connection:
-            connection.execute("PRAGMA foreign_keys = ON")
-            for statement in SCHEMA_STATEMENTS:
-                connection.execute(statement)
-            _ensure_project_theme_column(connection)
-            connection.commit()
-    except sqlite3.Error as exc:
-        raise StorageInitializationError(
-            f"Failed to initialize SQLite at '{settings.sqlite_path}': {exc}"
-        ) from exc
-
-    LOGGER.info("Storage initialized at %s", settings.sqlite_path)
-
-
-def _ensure_project_theme_column(connection: sqlite3.Connection) -> None:
-    rows = connection.execute("PRAGMA table_info(projects)").fetchall()
-    column_names = {row[1] for row in rows}
-    if "theme_color" not in column_names:
-        connection.execute(
-            "ALTER TABLE projects ADD COLUMN theme_color TEXT NOT NULL DEFAULT 'default'"
-        )
+    LOGGER.info("Storage initialized at %s", settings.planvas_root)
 
 
 def _ensure_directory(path: Path, label: str) -> None:
     if path.exists() and not path.is_dir():
         raise StorageInitializationError(f"{label} '{path}' must be a directory.")
-
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -162,16 +68,13 @@ def _ensure_directory(path: Path, label: str) -> None:
 
 
 def _ensure_writable_directory(path: Path, label: str) -> None:
-    probe_path = path / f".whiteboard-write-test-{uuid4().hex}"
+    probe_path = path / f".planvas-write-test-{uuid4().hex}"
     try:
         probe_path.write_text("", encoding="utf-8")
     except OSError as exc:
-        raise StorageInitializationError(
-            f"{label} '{path}' is not writable: {exc}"
-        ) from exc
+        raise StorageInitializationError(f"{label} '{path}' is not writable: {exc}") from exc
     finally:
-        if probe_path.exists():
-            probe_path.unlink(missing_ok=True)
+        probe_path.unlink(missing_ok=True)
 
 
 def _ensure_writable_file(path: Path, label: str) -> None:
@@ -180,1009 +83,458 @@ def _ensure_writable_file(path: Path, label: str) -> None:
         with path.open("a", encoding="utf-8"):
             pass
     except OSError as exc:
-        raise StorageInitializationError(
-            f"{label} '{path}' is not writable: {exc}"
+        raise StorageInitializationError(f"{label} '{path}' is not writable: {exc}") from exc
+
+
+def utc_timestamp() -> str:
+    return datetime.now(tz=UTC).replace(microsecond=0).isoformat()
+
+
+def _slugify(value: str, *, fallback: str = "untitled") -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip(".-_")
+    return normalized[:80] or fallback
+
+
+def _unique_path(parent: Path, stem: str, suffix: str = "") -> Path:
+    candidate = parent / f"{stem}{suffix}"
+    index = 2
+    while candidate.exists():
+        candidate = parent / f"{stem}-{index}{suffix}"
+        index += 1
+    return candidate
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        delete=False,
+        newline="\n",
+    ) as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        temp_path = Path(handle.name)
+    temp_path.replace(path)
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Project metadata '{path}' could not be read.",
         ) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Project metadata '{path}' is invalid.",
+        )
+    return payload
 
 
 class WhiteboardRepository:
     def __init__(self, settings: AppSettings) -> None:
         self.settings = settings
 
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.settings.sqlite_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield connection
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
-
     def list_projects(self) -> list[Project]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, name, theme_color, sort_order, created_at, updated_at
-                FROM projects
-                ORDER BY sort_order ASC, created_at ASC
-                """
-            ).fetchall()
-        return [self._project_from_row(row) for row in rows]
+        projects = [
+            self._project_from_metadata(metadata)
+            for _, metadata in self._iter_project_metadata()
+        ]
+        return sorted(projects, key=lambda project: (project.sort_order, project.created_at))
 
     def get_project(self, project_id: str) -> Project:
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT id, name, theme_color, sort_order, created_at, updated_at
-                FROM projects
-                WHERE id = ?
-                """,
-                (project_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project '{project_id}' was not found.",
-            )
-
-        return self._project_from_row(row)
+        _, metadata = self._find_project_metadata(project_id)
+        return self._project_from_metadata(metadata)
 
     def create_project(self, payload: ProjectCreatePayload) -> Project:
         timestamp = utc_timestamp()
-        project_id = str(uuid4())
-        with self._connect() as connection:
-            sort_order = self._next_sort_order(connection, "projects")
-            connection.execute(
-                """
-                INSERT INTO projects (
-                    id,
-                    name,
-                    theme_color,
-                    sort_order,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    project_id,
-                    payload.name,
-                    payload.theme_color,
-                    sort_order,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            row = connection.execute(
-                """
-                SELECT id, name, theme_color, sort_order, created_at, updated_at
-                FROM projects
-                WHERE id = ?
-                """,
-                (project_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Project creation did not persist correctly.",
-            )
-
-        return self._project_from_row(row)
+        project = Project(
+            id=str(uuid4()),
+            name=payload.name,
+            theme_color=payload.theme_color,
+            sort_order=len(self.list_projects()),
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        project_dir = _unique_path(self.settings.planvas_root, _slugify(payload.name))
+        metadata: dict[str, object] = {"project": project.model_dump(), "pages": []}
+        project_dir.mkdir(parents=True, exist_ok=False)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        return project
 
     def update_project(self, project_id: str, payload: ProjectUpdatePayload) -> Project:
-        timestamp = utc_timestamp()
-        with self._connect() as connection:
-            current_row = connection.execute(
-                """
-                SELECT name, theme_color
-                FROM projects
-                WHERE id = ?
-                """,
-                (project_id,),
-            ).fetchone()
-            if current_row is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project '{project_id}' was not found.",
-                )
-
-            next_name = payload.name if payload.name is not None else current_row["name"]
-            next_theme_color = (
-                payload.theme_color
-                if payload.theme_color is not None
-                else current_row["theme_color"]
-            )
-            cursor = connection.execute(
-                """
-                UPDATE projects
-                SET name = ?, theme_color = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (next_name, next_theme_color, timestamp, project_id),
-            )
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project '{project_id}' was not found.",
-                )
-
-            row = connection.execute(
-                """
-                SELECT id, name, theme_color, sort_order, created_at, updated_at
-                FROM projects
-                WHERE id = ?
-                """,
-                (project_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Project update did not persist correctly.",
-            )
-
-        return self._project_from_row(row)
+        project_dir, metadata = self._find_project_metadata(project_id)
+        project = self._project_from_metadata(metadata)
+        next_name = payload.name if payload.name is not None else project.name
+        next_theme_color = (
+            payload.theme_color if payload.theme_color is not None else project.theme_color
+        )
+        next_project = project.model_copy(
+            update={
+                "name": next_name,
+                "theme_color": next_theme_color,
+                "updated_at": utc_timestamp(),
+            }
+        )
+        metadata["project"] = next_project.model_dump()
+        next_dir = project_dir
+        if next_name != project.name:
+            next_dir = _unique_path(self.settings.planvas_root, _slugify(next_name))
+            project_dir.rename(next_dir)
+        _write_json_atomic(next_dir / METADATA_FILENAME, metadata)
+        return next_project
 
     def delete_project(self, project_id: str) -> None:
-        with self._connect() as connection:
-            cursor = connection.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project '{project_id}' was not found.",
-                )
+        project_dir, _ = self._find_project_metadata(project_id)
+        shutil.rmtree(project_dir)
 
     def reorder_projects(self, ordered_ids: list[str]) -> list[Project]:
+        entries = list(self._iter_project_metadata())
+        existing_ids = [
+            self._project_from_metadata(metadata).id for _, metadata in entries
+        ]
+        self._validate_reorder_ids(
+            existing_ids=existing_ids,
+            ordered_ids=ordered_ids,
+            entity_label="Project",
+        )
         timestamp = utc_timestamp()
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, sort_order
-                FROM projects
-                ORDER BY sort_order ASC, created_at ASC
-                """
-            ).fetchall()
-            self._validate_reorder_ids(
-                existing_ids=[row["id"] for row in rows],
-                ordered_ids=ordered_ids,
-                entity_label="Project",
+        order_by_id = {project_id: sort_order for sort_order, project_id in enumerate(ordered_ids)}
+        projects: list[Project] = []
+        for project_dir, metadata in entries:
+            project = self._project_from_metadata(metadata)
+            next_project = project.model_copy(
+                update={"sort_order": order_by_id[project.id], "updated_at": timestamp}
             )
-            self._apply_sort_order_updates(
-                connection=connection,
-                table_name="projects",
-                ordered_ids=ordered_ids,
-                current_sort_order_by_id={
-                    row["id"]: int(row["sort_order"]) for row in rows
-                },
-                timestamp=timestamp,
-            )
-            reordered_rows = connection.execute(
-                """
-                SELECT id, name, theme_color, sort_order, created_at, updated_at
-                FROM projects
-                ORDER BY sort_order ASC, created_at ASC
-                """
-            ).fetchall()
-
-        return [self._project_from_row(row) for row in reordered_rows]
+            metadata["project"] = next_project.model_dump()
+            _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+            projects.append(next_project)
+        return sorted(projects, key=lambda project: project.sort_order)
 
     def list_pages(self, project_id: str) -> list[Page]:
-        self.get_project(project_id)
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE project_id = ?
-                ORDER BY sort_order ASC, created_at ASC
-                """,
-                (project_id,),
-            ).fetchall()
-
-        return [self._page_from_row(row) for row in rows]
+        _, metadata = self._find_project_metadata(project_id)
+        return self._pages_from_metadata(metadata)
 
     def get_page(self, page_id: str) -> Page:
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE id = ?
-                """,
-                (page_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Page '{page_id}' was not found.",
-            )
-
-        return self._page_from_row(row)
+        _, _, page = self._find_page_metadata(page_id)
+        return page
 
     def create_page(self, project_id: str, payload: PageCreatePayload) -> Page:
-        self.get_project(project_id)
+        project_dir, metadata = self._find_project_metadata(project_id)
         timestamp = utc_timestamp()
-        page_id = str(uuid4())
-        with self._connect() as connection:
-            sort_order = self._next_sort_order(
-                connection,
-                "pages",
-                where_clause="project_id = ?",
-                parameters=(project_id,),
-            )
-            connection.execute(
-                """
-                INSERT INTO pages (
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    page_id,
-                    project_id,
-                    payload.name,
-                    sort_order,
-                    NEW_PAGE_VIEWPORT_X,
-                    NEW_PAGE_VIEWPORT_Y,
-                    NEW_PAGE_DEFAULT_ZOOM,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE id = ?
-                """,
-                (page_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Page creation did not persist correctly.",
-            )
-
-        return self._page_from_row(row)
+        pages = self._pages_from_metadata(metadata)
+        page = Page(
+            id=str(uuid4()),
+            project_id=project_id,
+            name=payload.name,
+            sort_order=len(pages),
+            viewport_x=NEW_PAGE_VIEWPORT_X,
+            viewport_y=NEW_PAGE_VIEWPORT_Y,
+            zoom=NEW_PAGE_DEFAULT_ZOOM,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        page_file = _unique_path(project_dir, _slugify(payload.name, fallback="page"), ".xml")
+        page_entries = self._page_entries(metadata)
+        page_entries.append({**page.model_dump(), "file": page_file.name})
+        self._touch_project(metadata, timestamp)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        self._write_page_xml(page_file, page, [], [])
+        return page
 
     def update_page(self, page_id: str, payload: PageUpdatePayload) -> Page:
+        project_dir, metadata, page = self._find_page_metadata(page_id)
         timestamp = utc_timestamp()
-        with self._connect() as connection:
-            cursor = connection.execute(
-                """
-                UPDATE pages
-                SET name = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (payload.name, timestamp, page_id),
-            )
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Page '{page_id}' was not found.",
-                )
-
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE id = ?
-                """,
-                (page_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Page update did not persist correctly.",
-            )
-
-        return self._page_from_row(row)
+        next_page = page.model_copy(update={"name": payload.name, "updated_at": timestamp})
+        self._replace_page_entry(metadata, next_page)
+        self._touch_project(metadata, timestamp)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        board = self.get_page_board_data(page_id)
+        self._write_page_xml(
+            self._page_path(project_dir, metadata, page_id),
+            next_page,
+            board.board_items,
+            board.connector_links,
+        )
+        return next_page
 
     def delete_page(self, page_id: str) -> None:
-        with self._connect() as connection:
-            cursor = connection.execute("DELETE FROM pages WHERE id = ?", (page_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Page '{page_id}' was not found.",
-                )
+        project_dir, metadata, _ = self._find_page_metadata(page_id)
+        page_path = self._page_path(project_dir, metadata, page_id)
+        metadata["pages"] = [
+            entry for entry in self._page_entries(metadata) if entry.get("id") != page_id
+        ]
+        self._renumber_pages(metadata)
+        self._touch_project(metadata, utc_timestamp())
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        page_path.unlink(missing_ok=True)
 
     def reorder_pages(self, project_id: str, ordered_ids: list[str]) -> list[Page]:
-        self.get_project(project_id)
+        project_dir, metadata = self._find_project_metadata(project_id)
+        pages = self._pages_from_metadata(metadata)
+        self._validate_reorder_ids(
+            existing_ids=[page.id for page in pages],
+            ordered_ids=ordered_ids,
+            entity_label="Page",
+        )
         timestamp = utc_timestamp()
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, sort_order
-                FROM pages
-                WHERE project_id = ?
-                ORDER BY sort_order ASC, created_at ASC
-                """,
-                (project_id,),
-            ).fetchall()
-            self._validate_reorder_ids(
-                existing_ids=[row["id"] for row in rows],
-                ordered_ids=ordered_ids,
-                entity_label="Page",
+        order_by_id = {page_id: sort_order for sort_order, page_id in enumerate(ordered_ids)}
+        next_pages = [
+            page.model_copy(
+                update={"sort_order": order_by_id[page.id], "updated_at": timestamp}
             )
-            self._apply_sort_order_updates(
-                connection=connection,
-                table_name="pages",
-                ordered_ids=ordered_ids,
-                current_sort_order_by_id={
-                    row["id"]: int(row["sort_order"]) for row in rows
-                },
-                timestamp=timestamp,
-            )
-            reordered_rows = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE project_id = ?
-                ORDER BY sort_order ASC, created_at ASC
-                """,
-                (project_id,),
-            ).fetchall()
-
-        return [self._page_from_row(row) for row in reordered_rows]
+            for page in pages
+        ]
+        for page in next_pages:
+            self._replace_page_entry(metadata, page)
+        self._touch_project(metadata, timestamp)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        return sorted(next_pages, key=lambda page: page.sort_order)
 
     def duplicate_page(self, page_id: str) -> Page:
-        source_page = self.get_page(page_id)
+        project_dir, metadata, source_page = self._find_page_metadata(page_id)
+        source_board = self.get_page_board_data(page_id)
         timestamp = utc_timestamp()
-        duplicated_page_id = str(uuid4())
-        duplicated_name: str | None = None
-
-        with self._connect() as connection:
-            duplicated_name = self._build_duplicate_page_name(
-                connection=connection,
-                project_id=source_page.project_id,
-                source_name=source_page.name,
-            )
-            connection.execute(
-                """
-                UPDATE pages
-                SET sort_order = sort_order + 1, updated_at = ?
-                WHERE project_id = ? AND sort_order > ?
-                """,
-                (timestamp, source_page.project_id, source_page.sort_order),
-            )
-            connection.execute(
-                """
-                INSERT INTO pages (
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    duplicated_page_id,
-                    source_page.project_id,
-                    duplicated_name,
-                    source_page.sort_order + 1,
-                    source_page.viewport_x,
-                    source_page.viewport_y,
-                    source_page.zoom,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-
-            source_items = connection.execute(
-                """
-                SELECT *
-                FROM board_items
-                WHERE page_id = ?
-                ORDER BY z_index ASC, created_at ASC
-                """,
-                (page_id,),
-            ).fetchall()
-            duplicated_item_id_by_source_id = {
-                row["id"]: str(uuid4()) for row in source_items
+        existing_names = {page.name for page in self._pages_from_metadata(metadata)}
+        duplicated_name = self._build_duplicate_page_name(existing_names, source_page.name)
+        duplicated_page = source_page.model_copy(
+            update={
+                "id": str(uuid4()),
+                "name": duplicated_name,
+                "sort_order": source_page.sort_order + 1,
+                "created_at": timestamp,
+                "updated_at": timestamp,
             }
-            for row in source_items:
-                connection.execute(
-                    """
-                    INSERT INTO board_items (
-                        id,
-                        page_id,
-                        parent_item_id,
-                        category,
-                        type,
-                        title,
-                        content,
-                        content_format,
-                        x,
-                        y,
-                        width,
-                        height,
-                        rotation,
-                        z_index,
-                        is_collapsed,
-                        style_json,
-                        data_json,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        duplicated_item_id_by_source_id[row["id"]],
-                        duplicated_page_id,
-                        self._get_duplicated_item_reference(
-                            duplicated_item_id_by_source_id,
-                            row["parent_item_id"],
-                        ),
-                        row["category"],
-                        row["type"],
-                        row["title"],
-                        row["content"],
-                        row["content_format"],
-                        row["x"],
-                        row["y"],
-                        row["width"],
-                        row["height"],
-                        row["rotation"],
-                        row["z_index"],
-                        row["is_collapsed"],
-                        row["style_json"],
-                        row["data_json"],
-                        timestamp,
-                        timestamp,
+        )
+
+        page_entries = self._page_entries(metadata)
+        for entry in page_entries:
+            sort_order = int(str(entry["sort_order"]))
+            if sort_order > source_page.sort_order:
+                entry["sort_order"] = sort_order + 1
+                entry["updated_at"] = timestamp
+
+        duplicated_item_id_by_source_id = {
+            item.id: str(uuid4()) for item in source_board.board_items
+        }
+        duplicated_items = [
+            item.model_copy(
+                update={
+                    "id": duplicated_item_id_by_source_id[item.id],
+                    "page_id": duplicated_page.id,
+                    "parent_item_id": self._get_duplicated_item_reference(
+                        duplicated_item_id_by_source_id,
+                        item.parent_item_id,
                     ),
-                )
-
-            source_connectors = connection.execute(
-                """
-                SELECT cl.*
-                FROM connector_links cl
-                INNER JOIN board_items bi ON bi.id = cl.connector_item_id
-                WHERE bi.page_id = ?
-                ORDER BY cl.id ASC
-                """,
-                (page_id,),
-            ).fetchall()
-            for row in source_connectors:
-                connection.execute(
-                    """
-                    INSERT INTO connector_links (
-                        id,
-                        connector_item_id,
-                        from_item_id,
-                        to_item_id,
-                        from_anchor,
-                        to_anchor
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(uuid4()),
-                        self._get_duplicated_item_reference(
-                            duplicated_item_id_by_source_id,
-                            row["connector_item_id"],
-                            required=True,
-                        ),
-                        self._get_duplicated_item_reference(
-                            duplicated_item_id_by_source_id,
-                            row["from_item_id"],
-                        ),
-                        self._get_duplicated_item_reference(
-                            duplicated_item_id_by_source_id,
-                            row["to_item_id"],
-                        ),
-                        row["from_anchor"],
-                        row["to_anchor"],
-                    ),
-                )
-
-            duplicated_row = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE id = ?
-                """,
-                (duplicated_page_id,),
-            ).fetchone()
-
-        if duplicated_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Page duplication did not persist correctly.",
+                    "created_at": timestamp,
+                    "updated_at": timestamp,
+                }
             )
+            for item in source_board.board_items
+        ]
+        duplicated_connectors = [
+            connector.model_copy(
+                update={
+                    "id": str(uuid4()),
+                    "connector_item_id": self._get_duplicated_item_reference(
+                        duplicated_item_id_by_source_id,
+                        connector.connector_item_id,
+                        required=True,
+                    ),
+                    "from_item_id": self._get_duplicated_item_reference(
+                        duplicated_item_id_by_source_id,
+                        connector.from_item_id,
+                    ),
+                    "to_item_id": self._get_duplicated_item_reference(
+                        duplicated_item_id_by_source_id,
+                        connector.to_item_id,
+                    ),
+                }
+            )
+            for connector in source_board.connector_links
+        ]
 
-        return self._page_from_row(duplicated_row)
+        page_file = _unique_path(project_dir, _slugify(duplicated_name, fallback="page"), ".xml")
+        page_entries.append({**duplicated_page.model_dump(), "file": page_file.name})
+        self._touch_project(metadata, timestamp)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        self._write_page_xml(page_file, duplicated_page, duplicated_items, duplicated_connectors)
+        return duplicated_page
 
     def update_page_viewport(self, page_id: str, payload: PageViewportPayload) -> Page:
+        project_dir, metadata, page = self._find_page_metadata(page_id)
         timestamp = utc_timestamp()
-        with self._connect() as connection:
-            cursor = connection.execute(
-                """
-                UPDATE pages
-                SET viewport_x = ?, viewport_y = ?, zoom = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    payload.viewport_x,
-                    payload.viewport_y,
-                    payload.zoom,
-                    timestamp,
-                    page_id,
-                ),
-            )
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Page '{page_id}' was not found.",
-                )
-
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    project_id,
-                    name,
-                    sort_order,
-                    viewport_x,
-                    viewport_y,
-                    zoom,
-                    created_at,
-                    updated_at
-                FROM pages
-                WHERE id = ?
-                """,
-                (page_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Page viewport update did not persist correctly.",
-            )
-
-        return self._page_from_row(row)
+        next_page = page.model_copy(
+            update={
+                "viewport_x": payload.viewport_x,
+                "viewport_y": payload.viewport_y,
+                "zoom": payload.zoom,
+                "updated_at": timestamp,
+            }
+        )
+        board = self.get_page_board_data(page_id)
+        self._replace_page_entry(metadata, next_page)
+        self._touch_project(metadata, timestamp)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        self._write_page_xml(
+            self._page_path(project_dir, metadata, page_id),
+            next_page,
+            board.board_items,
+            board.connector_links,
+        )
+        return next_page
 
     def list_board_items(self, page_id: str) -> list[BoardItem]:
-        self.get_page(page_id)
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    id,
-                    page_id,
-                    parent_item_id,
-                    category,
-                    type,
-                    title,
-                    content,
-                    content_format,
-                    x,
-                    y,
-                    width,
-                    height,
-                    rotation,
-                    z_index,
-                    is_collapsed,
-                    style_json,
-                    data_json,
-                    created_at,
-                    updated_at
-                FROM board_items
-                WHERE page_id = ?
-                ORDER BY z_index ASC, created_at ASC
-                """,
-                (page_id,),
-            ).fetchall()
-        return [self._board_item_from_row(row) for row in rows]
+        return self._read_page_xml(page_id)[0]
 
     def get_board_item(self, item_id: str) -> BoardItem:
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    page_id,
-                    parent_item_id,
-                    category,
-                    type,
-                    title,
-                    content,
-                    content_format,
-                    x,
-                    y,
-                    width,
-                    height,
-                    rotation,
-                    z_index,
-                    is_collapsed,
-                    style_json,
-                    data_json,
-                    created_at,
-                    updated_at
-                FROM board_items
-                WHERE id = ?
-                """,
-                (item_id,),
-            ).fetchone()
+        for page in self._all_pages():
+            items, _ = self._read_page_xml(page.id)
+            for item in items:
+                if item.id == item_id:
+                    return item
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Board item '{item_id}' was not found.",
+        )
 
-        if row is None:
+    def create_board_item(self, payload: BoardItemCreatePayload) -> BoardItem:
+        page = self.get_page(payload.page_id)
+        if payload.parent_item_id is not None:
+            parent = self.get_board_item(payload.parent_item_id)
+            if parent.page_id != payload.page_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Board item parent must belong to the same page.",
+                )
+        item = BoardItem(
+            **payload.model_dump(),
+            id=str(uuid4()),
+            created_at=utc_timestamp(),
+            updated_at=utc_timestamp(),
+        )
+        items, connectors = self._read_page_xml(page.id)
+        items.append(item)
+        self._persist_page_board(page, items, connectors)
+        return item
+
+    def update_board_item(self, item_id: str, payload: BoardItemUpdatePayload) -> BoardItem:
+        page = self.get_page(payload.page_id)
+        if payload.parent_item_id is not None:
+            parent = self.get_board_item(payload.parent_item_id)
+            if parent.page_id != payload.page_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Board item parent must belong to the same page.",
+                )
+        items, connectors = self._read_page_xml(payload.page_id)
+        for index, item in enumerate(items):
+            if item.id == item_id:
+                next_item = BoardItem(
+                    **payload.model_dump(),
+                    id=item_id,
+                    created_at=item.created_at,
+                    updated_at=utc_timestamp(),
+                )
+                items[index] = next_item
+                self._persist_page_board(page, items, connectors)
+                return next_item
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Board item '{item_id}' was not found.",
+        )
+
+    def delete_board_item(self, item_id: str) -> None:
+        page = self._find_page_for_board_item(item_id)
+        items, connectors = self._read_page_xml(page.id)
+        item_ids = {item.id for item in items}
+        if item_id not in item_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Board item '{item_id}' was not found.",
             )
-
-        return self._board_item_from_row(row)
-
-    def create_board_item(self, payload: BoardItemCreatePayload) -> BoardItem:
-        self.get_page(payload.page_id)
-        if payload.parent_item_id is not None:
-            self.get_board_item(payload.parent_item_id)
-        item_id = str(uuid4())
-        timestamp = utc_timestamp()
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO board_items (
-                    id,
-                    page_id,
-                    parent_item_id,
-                    category,
-                    type,
-                    title,
-                    content,
-                    content_format,
-                    x,
-                    y,
-                    width,
-                    height,
-                    rotation,
-                    z_index,
-                    is_collapsed,
-                    style_json,
-                    data_json,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    item_id,
-                    payload.page_id,
-                    payload.parent_item_id,
-                    payload.category,
-                    payload.type,
-                    payload.title,
-                    payload.content,
-                    payload.content_format,
-                    payload.x,
-                    payload.y,
-                    payload.width,
-                    payload.height,
-                    payload.rotation,
-                    payload.z_index,
-                    int(payload.is_collapsed),
-                    payload.style_json,
-                    payload.data_json,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            row = connection.execute(
-                "SELECT * FROM board_items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Board item creation did not persist correctly.",
-            )
-        return self._board_item_from_row(row)
-
-    def update_board_item(self, item_id: str, payload: BoardItemUpdatePayload) -> BoardItem:
-        self.get_page(payload.page_id)
-        if payload.parent_item_id is not None:
-            self.get_board_item(payload.parent_item_id)
-        timestamp = utc_timestamp()
-        with self._connect() as connection:
-            cursor = connection.execute(
-                """
-                UPDATE board_items
-                SET
-                    page_id = ?,
-                    parent_item_id = ?,
-                    category = ?,
-                    type = ?,
-                    title = ?,
-                    content = ?,
-                    content_format = ?,
-                    x = ?,
-                    y = ?,
-                    width = ?,
-                    height = ?,
-                    rotation = ?,
-                    z_index = ?,
-                    is_collapsed = ?,
-                    style_json = ?,
-                    data_json = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    payload.page_id,
-                    payload.parent_item_id,
-                    payload.category,
-                    payload.type,
-                    payload.title,
-                    payload.content,
-                    payload.content_format,
-                    payload.x,
-                    payload.y,
-                    payload.width,
-                    payload.height,
-                    payload.rotation,
-                    payload.z_index,
-                    int(payload.is_collapsed),
-                    payload.style_json,
-                    payload.data_json,
-                    timestamp,
-                    item_id,
-                ),
-            )
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Board item '{item_id}' was not found.",
-                )
-            row = connection.execute(
-                "SELECT * FROM board_items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
-
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Board item update did not persist correctly.",
-            )
-        return self._board_item_from_row(row)
-
-    def delete_board_item(self, item_id: str) -> None:
-        with self._connect() as connection:
-            related_arrow_ids = [
-                row["connector_item_id"]
-                for row in connection.execute(
-                    """
-                    SELECT DISTINCT connector_item_id
-                    FROM connector_links
-                    WHERE from_item_id = ? OR to_item_id = ?
-                    """,
-                    (item_id, item_id),
-                ).fetchall()
-                if row["connector_item_id"] != item_id
-            ]
-
-            if related_arrow_ids:
-                placeholders = ", ".join("?" for _ in related_arrow_ids)
-                connection.execute(
-                    f"DELETE FROM board_items WHERE id IN ({placeholders})",
-                    tuple(related_arrow_ids),
-                )
-
-            cursor = connection.execute("DELETE FROM board_items WHERE id = ?", (item_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Board item '{item_id}' was not found.",
-                )
+        related_arrow_ids = {
+            connector.connector_item_id
+            for connector in connectors
+            if item_id in {connector.from_item_id, connector.to_item_id}
+            and connector.connector_item_id != item_id
+        }
+        delete_ids = {item_id, *related_arrow_ids}
+        items = [
+            item
+            for item in items
+            if item.id not in delete_ids and item.parent_item_id not in delete_ids
+        ]
+        remaining_ids = {item.id for item in items}
+        connectors = [
+            connector
+            for connector in connectors
+            if connector.connector_item_id in remaining_ids
+            and (connector.from_item_id is None or connector.from_item_id in remaining_ids)
+            and (connector.to_item_id is None or connector.to_item_id in remaining_ids)
+        ]
+        self._persist_page_board(page, items, connectors)
 
     def list_connector_links(self, page_id: str) -> list[ConnectorLink]:
-        self.get_page(page_id)
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    cl.id,
-                    cl.connector_item_id,
-                    cl.from_item_id,
-                    cl.to_item_id,
-                    cl.from_anchor,
-                    cl.to_anchor
-                FROM connector_links cl
-                INNER JOIN board_items bi ON bi.id = cl.connector_item_id
-                WHERE bi.page_id = ?
-                ORDER BY cl.id ASC
-                """,
-                (page_id,),
-            ).fetchall()
-        return [self._connector_from_row(row) for row in rows]
+        return self._read_page_xml(page_id)[1]
 
     def get_connector_link(self, connector_id: str) -> ConnectorLink:
-        with self._connect() as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    id,
-                    connector_item_id,
-                    from_item_id,
-                    to_item_id,
-                    from_anchor,
-                    to_anchor
-                FROM connector_links
-                WHERE id = ?
-                """,
-                (connector_id,),
-            ).fetchone()
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Connector '{connector_id}' was not found.",
-            )
-        return self._connector_from_row(row)
+        for page in self._all_pages():
+            _, connectors = self._read_page_xml(page.id)
+            for connector in connectors:
+                if connector.id == connector_id:
+                    return connector
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connector '{connector_id}' was not found.",
+        )
 
     def create_connector_link(self, payload: ConnectorLinkCreatePayload) -> ConnectorLink:
-        self._validate_connector_payload(payload)
-        connector_id = str(uuid4())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO connector_links (
-                    id,
-                    connector_item_id,
-                    from_item_id,
-                    to_item_id,
-                    from_anchor,
-                    to_anchor
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    connector_id,
-                    payload.connector_item_id,
-                    payload.from_item_id,
-                    payload.to_item_id,
-                    payload.from_anchor,
-                    payload.to_anchor,
-                ),
-            )
-            row = connection.execute(
-                "SELECT * FROM connector_links WHERE id = ?",
-                (connector_id,),
-            ).fetchone()
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Connector creation did not persist correctly.",
-            )
-        return self._connector_from_row(row)
+        connector_item = self._validate_connector_payload(payload)
+        connector = ConnectorLink(**payload.model_dump(), id=str(uuid4()))
+        items, connectors = self._read_page_xml(connector_item.page_id)
+        connectors.append(connector)
+        self._persist_page_board(self.get_page(connector_item.page_id), items, connectors)
+        return connector
 
     def update_connector_link(
         self,
         connector_id: str,
         payload: ConnectorLinkUpdatePayload,
     ) -> ConnectorLink:
-        self._validate_connector_payload(payload)
-        with self._connect() as connection:
-            cursor = connection.execute(
-                """
-                UPDATE connector_links
-                SET
-                    connector_item_id = ?,
-                    from_item_id = ?,
-                    to_item_id = ?,
-                    from_anchor = ?,
-                    to_anchor = ?
-                WHERE id = ?
-                """,
-                (
-                    payload.connector_item_id,
-                    payload.from_item_id,
-                    payload.to_item_id,
-                    payload.from_anchor,
-                    payload.to_anchor,
-                    connector_id,
-                ),
-            )
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Connector '{connector_id}' was not found.",
+        connector_item = self._validate_connector_payload(payload)
+        items, connectors = self._read_page_xml(connector_item.page_id)
+        for index, connector in enumerate(connectors):
+            if connector.id == connector_id:
+                next_connector = ConnectorLink(**payload.model_dump(), id=connector_id)
+                connectors[index] = next_connector
+                self._persist_page_board(
+                    self.get_page(connector_item.page_id),
+                    items,
+                    connectors,
                 )
-            row = connection.execute(
-                "SELECT * FROM connector_links WHERE id = ?",
-                (connector_id,),
-            ).fetchone()
-        if row is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Connector update did not persist correctly.",
-            )
-        return self._connector_from_row(row)
+                return next_connector
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connector '{connector_id}' was not found.",
+        )
 
     def delete_connector_link(self, connector_id: str) -> None:
-        with self._connect() as connection:
-            cursor = connection.execute("DELETE FROM connector_links WHERE id = ?", (connector_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Connector '{connector_id}' was not found.",
-                )
+        page = self._find_page_for_connector(connector_id)
+        items, connectors = self._read_page_xml(page.id)
+        next_connectors = [
+            connector for connector in connectors if connector.id != connector_id
+        ]
+        if len(next_connectors) == len(connectors):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Connector '{connector_id}' was not found.",
+            )
+        self._persist_page_board(page, items, next_connectors)
 
     def replace_page_board_state(
         self,
@@ -1190,64 +542,301 @@ class WhiteboardRepository:
         board_items: list[BoardItem],
         connector_links: list[ConnectorLink],
     ) -> PageBoardData:
-        self.get_page(page_id)
-        item_by_id = self._validate_board_state_payload(
+        page = self.get_page(page_id)
+        self._validate_board_state_payload(
             page_id=page_id,
             board_items=board_items,
             connector_links=connector_links,
         )
-
-        with self._connect() as connection:
-            connection.execute("DELETE FROM board_items WHERE page_id = ?", (page_id,))
-            self._insert_board_state_items(connection, board_items)
-            self._insert_board_state_connectors(
-                connection,
-                connector_links,
-                item_by_id=item_by_id,
-            )
-
+        self._persist_page_board(page, board_items, connector_links)
         return self.get_page_board_data(page_id)
 
     def get_page_board_data(self, page_id: str) -> PageBoardData:
         page = self.get_page(page_id)
+        board_items, connector_links = self._read_page_xml(page_id)
         return PageBoardData(
             page=page,
-            board_items=self.list_board_items(page_id),
-            connector_links=self.list_connector_links(page_id),
+            board_items=board_items,
+            connector_links=connector_links,
         )
 
-    def _next_sort_order(
+    def _iter_project_metadata(self) -> list[tuple[Path, dict[str, object]]]:
+        if not self.settings.planvas_root.exists():
+            return []
+        entries: list[tuple[Path, dict[str, object]]] = []
+        for child in self.settings.planvas_root.iterdir():
+            metadata_path = child / METADATA_FILENAME
+            if child.is_dir() and metadata_path.is_file():
+                entries.append((child, _read_json(metadata_path)))
+        return entries
+
+    def _find_project_metadata(self, project_id: str) -> tuple[Path, dict[str, object]]:
+        for project_dir, metadata in self._iter_project_metadata():
+            if self._project_from_metadata(metadata).id == project_id:
+                return project_dir, metadata
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project '{project_id}' was not found.",
+        )
+
+    def _find_page_metadata(self, page_id: str) -> tuple[Path, dict[str, object], Page]:
+        for project_dir, metadata in self._iter_project_metadata():
+            for page in self._pages_from_metadata(metadata):
+                if page.id == page_id:
+                    return project_dir, metadata, page
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page '{page_id}' was not found.",
+        )
+
+    def _all_pages(self) -> list[Page]:
+        pages: list[Page] = []
+        for _, metadata in self._iter_project_metadata():
+            pages.extend(self._pages_from_metadata(metadata))
+        return pages
+
+    def _project_from_metadata(self, metadata: dict[str, object]) -> Project:
+        project_payload = metadata.get("project")
+        if not isinstance(project_payload, dict):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Project metadata is missing project data.",
+            )
+        if project_payload.get("theme_color") not in PROJECT_THEME_COLORS:
+            project_payload["theme_color"] = "default"
+        return Project.model_validate(project_payload)
+
+    def _page_entries(self, metadata: dict[str, object]) -> list[dict[str, object]]:
+        pages_payload = metadata.setdefault("pages", [])
+        if not isinstance(pages_payload, list):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Project metadata pages data is invalid.",
+            )
+        return pages_payload
+
+    def _pages_from_metadata(self, metadata: dict[str, object]) -> list[Page]:
+        pages = [Page.model_validate(entry) for entry in self._page_entries(metadata)]
+        return sorted(pages, key=lambda page: (page.sort_order, page.created_at))
+
+    def _replace_page_entry(self, metadata: dict[str, object], page: Page) -> None:
+        for entry in self._page_entries(metadata):
+            if entry.get("id") == page.id:
+                file_name = entry.get("file")
+                entry.clear()
+                entry.update(page.model_dump())
+                entry["file"] = file_name
+                return
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page '{page.id}' was not found.",
+        )
+
+    def _page_path(self, project_dir: Path, metadata: dict[str, object], page_id: str) -> Path:
+        for entry in self._page_entries(metadata):
+            if entry.get("id") == page_id:
+                file_name = entry.get("file")
+                if isinstance(file_name, str) and file_name:
+                    return project_dir / file_name
+                return project_dir / f"{page_id}.xml"
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page '{page_id}' was not found.",
+        )
+
+    def _touch_project(self, metadata: dict[str, object], timestamp: str) -> None:
+        project = self._project_from_metadata(metadata)
+        metadata["project"] = project.model_copy(update={"updated_at": timestamp}).model_dump()
+
+    def _renumber_pages(self, metadata: dict[str, object]) -> None:
+        timestamp = utc_timestamp()
+        for sort_order, page in enumerate(self._pages_from_metadata(metadata)):
+            self._replace_page_entry(
+                metadata,
+                page.model_copy(update={"sort_order": sort_order, "updated_at": timestamp}),
+            )
+
+    def _persist_page_board(
         self,
-        connection: sqlite3.Connection,
-        table_name: str,
-        where_clause: str | None = None,
-        parameters: tuple[object, ...] = (),
-    ) -> int:
-        query = f"SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort_order FROM {table_name}"
-        if where_clause is not None:
-            query = f"{query} WHERE {where_clause}"
+        page: Page,
+        board_items: list[BoardItem],
+        connector_links: list[ConnectorLink],
+    ) -> None:
+        project_dir, metadata, current_page = self._find_page_metadata(page.id)
+        next_page = current_page.model_copy(update={"updated_at": utc_timestamp()})
+        self._replace_page_entry(metadata, next_page)
+        self._touch_project(metadata, next_page.updated_at)
+        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        self._write_page_xml(
+            self._page_path(project_dir, metadata, page.id),
+            next_page,
+            board_items,
+            connector_links,
+        )
 
-        row = connection.execute(query, parameters).fetchone()
-        if row is None:
-            return 0
-        return int(row["next_sort_order"])
+    def _read_page_xml(self, page_id: str) -> tuple[list[BoardItem], list[ConnectorLink]]:
+        project_dir, metadata, page = self._find_page_metadata(page_id)
+        page_path = self._page_path(project_dir, metadata, page_id)
+        if not page_path.exists():
+            return [], []
+        try:
+            root = ElementTree.parse(page_path).getroot()
+        except (ElementTree.ParseError, OSError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Page XML '{page_path}' could not be read.",
+            ) from exc
+        board_items = [
+            self._board_item_from_element(element, page.id)
+            for element in root.findall("./board_items/board_item")
+        ]
+        connectors = [
+            ConnectorLink.model_validate(
+                {
+                    "id": element.attrib["id"],
+                    "connector_item_id": element.attrib["connector_item_id"],
+                    "from_item_id": _blank_to_none(element.attrib.get("from_item_id")),
+                    "to_item_id": _blank_to_none(element.attrib.get("to_item_id")),
+                    "from_anchor": _blank_to_none(element.attrib.get("from_anchor")),
+                    "to_anchor": _blank_to_none(element.attrib.get("to_anchor")),
+                }
+            )
+            for element in root.findall("./connector_links/connector_link")
+        ]
+        return (
+            sorted(board_items, key=lambda item: (item.z_index, item.created_at)),
+            sorted(connectors, key=lambda connector: connector.id),
+        )
 
-    def _project_from_row(self, row: sqlite3.Row) -> Project:
-        payload = dict(row)
-        if payload["theme_color"] not in PROJECT_THEME_COLORS:
-            payload["theme_color"] = "default"
-        return Project.model_validate(payload)
+    def _write_page_xml(
+        self,
+        path: Path,
+        page: Page,
+        board_items: list[BoardItem],
+        connector_links: list[ConnectorLink],
+    ) -> None:
+        root = ElementTree.Element(
+            "page",
+            {
+                "id": page.id,
+                "project_id": page.project_id,
+                "name": page.name,
+                "sort_order": str(page.sort_order),
+                "viewport_x": str(page.viewport_x),
+                "viewport_y": str(page.viewport_y),
+                "zoom": str(page.zoom),
+                "created_at": page.created_at,
+                "updated_at": page.updated_at,
+            },
+        )
+        items_element = ElementTree.SubElement(root, "board_items")
+        for item in sorted(board_items, key=lambda value: (value.z_index, value.created_at)):
+            item_element = ElementTree.SubElement(
+                items_element,
+                "board_item",
+                {
+                    "id": item.id,
+                    "page_id": item.page_id,
+                    "parent_item_id": item.parent_item_id or "",
+                    "category": item.category,
+                    "type": item.type,
+                    "x": str(item.x),
+                    "y": str(item.y),
+                    "width": str(item.width),
+                    "height": str(item.height),
+                    "rotation": str(item.rotation),
+                    "z_index": str(item.z_index),
+                    "is_collapsed": "true" if item.is_collapsed else "false",
+                    "created_at": item.created_at,
+                    "updated_at": item.updated_at,
+                },
+            )
+            for field_name in (
+                "title",
+                "content",
+                "content_format",
+                "style_json",
+                "data_json",
+            ):
+                field = ElementTree.SubElement(item_element, field_name)
+                value = getattr(item, field_name)
+                if value is not None:
+                    field.text = value
+        connectors_element = ElementTree.SubElement(root, "connector_links")
+        for connector in sorted(connector_links, key=lambda value: value.id):
+            ElementTree.SubElement(
+                connectors_element,
+                "connector_link",
+                {
+                    "id": connector.id,
+                    "connector_item_id": connector.connector_item_id,
+                    "from_item_id": connector.from_item_id or "",
+                    "to_item_id": connector.to_item_id or "",
+                    "from_anchor": connector.from_anchor or "",
+                    "to_anchor": connector.to_anchor or "",
+                },
+            )
+        ElementTree.indent(root, space="  ")
+        tree = ElementTree.ElementTree(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=path.parent,
+            delete=False,
+        ) as handle:
+            tree.write(handle, encoding="utf-8", xml_declaration=True)
+            temp_path = Path(handle.name)
+        temp_path.replace(path)
 
-    def _page_from_row(self, row: sqlite3.Row) -> Page:
-        return Page.model_validate(dict(row))
-
-    def _board_item_from_row(self, row: sqlite3.Row) -> BoardItem:
-        payload = dict(row)
-        payload["is_collapsed"] = bool(payload["is_collapsed"])
+    def _board_item_from_element(self, element: ElementTree.Element, page_id: str) -> BoardItem:
+        payload = {
+            "id": element.attrib["id"],
+            "page_id": element.attrib.get("page_id", page_id),
+            "parent_item_id": _blank_to_none(element.attrib.get("parent_item_id")),
+            "category": element.attrib["category"],
+            "type": element.attrib["type"],
+            "title": self._child_text(element, "title"),
+            "content": self._child_text(element, "content"),
+            "content_format": self._child_text(element, "content_format"),
+            "x": float(element.attrib.get("x", "0")),
+            "y": float(element.attrib.get("y", "0")),
+            "width": float(element.attrib.get("width", "0")),
+            "height": float(element.attrib.get("height", "0")),
+            "rotation": float(element.attrib.get("rotation", "0")),
+            "z_index": int(element.attrib.get("z_index", "0")),
+            "is_collapsed": element.attrib.get("is_collapsed", "false") == "true",
+            "style_json": self._child_text(element, "style_json"),
+            "data_json": self._child_text(element, "data_json"),
+            "created_at": element.attrib["created_at"],
+            "updated_at": element.attrib["updated_at"],
+        }
         return BoardItem.model_validate(payload)
 
-    def _connector_from_row(self, row: sqlite3.Row) -> ConnectorLink:
-        return ConnectorLink.model_validate(dict(row))
+    def _child_text(self, element: ElementTree.Element, tag_name: str) -> str | None:
+        child = element.find(tag_name)
+        if child is None:
+            return None
+        return child.text
+
+    def _find_page_for_board_item(self, item_id: str) -> Page:
+        for page in self._all_pages():
+            items, _ = self._read_page_xml(page.id)
+            if any(item.id == item_id for item in items):
+                return page
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Board item '{item_id}' was not found.",
+        )
+
+    def _find_page_for_connector(self, connector_id: str) -> Page:
+        for page in self._all_pages():
+            _, connectors = self._read_page_xml(page.id)
+            if any(connector.id == connector_id for connector in connectors):
+                return page
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connector '{connector_id}' was not found.",
+        )
 
     def _validate_board_state_payload(
         self,
@@ -1262,14 +851,12 @@ class WhiteboardRepository:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Board state contains duplicate board item ids.",
             )
-
         connector_ids = [connector.id for connector in connector_links]
         if len(set(connector_ids)) != len(connector_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Board state contains duplicate connector ids.",
             )
-
         item_by_id = {item.id: item for item in board_items}
         for item in board_items:
             if item.page_id != page_id:
@@ -1277,13 +864,11 @@ class WhiteboardRepository:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Board state items must belong to the target page.",
                 )
-
             if item.parent_item_id is not None and item.parent_item_id not in item_by_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Board state item parent references must exist in the payload.",
                 )
-
         for connector in connector_links:
             connector_item = item_by_id.get(connector.connector_item_id)
             if connector_item is None:
@@ -1291,7 +876,6 @@ class WhiteboardRepository:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Board state connector item references must exist in the payload.",
                 )
-
             self._validate_connector_targets(
                 connector_item=connector_item,
                 from_item=item_by_id.get(connector.from_item_id)
@@ -1301,14 +885,8 @@ class WhiteboardRepository:
                 if connector.to_item_id is not None
                 else None,
             )
-
-            for role, item_id in (
-                ("from", connector.from_item_id),
-                ("to", connector.to_item_id),
-            ):
-                if item_id is None:
-                    continue
-                if item_id not in item_by_id:
+            for role, item_id in (("from", connector.from_item_id), ("to", connector.to_item_id)):
+                if item_id is not None and item_id not in item_by_id:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=(
@@ -1316,128 +894,7 @@ class WhiteboardRepository:
                             "in the payload."
                         ),
                     )
-
         return item_by_id
-
-    def _insert_board_state_items(
-        self,
-        connection: sqlite3.Connection,
-        board_items: list[BoardItem],
-    ) -> None:
-        pending_items = {item.id: item for item in board_items}
-        inserted_ids: set[str] = set()
-
-        while pending_items:
-            inserted_this_round = False
-
-            for item_id, item in list(pending_items.items()):
-                if item.parent_item_id is not None and item.parent_item_id not in inserted_ids:
-                    continue
-
-                connection.execute(
-                    """
-                    INSERT INTO board_items (
-                        id,
-                        page_id,
-                        parent_item_id,
-                        category,
-                        type,
-                        title,
-                        content,
-                        content_format,
-                        x,
-                        y,
-                        width,
-                        height,
-                        rotation,
-                        z_index,
-                        is_collapsed,
-                        style_json,
-                        data_json,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        item.id,
-                        item.page_id,
-                        item.parent_item_id,
-                        item.category,
-                        item.type,
-                        item.title,
-                        item.content,
-                        item.content_format,
-                        item.x,
-                        item.y,
-                        item.width,
-                        item.height,
-                        item.rotation,
-                        item.z_index,
-                        int(item.is_collapsed),
-                        item.style_json,
-                        item.data_json,
-                        item.created_at,
-                        item.updated_at,
-                    ),
-                )
-                inserted_ids.add(item_id)
-                del pending_items[item_id]
-                inserted_this_round = True
-
-            if inserted_this_round:
-                continue
-
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Board state contains invalid or cyclic parent references.",
-            )
-
-    def _insert_board_state_connectors(
-        self,
-        connection: sqlite3.Connection,
-        connector_links: list[ConnectorLink],
-        *,
-        item_by_id: dict[str, BoardItem],
-    ) -> None:
-        for connector in connector_links:
-            connector_item = item_by_id[connector.connector_item_id]
-            from_item = (
-                item_by_id[connector.from_item_id]
-                if connector.from_item_id is not None
-                else None
-            )
-            to_item = (
-                item_by_id[connector.to_item_id]
-                if connector.to_item_id is not None
-                else None
-            )
-            self._validate_connector_targets(
-                connector_item=connector_item,
-                from_item=from_item,
-                to_item=to_item,
-            )
-            connection.execute(
-                """
-                INSERT INTO connector_links (
-                    id,
-                    connector_item_id,
-                    from_item_id,
-                    to_item_id,
-                    from_anchor,
-                    to_anchor
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    connector.id,
-                    connector.connector_item_id,
-                    connector.from_item_id,
-                    connector.to_item_id,
-                    connector.from_anchor,
-                    connector.to_anchor,
-                ),
-            )
 
     def _validate_reorder_ids(
         self,
@@ -1455,43 +912,7 @@ class WhiteboardRepository:
                 ),
             )
 
-    def _apply_sort_order_updates(
-        self,
-        *,
-        connection: sqlite3.Connection,
-        table_name: str,
-        ordered_ids: list[str],
-        current_sort_order_by_id: dict[str, int],
-        timestamp: str,
-    ) -> None:
-        for sort_order, entity_id in enumerate(ordered_ids):
-            current_sort_order = current_sort_order_by_id[entity_id]
-            if current_sort_order == sort_order:
-                continue
-
-            connection.execute(
-                f"""
-                UPDATE {table_name}
-                SET sort_order = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (sort_order, timestamp, entity_id),
-            )
-
-    def _build_duplicate_page_name(
-        self,
-        *,
-        connection: sqlite3.Connection,
-        project_id: str,
-        source_name: str,
-    ) -> str:
-        existing_names = {
-            row["name"]
-            for row in connection.execute(
-                "SELECT name FROM pages WHERE project_id = ?",
-                (project_id,),
-            ).fetchall()
-        }
+    def _build_duplicate_page_name(self, existing_names: set[str], source_name: str) -> str:
         candidate = f"{source_name} Copy"
         copy_index = 2
         while candidate in existing_names:
@@ -1508,7 +929,6 @@ class WhiteboardRepository:
     ) -> str | None:
         if source_item_id is None:
             return None
-
         duplicated_item_id = duplicated_item_id_by_source_id.get(source_item_id)
         if duplicated_item_id is None and required:
             raise HTTPException(
@@ -1520,7 +940,7 @@ class WhiteboardRepository:
     def _validate_connector_payload(
         self,
         payload: ConnectorLinkCreatePayload | ConnectorLinkUpdatePayload,
-    ) -> None:
+    ) -> BoardItem:
         connector_item = self.get_board_item(payload.connector_item_id)
         from_item = (
             self.get_board_item(payload.from_item_id)
@@ -1537,6 +957,7 @@ class WhiteboardRepository:
             from_item=from_item,
             to_item=to_item,
         )
+        return connector_item
 
     def _validate_connector_targets(
         self,
@@ -1550,17 +971,14 @@ class WhiteboardRepository:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Connector item must be an arrow board item.",
             )
-
         for role, target_item in (("from", from_item), ("to", to_item)):
             if target_item is None:
                 continue
-
             if target_item.page_id != connector_item.page_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Connector {role} item must be on the same page as the arrow.",
                 )
-
             if target_item.type not in CONNECTABLE_ITEM_TYPES:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -1571,5 +989,7 @@ class WhiteboardRepository:
                 )
 
 
-def utc_timestamp() -> str:
-    return datetime.now(tz=UTC).replace(microsecond=0).isoformat()
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None or value == "":
+        return None
+    return value

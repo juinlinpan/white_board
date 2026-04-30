@@ -21,14 +21,17 @@
 
 - Frontend: `React + TypeScript`
 - Backend: `Python 3.12 + FastAPI`
-- Database: `SQLite`
+- Persistence: file-based Planvas project storage
 
 補充限制：
 
 - 這是一個本機優先的單人 web app
 - 不再預設包含桌面殼或 Tauri
 - backend 啟動目錄必須可寫入
-- SQLite 必須位於 `<backend_root>/data/whiteboard.db`
+- Project 預設儲存根目錄必須位於 `<user_home>/.planvas/`
+- 每個 Project 是一個工作路徑：`<user_home>/.planvas/<project_name>/`
+- 每個 Project 目錄必須包含 `metadata.json`
+- 每個 Project 目錄底下的 Page 必須以 XML 檔案儲存
 - Log 必須位於 `<backend_root>/logs/`
 - 不預設依賴雲端服務
 
@@ -136,7 +139,7 @@ Codex 在這個專案中，不只可以閱讀 `spec.md` 與 `todo_list.md`，也
 - 預設先以 MVP 為優先
 - 不要先做多人協作、雲端同步、權限系統
 - 優先確保白板核心互動可用
-- 優先確保本機 SQLite 與本機啟動流程可用
+- 優先確保本機 `.planvas` 檔案儲存與本機啟動流程可用
 - 文件與實作要持續對齊
 
 ## 8. 備註
