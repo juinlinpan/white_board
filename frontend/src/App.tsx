@@ -380,6 +380,20 @@ export function App() {
   const [selectedPageId, setSelectedPageId] = useState<string | null>(
     initialRoute.view === 'workspace' ? initialRoute.pageId : null,
   );
+  const [galleryNotes, setGalleryNotes] = useState<
+    Array<{
+      id: string;
+      title: string;
+      preview: string;
+      folder: string;
+      linkedLocations: Array<{
+        projectId: string;
+        projectName: string;
+        pageId: string;
+        pageName: string;
+      }>;
+    }>
+  >([]);
   const [projectNameDraft, setProjectNameDraft] = useState('');
   const [projectSettingsDialogOpen, setProjectSettingsDialogOpen] =
     useState(false);
@@ -468,6 +482,7 @@ export function App() {
       ]);
 
       setProjects(nextProjects);
+      await refreshGalleryIndex(nextProjects);
       setSelectedProjectId((current) =>
         appView === 'workspace'
           ? current
@@ -1085,6 +1100,31 @@ export function App() {
     });
   }
 
+
+  async function refreshGalleryIndex(nextProjects: Project[]): Promise<void> {
+    const noteMap = new Map<string, { id: string; title: string; preview: string; folder: string; linkedLocations: Array<{ projectId: string; projectName: string; pageId: string; pageName: string }> }>();
+    for (const project of nextProjects) {
+      const projectPages = await listPages(project.id);
+      for (const page of projectPages) {
+        const data = await getPageBoardData(page.id);
+        for (const item of data.board_items) {
+          if (item.type !== 'note_paper' || (item.content ?? '').trim().length === 0) continue;
+          const content = item.content ?? '';
+          const existing = noteMap.get(content) ?? {
+            id: item.id,
+            title: content.split('\n').find((line) => line.trim().startsWith('# '))?.replace('# ', '').trim() || 'Untitled markdown',
+            preview: content.slice(0, 120),
+            folder: project.name,
+            linkedLocations: [],
+          };
+          existing.linkedLocations.push({ projectId: project.id, projectName: project.name, pageId: page.id, pageName: page.name });
+          noteMap.set(content, existing);
+        }
+      }
+    }
+    setGalleryNotes(Array.from(noteMap.values()));
+  }
+
   if (loadState === 'error' || appView === 'home') {
     return (
       <>
@@ -1101,9 +1141,11 @@ export function App() {
           isLoading={loadState === 'loading'}
           projects={projects}
           selectedProjectId={selectedProjectId}
+          notes={galleryNotes}
           onCreateProject={() => void handleCreateProject()}
           onImportProject={handleImportButtonClick}
           onOpenProject={(projectId) => openProject(projectId, null)}
+          onOpenGalleryLink={(projectId, pageId) => openProject(projectId, pageId)}
         />
       </>
     );

@@ -363,3 +363,13 @@
 5. 物件模型與各型別實作
 6. Snap、connector 與驗收
 7. 本機部署流程與測試
+
+
+## Gallery Markdown Hub Todo
+
+- [x] Home view adds a `Gallery` entry under `你的 Projects` with dedicated browsing panel.
+- [x] Build a first-pass gallery index that collects existing page markdown (`note_paper`) and shows backlinks to each project/page location.
+- [ ] Add backend canonical markdown entities (`gallery_folders`, `markdown_notes`, `page_note_links`) so linked notes are truly one-source across pages.
+- [ ] Replace derived-content dedup with explicit note IDs; editing from page or gallery must persist through the same note record.
+- [ ] Implement Notion-like markdown editor capabilities (slash command, block transforms, checklist, code block, table, quote).
+- [ ] Add folder CRUD and drag-sort for gallery information architecture.

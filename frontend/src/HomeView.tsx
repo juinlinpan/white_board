@@ -1,80 +1,22 @@
+import { useMemo, useState } from 'react';
 import { type Project } from './api';
 
 const HERO_IMAGE_SRC = '/assets/home-whiteboard-hero.png';
 
-function IconPlus() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
+type GalleryLinkedLocation = {
+  projectId: string;
+  projectName: string;
+  pageId: string;
+  pageName: string;
+};
 
-function IconArrow() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  );
-}
-
-function IconImport() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 3v12" />
-      <path d="m7 10 5 5 5-5" />
-      <path d="M5 21h14" />
-    </svg>
-  );
-}
-
-function IconSpark() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m12 3 1.65 5.35L19 10l-5.35 1.65L12 17l-1.65-5.35L5 10l5.35-1.65L12 3Z" />
-      <path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" />
-    </svg>
-  );
-}
+type GalleryNote = {
+  id: string;
+  title: string;
+  preview: string;
+  folder: string;
+  linkedLocations: GalleryLinkedLocation[];
+};
 
 type Props = {
   errorMessage: string | null;
@@ -82,9 +24,11 @@ type Props = {
   isLoading: boolean;
   projects: Project[];
   selectedProjectId: string | null;
+  notes: GalleryNote[];
   onCreateProject: () => void;
   onImportProject: () => void;
   onOpenProject: (projectId: string) => void;
+  onOpenGalleryLink: (projectId: string, pageId: string) => void;
 };
 
 function formatDate(value: string): string {
@@ -107,95 +51,74 @@ export function HomeView({
   isLoading,
   projects,
   selectedProjectId,
+  notes,
   onCreateProject,
   onImportProject,
   onOpenProject,
+  onOpenGalleryLink,
 }: Props) {
   const recentProject = latestProject(projects);
+  const [tab, setTab] = useState<'projects' | 'gallery'>('projects');
+  const folders = useMemo(() => [...new Set(notes.map((note) => note.folder))], [notes]);
 
   return (
     <main className="home-shell">
       <section className="home-hero-panel" aria-label="Planvas home">
         <div className="home-copy">
-          <div className="home-brand">
-            <span className="home-brand-mark" aria-hidden="true">
-              <IconSpark />
-            </span>
-            <div>
-              <span className="home-brand-name">Planvas</span>
-              <span className="home-brand-kicker">Local-first planning</span>
-            </div>
-          </div>
-
           <div className="home-heading-group">
             <p className="home-eyebrow">Projects</p>
             <h1 className="home-title">就是一塊白板</h1>
           </div>
-
           <div className="home-actions">
-            <button className="home-create-button" disabled={isBusy} onClick={onCreateProject}>
-              <IconPlus />
-              建立 Project
-            </button>
-            <button className="home-import-button" disabled={isBusy} onClick={onImportProject}>
-              <IconImport />
-              匯入 Project
-            </button>
+            <button className="home-create-button" disabled={isBusy} onClick={onCreateProject}>建立 Project</button>
+            <button className="home-import-button" disabled={isBusy} onClick={onImportProject}>匯入 Project</button>
           </div>
         </div>
-
-        <div className="home-visual" aria-hidden="true">
-          <img src={HERO_IMAGE_SRC} alt="" />
-        </div>
+        <div className="home-visual" aria-hidden="true"><img src={HERO_IMAGE_SRC} alt="" /></div>
       </section>
 
-      <section className="home-project-panel" aria-label="Project list">
-        <div className="home-header">
-          <div>
-            <p className="home-eyebrow">Workspace</p>
-            <h2 className="home-list-title">你的 Projects</h2>
-          </div>
-          <span className="count-badge">{projects.length}</span>
+      <section className="home-project-panel" aria-label="Workspace list">
+        <div className="home-header"><h2 className="home-list-title">你的 Workspace</h2></div>
+        <div className="home-tabs">
+          <button className={`home-tab ${tab === 'projects' ? 'is-active' : ''}`} onClick={() => setTab('projects')}>你的 Projects</button>
+          <button className={`home-tab ${tab === 'gallery' ? 'is-active' : ''}`} onClick={() => setTab('gallery')}>Gallery</button>
         </div>
 
-        {errorMessage !== null ? <div className="error-banner">{errorMessage}</div> : null}
-
-        {isLoading ? (
-          <div className="home-loading" aria-label="Loading projects">
-            <div className="home-loading-dot" />
-            <div className="home-loading-dot" />
-            <div className="home-loading-dot" />
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="home-empty-state">
-            <strong>還沒有 Project</strong>
-            <p>先建立一個白板專案，或匯入現有 JSON snapshot。</p>
-          </div>
+        {tab === 'projects' ? (
+          <>
+            {errorMessage !== null ? <div className="error-banner">{errorMessage}</div> : null}
+            {isLoading ? <div className="home-loading"><div className="home-loading-dot" /><div className="home-loading-dot" /><div className="home-loading-dot" /></div> : (
+              <div className="home-project-list">
+                {projects.map((project) => (
+                  <button key={project.id} className={`home-project-card ${project.id === selectedProjectId ? 'is-selected' : ''}`} disabled={isBusy} onClick={() => onOpenProject(project.id)}>
+                    <div className="home-project-card-main"><strong>{project.name}</strong><span>{formatDate(project.updated_at)}</span></div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="home-panel-footer"><span>最近更新</span><strong>{recentProject?.name ?? 'None'}</strong></div>
+          </>
         ) : (
-          <div className="home-project-list">
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                className={`home-project-card ${project.id === selectedProjectId ? 'is-selected' : ''}`}
-                disabled={isBusy}
-                onClick={() => onOpenProject(project.id)}
-              >
-                <div className="home-project-card-main">
-                  <strong>{project.name}</strong>
-                  <span>{formatDate(project.updated_at)}</span>
-                </div>
-                <span className="home-project-card-arrow">
-                  <IconArrow />
-                </span>
-              </button>
-            ))}
+          <div className="gallery-shell">
+            <p className="gallery-hint">Folder（floder）可放多份 Markdown，並且同一份筆記可連到多個 page。</p>
+            <div className="gallery-folder-row">{folders.map((folder) => <span key={folder} className="gallery-folder-chip">{folder}</span>)}</div>
+            <div className="gallery-note-list">
+              {notes.map((note) => (
+                <article key={note.id} className="gallery-note-card">
+                  <header><strong>{note.title}</strong><span>{note.folder}</span></header>
+                  <p>{note.preview}</p>
+                  <div className="gallery-links">
+                    {note.linkedLocations.map((location) => (
+                      <button key={`${location.projectId}:${location.pageId}`} onClick={() => onOpenGalleryLink(location.projectId, location.pageId)}>
+                        {location.projectName} / {location.pageName}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         )}
-
-        <div className="home-panel-footer">
-          <span>最近更新</span>
-          <strong>{recentProject?.name ?? 'None'}</strong>
-        </div>
       </section>
     </main>
   );

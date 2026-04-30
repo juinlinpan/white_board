@@ -600,3 +600,13 @@ MVP 至少包含：
 5. 物件型別逐步補齊
 6. magnet 與連線
 7. SQLite 持久化與驗收測試
+
+
+## Gallery Markdown Hub Update Notes
+
+- Home `你的 Projects` section must provide a sibling `Gallery` entry as the markdown knowledge hub.
+- `Gallery` contains multiple folders, each folder can store many markdown notes.
+- A markdown note is a single source of truth and may be linked into multiple pages/projects.
+- Editing the note from any linked page or from Gallery updates the same canonical markdown content everywhere.
+- Gallery note detail should expose backlinks listing every linked `Project / Page`, and each backlink opens that page directly.
+- The initial Notion-like editor scope targets: heading hierarchy, bullet/numbered list, checklist, quote, code block, divider, table, and slash command insertion.

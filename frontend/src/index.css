@@ -5276,3 +5276,16 @@ button {
   bottom: auto;
   transform: none;
 }
+
+.home-tabs { display:flex; gap:8px; margin: 10px 0 14px; }
+.home-tab { border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; }
+.home-tab.is-active { border-color: var(--accent); color: var(--accent); }
+.gallery-shell { display:flex; flex-direction:column; gap:10px; }
+.gallery-folder-row { display:flex; gap:8px; flex-wrap:wrap; }
+.gallery-folder-chip { font-size:12px; padding:4px 8px; background:var(--surface-dim); border-radius:999px; }
+.gallery-note-list { display:flex; flex-direction:column; gap:10px; max-height:420px; overflow:auto; }
+.gallery-note-card { border:1px solid var(--line); border-radius:10px; padding:10px; background:#fff; }
+.gallery-note-card header { display:flex; justify-content:space-between; margin-bottom:6px; }
+.gallery-links { display:flex; flex-wrap:wrap; gap:6px; }
+.gallery-links button { border:1px solid var(--line); background:var(--surface-dim); border-radius:8px; padding:4px 8px; cursor:pointer; }
+.gallery-hint { margin:0; color:var(--muted); font-size:12px; }
