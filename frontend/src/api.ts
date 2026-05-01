@@ -13,6 +13,9 @@ export type Project = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  path?: string | null;
+  storage_kind?: 'project_store' | 'external';
+  path_exists?: boolean;
 };
 
 export type ProjectThemeColor = 'default' | 'sage' | 'sunset' | 'ocean';
@@ -103,6 +106,19 @@ export async function createProject(name: string): Promise<Project> {
   return requestJson<Project>('/projects', {
     method: 'POST',
     body: JSON.stringify({ name }),
+  });
+}
+
+export async function openProjectWithDialog(): Promise<Project> {
+  return requestJson<Project>('/projects/open-dialog', {
+    method: 'POST',
+  });
+}
+
+export async function openProjectPath(path: string): Promise<Project> {
+  return requestJson<Project>('/projects/open-path', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
   });
 }
 

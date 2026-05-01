@@ -95,6 +95,21 @@ class Project(BaseModel):
     sort_order: int
     created_at: str
     updated_at: str
+    path: str | None = None
+    storage_kind: str = "project_store"
+    path_exists: bool = True
+
+
+class ProjectOpenPathPayload(BaseModel):
+    path: str = Field(min_length=1)
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        normalized = value.strip().strip('"')
+        if not normalized:
+            raise ValueError("Path cannot be blank.")
+        return normalized
 
 
 class Page(BaseModel):

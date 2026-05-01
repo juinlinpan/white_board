@@ -16,6 +16,8 @@ import {
   getHealth,
   listPages,
   listProjects,
+  openProjectPath,
+  openProjectWithDialog,
   replacePageBoardState,
   reorderPages,
   updatePage,
@@ -28,10 +30,6 @@ import {
 import { Canvas } from './Canvas';
 import { HomeView } from './HomeView';
 import { syncPageViewport } from './pageViewport';
-import {
-  importProjectSnapshot,
-  parseProjectImportText,
-} from './projectImport';
 import {
   buildPageExportPayload,
   buildPageExportSnapshot,
@@ -399,7 +397,6 @@ export function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
     readStoredBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY, false),
   );
-  const projectImportInputRef = useRef<HTMLInputElement | null>(null);
   const pageImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProject = useMemo(
@@ -658,6 +655,32 @@ export function App() {
     });
   }
 
+  async function handleOpenProject(): Promise<void> {
+    await runMutation(async () => {
+      let project: Project;
+      try {
+        project = await openProjectWithDialog();
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.toLowerCase().includes('cancelled')
+        ) {
+          return;
+        }
+
+        const path = window.prompt('Project folder path');
+        if (path === null || path.trim().length === 0) {
+          return;
+        }
+        project = await openProjectPath(path);
+      }
+
+      const nextProjects = await listProjects();
+      setProjects(nextProjects);
+      openProject(project.id, null);
+    });
+  }
+
   async function handleSaveProjectName(): Promise<void> {
     if (selectedProject === null) {
       return;
@@ -865,6 +888,19 @@ export function App() {
     });
   }
 
+  async function handleRemoveProjectFromHome(projectId: string): Promise<void> {
+    await runMutation(async () => {
+      await deleteProject(projectId);
+      setProjects((current) => current.filter((project) => project.id !== projectId));
+      if (selectedProjectId === projectId) {
+        setPages([]);
+        setSelectedProjectId(null);
+        setSelectedPageId(null);
+        goHome('replace');
+      }
+    });
+  }
+
   function clearDragState(): void {
     setDragState(null);
     setDropState(null);
@@ -967,33 +1003,6 @@ export function App() {
     void handlePageDrop(currentDragState.itemId, targetId, position);
   }
 
-  function handleImportButtonClick(): void {
-    if (isMutating) {
-      return;
-    }
-
-    projectImportInputRef.current?.click();
-  }
-
-  async function handleImportInputChange(
-    event: ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-
-    if (file === undefined) {
-      return;
-    }
-
-    await runMutation(async () => {
-      const importedSnapshot = parseProjectImportText(await file.text());
-      const importedProject = await importProjectSnapshot(importedSnapshot);
-      setProjects((current) => [...current, importedProject.project]);
-      openProject(importedProject.project.id, importedProject.firstPageId);
-    });
-  }
-
   function handleExportPageClick(format: 'json' | 'png' | 'pptx'): void {
     if (selectedPage === null || isMutating) {
       return;
@@ -1087,37 +1096,23 @@ export function App() {
 
   if (loadState === 'error' || appView === 'home') {
     return (
-      <>
-        <input
-          ref={projectImportInputRef}
-          hidden
-          accept=".json,.whiteboard-project.json"
-          type="file"
-          onChange={(event) => void handleImportInputChange(event)}
-        />
-        <HomeView
-          errorMessage={errorMessage}
-          isBusy={isMutating}
-          isLoading={loadState === 'loading'}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onCreateProject={() => void handleCreateProject()}
-          onImportProject={handleImportButtonClick}
-          onOpenProject={(projectId) => openProject(projectId, null)}
-        />
-      </>
+      <HomeView
+        errorMessage={errorMessage}
+        isBusy={isMutating}
+        isLoading={loadState === 'loading'}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onCreateProject={() => void handleCreateProject()}
+        onOpenProject={() => void handleOpenProject()}
+        onSelectProject={(projectId) => openProject(projectId, null)}
+        onRemoveProject={(projectId) => void handleRemoveProjectFromHome(projectId)}
+        onRefreshProjects={() => void loadWorkspace()}
+      />
     );
   }
 
   return (
     <>
-      <input
-        ref={projectImportInputRef}
-        hidden
-        accept=".json,.whiteboard-project.json"
-        type="file"
-        onChange={(event) => void handleImportInputChange(event)}
-      />
       <input
         ref={pageImportInputRef}
         hidden

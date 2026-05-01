@@ -228,7 +228,7 @@ body {
     transform 120ms ease;
 }
 
-.home-project-card:hover:not(:disabled) {
+.home-project-card:hover {
   border-color: rgba(37, 99, 235, 0.2);
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
   background: #fff;
@@ -241,10 +241,24 @@ body {
   background: #fff;
 }
 
-.home-project-card:disabled {
-  opacity: 0.4;
+.home-project-open-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-project-open-button:disabled {
   cursor: not-allowed;
-  transform: none;
 }
 
 .home-project-card-main {
@@ -267,6 +281,17 @@ body {
   color: var(--muted);
 }
 
+.home-project-card-main small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #7a878c;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .home-project-card-arrow {
   color: var(--muted);
   flex-shrink: 0;
@@ -275,11 +300,40 @@ body {
   transition: opacity 120ms ease, transform 120ms ease, color 120ms ease;
 }
 
-.home-project-card:hover:not(:disabled) .home-project-card-arrow,
+.home-project-card:hover .home-project-card-arrow,
 .home-project-card.is-selected .home-project-card-arrow {
   opacity: 1;
   transform: translateX(0);
   color: var(--accent);
+}
+
+.home-project-remove-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--danger);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.home-project-remove-button:hover:not(:disabled) {
+  background: #fff1f2;
+  border-color: rgba(220, 38, 38, 0.42);
+  transform: translateY(-1px);
+}
+
+.home-project-remove-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* Action buttons */
@@ -531,6 +585,35 @@ body {
   padding-right: 2px;
 }
 
+.home-project-list-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.home-project-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-project-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #657277;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-project-group-title strong {
+  color: #17262b;
+  letter-spacing: 0;
+}
+
 .home-project-card {
   width: 100%;
   min-height: 70px;
@@ -538,7 +621,12 @@ body {
   border-radius: 8px;
 }
 
-.home-project-card:hover:not(:disabled) {
+.home-project-card.is-missing {
+  border-style: dashed;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.home-project-card:hover {
   border-color: rgba(25, 115, 119, 0.3);
   box-shadow: 0 8px 18px rgba(25, 115, 119, 0.1);
 }
@@ -548,7 +636,7 @@ body {
   box-shadow: 0 8px 18px rgba(25, 115, 119, 0.12), 0 0 0 3px rgba(25, 115, 119, 0.08);
 }
 
-.home-project-card:hover:not(:disabled) .home-project-card-arrow,
+.home-project-card:hover .home-project-card-arrow,
 .home-project-card.is-selected .home-project-card-arrow {
   color: #197377;
 }
@@ -658,6 +746,28 @@ body {
   font-size: 0.86rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.home-refresh-button {
+  padding: 8px 12px;
+  border: 1px solid rgba(22, 50, 56, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  color: #24393f;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.home-refresh-button:hover:not(:disabled) {
+  background: #edf7f4;
+  border-color: rgba(25, 115, 119, 0.34);
+}
+
+.home-refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .workspace-header-actions {

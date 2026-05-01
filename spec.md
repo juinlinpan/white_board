@@ -5,15 +5,25 @@
 - The project no longer uses SQLite as the canonical persistence layer.
 - The backend must store project data as files under a Planvas root.
 - The default Planvas root is `<user_home>/.planvas/`.
-- A `Project` is a working directory: `<user_home>/.planvas/<project_name>/`.
-- Each Project directory must contain `metadata.json`.
-- Each Page must be stored as an XML file inside its Project directory.
-- The existing HTTP API may stay stable while the repository implementation reads and writes `metadata.json` and Page XML files.
+- The Planvas root must contain `project.json`, an index of common project paths.
+- The Planvas root must contain `project_store/`; newly created projects are stored as `<user_home>/.planvas/project_store/<project_name>/`.
+- A `Project` is a working directory that may live either under `project_store/` or at an external user-selected path.
+- Each Project directory must contain `.pv_project/` as a Planvas data directory.
+- Project metadata must live at `.pv_project/metadata.json`.
+- Each Page must be stored as an XML file inside `.pv_project/`.
+- The existing HTTP API may stay stable while the repository implementation reads and writes `.pv_project/metadata.json` and Page XML files.
+- Opening an external Project path must initialize missing `.pv_project/` / `.pv_project/metadata.json` files when the path is new, and must only add the path to `project.json` when the path is already a Planvas project.
+- Project listing must refresh path existence and sort `project_store/` projects before other registered paths.
 
 ## Navigation Update Notes
 
 - The workspace left page sidebar and right inspector must both support collapse / expand toggles while keeping a visible restore handle.
 - Opening a `Project` from the dedicated home screen must create a browser history entry and enter a concrete `Page` immediately.
+- The home screen left action area must show `Create Project` and `Open Project`; the previous project JSON import action is removed from the home screen.
+- `Open Project` should use a native folder picker when available and fall back to a manual path entry if the picker is unavailable.
+- The home screen project list is `Common Projects`: first projects under `project_store/`, then registered projects from other paths.
+- The home screen must provide `Refresh` to re-check whether registered project paths still exist.
+- After Refresh marks a registered project path as missing, the home screen must provide a remove button that deletes only the `project.json` entry.
 - If the target project is already loaded in memory, the workspace should keep the current page when possible and otherwise fall back to that project's first page.
 - The workspace left sidebar should stay focused on page navigation and should not render a project details panel.
 - The workspace sidebar header should show a top row with `Planvas` and `Home`, then a divided project summary row with `Project`, the current project name, and a settings icon button.
@@ -499,7 +509,7 @@ Page ?臬鋆?閬?嚗?
 
 - `frontend-web-ui`: React + TypeScript + Vite
 - `backend-service`: Python FastAPI
-- `persistence`: Planvas project directory, `metadata.json`, and Page XML files
+- `persistence`: Planvas project directory, `.pv_project/metadata.json`, and Page XML files
 
 ### 9.2 ?祆??隞
 

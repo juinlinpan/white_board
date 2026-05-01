@@ -12,6 +12,7 @@ from uuid import uuid4
 from xml.etree import ElementTree
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 
 from app.schemas import (
     PROJECT_THEME_COLORS,
@@ -38,6 +39,9 @@ NEW_PAGE_VIEWPORT_X = 240.0
 NEW_PAGE_VIEWPORT_Y = 160.0
 NEW_PAGE_DEFAULT_ZOOM = 1.0
 METADATA_FILENAME = "metadata.json"
+PROJECT_INDEX_FILENAME = "project.json"
+PROJECT_STORE_DIRNAME = "project_store"
+PROJECT_MARKER_FILENAME = ".pv_project"
 
 
 class StorageInitializationError(RuntimeError):
@@ -49,6 +53,8 @@ def initialize_storage(settings: AppSettings) -> None:
     _ensure_writable_directory(settings.backend_root, "Backend root")
     _ensure_directory(settings.planvas_root, "Planvas root")
     _ensure_writable_directory(settings.planvas_root, "Planvas root")
+    _ensure_directory(settings.planvas_root / PROJECT_STORE_DIRNAME, "Project store")
+    _ensure_writable_directory(settings.planvas_root / PROJECT_STORE_DIRNAME, "Project store")
     _ensure_directory(settings.logs_dir, "Logs directory")
     _ensure_writable_directory(settings.logs_dir, "Logs directory")
     _ensure_writable_file(settings.app_log_path, "App log")
@@ -140,15 +146,26 @@ class WhiteboardRepository:
         self.settings = settings
 
     def list_projects(self) -> list[Project]:
-        projects = [
-            self._project_from_metadata(metadata)
-            for _, metadata in self._iter_project_metadata()
-        ]
-        return sorted(projects, key=lambda project: (project.sort_order, project.created_at))
+        entries = self._iter_project_metadata(include_missing=True)
+        projects = [project for _, _, project in entries]
+        return sorted(
+            projects,
+            key=lambda project: (
+                0 if project.storage_kind == "project_store" else 1,
+                not project.path_exists,
+                project.sort_order,
+                project.created_at,
+            ),
+        )
 
     def get_project(self, project_id: str) -> Project:
-        _, metadata = self._find_project_metadata(project_id)
-        return self._project_from_metadata(metadata)
+        project_dir, metadata = self._find_project_metadata(project_id)
+        return self._project_from_metadata(
+            metadata,
+            project_dir,
+            self._storage_kind_for_path(project_dir),
+            True,
+        )
 
     def create_project(self, payload: ProjectCreatePayload) -> Project:
         timestamp = utc_timestamp()
@@ -160,11 +177,39 @@ class WhiteboardRepository:
             created_at=timestamp,
             updated_at=timestamp,
         )
-        project_dir = _unique_path(self.settings.planvas_root, _slugify(payload.name))
+        project_dir = _unique_path(self._project_store_dir(), _slugify(payload.name))
         metadata: dict[str, object] = {"project": project.model_dump(), "pages": []}
         project_dir.mkdir(parents=True, exist_ok=False)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
-        return project
+        self._write_project_marker(project_dir)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
+        self._register_project_path(project_dir, project.id, "project_store", timestamp)
+        return self._project_from_metadata(metadata, project_dir, "project_store", True)
+
+    def open_project_path(self, project_path: Path) -> Project:
+        project_dir = project_path.expanduser().resolve()
+        if project_dir.exists() and not project_dir.is_dir():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project path '{project_dir}' must be a directory.",
+            )
+
+        timestamp = utc_timestamp()
+        project_dir.mkdir(parents=True, exist_ok=True)
+        metadata = self._ensure_project_metadata(project_dir, timestamp)
+        project = self._project_from_metadata(
+            metadata,
+            project_dir,
+            self._storage_kind_for_path(project_dir),
+            True,
+        )
+        self._write_project_marker(project_dir)
+        self._register_project_path(project_dir, project.id, self._storage_kind_for_path(project_dir), timestamp)
+        return self._project_from_metadata(
+            metadata,
+            project_dir,
+            self._storage_kind_for_path(project_dir),
+            True,
+        )
 
     def update_project(self, project_id: str, payload: ProjectUpdatePayload) -> Project:
         project_dir, metadata = self._find_project_metadata(project_id)
@@ -182,20 +227,35 @@ class WhiteboardRepository:
         )
         metadata["project"] = next_project.model_dump()
         next_dir = project_dir
-        if next_name != project.name:
-            next_dir = _unique_path(self.settings.planvas_root, _slugify(next_name))
+        if next_name != project.name and self._storage_kind_for_path(project_dir) == "project_store":
+            next_dir = _unique_path(self._project_store_dir(), _slugify(next_name))
             project_dir.rename(next_dir)
-        _write_json_atomic(next_dir / METADATA_FILENAME, metadata)
-        return next_project
+            self._update_project_index_path(project_id, next_dir)
+        _write_json_atomic(self._metadata_path(next_dir), metadata)
+        return self._project_from_metadata(
+            metadata,
+            next_dir,
+            self._storage_kind_for_path(next_dir),
+            True,
+        )
 
     def delete_project(self, project_id: str) -> None:
-        project_dir, _ = self._find_project_metadata(project_id)
-        shutil.rmtree(project_dir)
+        for project_dir, metadata, project in self._iter_project_metadata(include_missing=True):
+            if project.id != project_id:
+                continue
+            if metadata is not None and self._storage_kind_for_path(project_dir) == "project_store":
+                shutil.rmtree(project_dir)
+            self._remove_project_from_index(project_id)
+            return
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project '{project_id}' was not found.",
+        )
 
     def reorder_projects(self, ordered_ids: list[str]) -> list[Project]:
         entries = list(self._iter_project_metadata())
         existing_ids = [
-            self._project_from_metadata(metadata).id for _, metadata in entries
+            project.id for _, metadata, project in entries if metadata is not None
         ]
         self._validate_reorder_ids(
             existing_ids=existing_ids,
@@ -205,14 +265,22 @@ class WhiteboardRepository:
         timestamp = utc_timestamp()
         order_by_id = {project_id: sort_order for sort_order, project_id in enumerate(ordered_ids)}
         projects: list[Project] = []
-        for project_dir, metadata in entries:
-            project = self._project_from_metadata(metadata)
+        for project_dir, metadata, project in entries:
+            if metadata is None:
+                continue
             next_project = project.model_copy(
                 update={"sort_order": order_by_id[project.id], "updated_at": timestamp}
             )
             metadata["project"] = next_project.model_dump()
-            _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
-            projects.append(next_project)
+            _write_json_atomic(self._metadata_path(project_dir), metadata)
+            projects.append(
+                self._project_from_metadata(
+                    metadata,
+                    project_dir,
+                    self._storage_kind_for_path(project_dir),
+                    True,
+                )
+            )
         return sorted(projects, key=lambda project: project.sort_order)
 
     def list_pages(self, project_id: str) -> list[Page]:
@@ -238,11 +306,15 @@ class WhiteboardRepository:
             created_at=timestamp,
             updated_at=timestamp,
         )
-        page_file = _unique_path(project_dir, _slugify(payload.name, fallback="page"), ".xml")
+        page_file = _unique_path(
+            self._project_data_dir(project_dir),
+            _slugify(payload.name, fallback="page"),
+            ".xml",
+        )
         page_entries = self._page_entries(metadata)
         page_entries.append({**page.model_dump(), "file": page_file.name})
         self._touch_project(metadata, timestamp)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         self._write_page_xml(page_file, page, [], [])
         return page
 
@@ -252,7 +324,7 @@ class WhiteboardRepository:
         next_page = page.model_copy(update={"name": payload.name, "updated_at": timestamp})
         self._replace_page_entry(metadata, next_page)
         self._touch_project(metadata, timestamp)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         board = self.get_page_board_data(page_id)
         self._write_page_xml(
             self._page_path(project_dir, metadata, page_id),
@@ -270,7 +342,7 @@ class WhiteboardRepository:
         ]
         self._renumber_pages(metadata)
         self._touch_project(metadata, utc_timestamp())
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         page_path.unlink(missing_ok=True)
 
     def reorder_pages(self, project_id: str, ordered_ids: list[str]) -> list[Page]:
@@ -292,7 +364,7 @@ class WhiteboardRepository:
         for page in next_pages:
             self._replace_page_entry(metadata, page)
         self._touch_project(metadata, timestamp)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         return sorted(next_pages, key=lambda page: page.sort_order)
 
     def duplicate_page(self, page_id: str) -> Page:
@@ -358,10 +430,14 @@ class WhiteboardRepository:
             for connector in source_board.connector_links
         ]
 
-        page_file = _unique_path(project_dir, _slugify(duplicated_name, fallback="page"), ".xml")
+        page_file = _unique_path(
+            self._project_data_dir(project_dir),
+            _slugify(duplicated_name, fallback="page"),
+            ".xml",
+        )
         page_entries.append({**duplicated_page.model_dump(), "file": page_file.name})
         self._touch_project(metadata, timestamp)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         self._write_page_xml(page_file, duplicated_page, duplicated_items, duplicated_connectors)
         return duplicated_page
 
@@ -379,7 +455,7 @@ class WhiteboardRepository:
         board = self.get_page_board_data(page_id)
         self._replace_page_entry(metadata, next_page)
         self._touch_project(metadata, timestamp)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         self._write_page_xml(
             self._page_path(project_dir, metadata, page_id),
             next_page,
@@ -560,19 +636,279 @@ class WhiteboardRepository:
             connector_links=connector_links,
         )
 
-    def _iter_project_metadata(self) -> list[tuple[Path, dict[str, object]]]:
+    def _project_store_dir(self) -> Path:
+        return self.settings.planvas_root / PROJECT_STORE_DIRNAME
+
+    def _project_index_path(self) -> Path:
+        return self.settings.planvas_root / PROJECT_INDEX_FILENAME
+
+    def _project_data_dir(self, project_dir: Path) -> Path:
+        return project_dir / PROJECT_MARKER_FILENAME
+
+    def _metadata_path(self, project_dir: Path) -> Path:
+        return self._project_data_dir(project_dir) / METADATA_FILENAME
+
+    def _legacy_metadata_path(self, project_dir: Path) -> Path:
+        return project_dir / METADATA_FILENAME
+
+    def _read_project_index(self) -> dict[str, object]:
+        index_path = self._project_index_path()
+        if not index_path.exists():
+            return {"version": 1, "projects": []}
+        payload = _read_json(index_path)
+        projects = payload.setdefault("projects", [])
+        if not isinstance(projects, list):
+            payload["projects"] = []
+        payload["version"] = 1
+        return payload
+
+    def _write_project_index(self, index: dict[str, object]) -> None:
+        _write_json_atomic(self._project_index_path(), index)
+
+    def _project_index_entries(self, index: dict[str, object]) -> list[dict[str, object]]:
+        projects = index.setdefault("projects", [])
+        if not isinstance(projects, list):
+            projects = []
+            index["projects"] = projects
+        return projects
+
+    def _storage_kind_for_path(self, project_dir: Path) -> str:
+        try:
+            project_dir.resolve().relative_to(self._project_store_dir().resolve())
+        except ValueError:
+            return "external"
+        return "project_store"
+
+    def _write_project_marker(self, project_dir: Path) -> None:
+        marker_path = self._project_data_dir(project_dir)
+        if marker_path.exists() and not marker_path.is_dir():
+            marker_path.unlink()
+        marker_path.mkdir(parents=True, exist_ok=True)
+
+    def _ensure_project_metadata(self, project_dir: Path, timestamp: str) -> dict[str, object]:
+        marker_path = self._project_data_dir(project_dir)
+        metadata_path = self._metadata_path(project_dir)
+        legacy_metadata_path = self._legacy_metadata_path(project_dir)
+        had_planvas_data_dir = marker_path.is_dir()
+        self._write_project_marker(project_dir)
+        try:
+            if metadata_path.is_file():
+                metadata = _read_json(metadata_path)
+            elif legacy_metadata_path.is_file():
+                metadata = _read_json(legacy_metadata_path)
+            else:
+                metadata = {}
+        except HTTPException:
+            if had_planvas_data_dir:
+                raise
+            metadata = {}
+        changed = False
+
+        project_payload = metadata.get("project")
+        if isinstance(project_payload, dict):
+            if project_payload.get("theme_color") not in PROJECT_THEME_COLORS:
+                project_payload["theme_color"] = "default"
+                changed = True
+            try:
+                Project.model_validate(project_payload)
+            except ValidationError:
+                project_payload = None
+        else:
+            project_payload = None
+
+        if project_payload is None:
+            project = Project(
+                id=str(uuid4()),
+                name=project_dir.name or "Untitled Project",
+                theme_color="default",
+                sort_order=len(self.list_projects()),
+                created_at=timestamp,
+                updated_at=timestamp,
+            )
+            metadata["project"] = project.model_dump()
+            changed = True
+
+        pages_payload = metadata.get("pages")
+        if not isinstance(pages_payload, list):
+            metadata["pages"] = []
+            changed = True
+
+        if changed or not metadata_path.is_file():
+            _write_json_atomic(metadata_path, metadata)
+
+        return metadata
+
+    def _register_project_path(
+        self,
+        project_dir: Path,
+        project_id: str,
+        storage_kind: str,
+        timestamp: str,
+    ) -> None:
+        index = self._read_project_index()
+        entries = self._project_index_entries(index)
+        resolved_path = str(project_dir.resolve())
+        matching_entry = next(
+            (
+                entry
+                for entry in entries
+                if entry.get("project_id") == project_id or entry.get("path") == resolved_path
+            ),
+            None,
+        )
+        if matching_entry is None:
+            entries.append(
+                {
+                    "project_id": project_id,
+                    "path": resolved_path,
+                    "storage_kind": storage_kind,
+                    "sort_order": len(entries),
+                    "added_at": timestamp,
+                    "last_seen_at": timestamp,
+                }
+            )
+        else:
+            matching_entry.update(
+                {
+                    "project_id": project_id,
+                    "path": resolved_path,
+                    "storage_kind": storage_kind,
+                    "last_seen_at": timestamp,
+                }
+            )
+        self._write_project_index(index)
+
+    def _update_project_index_path(self, project_id: str, project_dir: Path) -> None:
+        index = self._read_project_index()
+        for entry in self._project_index_entries(index):
+            if entry.get("project_id") == project_id:
+                entry["path"] = str(project_dir.resolve())
+                entry["storage_kind"] = self._storage_kind_for_path(project_dir)
+                entry["last_seen_at"] = utc_timestamp()
+                break
+        self._write_project_index(index)
+
+    def _remove_project_from_index(self, project_id: str) -> None:
+        index = self._read_project_index()
+        entries = self._project_index_entries(index)
+        index["projects"] = [
+            entry for entry in entries if entry.get("project_id") != project_id
+        ]
+        self._write_project_index(index)
+
+    def _refresh_project_index(self) -> dict[str, object]:
+        timestamp = utc_timestamp()
+        index = self._read_project_index()
+        entries = self._project_index_entries(index)
+        entry_by_id = {
+            str(entry.get("project_id")): entry
+            for entry in entries
+            if isinstance(entry.get("project_id"), str)
+        }
+
+        for project_dir in self._discover_project_store_dirs():
+            metadata = self._ensure_project_metadata(project_dir, timestamp)
+            project = self._project_from_metadata(metadata, project_dir, "project_store", True)
+            entry = entry_by_id.get(project.id)
+            if entry is None:
+                entry = {
+                    "project_id": project.id,
+                    "path": str(project_dir.resolve()),
+                    "storage_kind": "project_store",
+                    "sort_order": len(entries),
+                    "added_at": project.created_at,
+                    "last_seen_at": timestamp,
+                }
+                entries.append(entry)
+                entry_by_id[project.id] = entry
+            else:
+                entry["path"] = str(project_dir.resolve())
+                entry["storage_kind"] = "project_store"
+                entry["last_seen_at"] = timestamp
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            path_value = entry.get("path")
+            if not isinstance(path_value, str):
+                continue
+            project_dir = Path(path_value)
+            metadata_path = self._metadata_path(project_dir)
+            if metadata_path.is_file() or self._legacy_metadata_path(project_dir).is_file():
+                entry["last_seen_at"] = timestamp
+
+        self._write_project_index(index)
+        return index
+
+    def _discover_project_store_dirs(self) -> list[Path]:
+        candidates: list[Path] = []
+        for base_dir in (self._project_store_dir(), self.settings.planvas_root):
+            if not base_dir.exists():
+                continue
+            for child in base_dir.iterdir():
+                if child.name in {PROJECT_STORE_DIRNAME}:
+                    continue
+                if child.is_dir() and (
+                    self._metadata_path(child).is_file()
+                    or self._legacy_metadata_path(child).is_file()
+                ):
+                    candidates.append(child)
+        return candidates
+
+    def _iter_project_metadata(
+        self,
+        *,
+        include_missing: bool = False,
+    ) -> list[tuple[Path, dict[str, object] | None, Project]]:
         if not self.settings.planvas_root.exists():
             return []
-        entries: list[tuple[Path, dict[str, object]]] = []
-        for child in self.settings.planvas_root.iterdir():
-            metadata_path = child / METADATA_FILENAME
-            if child.is_dir() and metadata_path.is_file():
-                entries.append((child, _read_json(metadata_path)))
+
+        index = self._refresh_project_index()
+        entries: list[tuple[Path, dict[str, object] | None, Project]] = []
+        for entry in index["projects"]:
+            if not isinstance(entry, dict):
+                continue
+            path_value = entry.get("path")
+            project_id = entry.get("project_id")
+            storage_kind = str(entry.get("storage_kind") or "external")
+            if not isinstance(path_value, str) or not isinstance(project_id, str):
+                continue
+            project_dir = Path(path_value)
+            metadata_path = self._metadata_path(project_dir)
+            legacy_metadata_path = self._legacy_metadata_path(project_dir)
+            if project_dir.is_dir() and (
+                metadata_path.is_file() or legacy_metadata_path.is_file()
+            ):
+                if metadata_path.is_file():
+                    metadata = _read_json(metadata_path)
+                else:
+                    metadata = self._ensure_project_metadata(project_dir, utc_timestamp())
+                project = self._project_from_metadata(
+                    metadata,
+                    project_dir,
+                    storage_kind,
+                    True,
+                )
+                entries.append((project_dir, metadata, project))
+            elif include_missing:
+                timestamp = str(entry.get("added_at") or utc_timestamp())
+                project = Project(
+                    id=project_id,
+                    name=project_dir.name or "Missing Project",
+                    theme_color="default",
+                    sort_order=int(entry.get("sort_order") or 0),
+                    created_at=timestamp,
+                    updated_at=timestamp,
+                    path=str(project_dir),
+                    storage_kind=storage_kind,
+                    path_exists=False,
+                )
+                entries.append((project_dir, None, project))
         return entries
 
     def _find_project_metadata(self, project_id: str) -> tuple[Path, dict[str, object]]:
-        for project_dir, metadata in self._iter_project_metadata():
-            if self._project_from_metadata(metadata).id == project_id:
+        for project_dir, metadata, project in self._iter_project_metadata():
+            if metadata is not None and project.id == project_id:
                 return project_dir, metadata
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -580,7 +916,9 @@ class WhiteboardRepository:
         )
 
     def _find_page_metadata(self, page_id: str) -> tuple[Path, dict[str, object], Page]:
-        for project_dir, metadata in self._iter_project_metadata():
+        for project_dir, metadata, _ in self._iter_project_metadata():
+            if metadata is None:
+                continue
             for page in self._pages_from_metadata(metadata):
                 if page.id == page_id:
                     return project_dir, metadata, page
@@ -591,11 +929,19 @@ class WhiteboardRepository:
 
     def _all_pages(self) -> list[Page]:
         pages: list[Page] = []
-        for _, metadata in self._iter_project_metadata():
+        for _, metadata, _ in self._iter_project_metadata():
+            if metadata is None:
+                continue
             pages.extend(self._pages_from_metadata(metadata))
         return pages
 
-    def _project_from_metadata(self, metadata: dict[str, object]) -> Project:
+    def _project_from_metadata(
+        self,
+        metadata: dict[str, object],
+        project_dir: Path | None = None,
+        storage_kind: str | None = None,
+        path_exists: bool = True,
+    ) -> Project:
         project_payload = metadata.get("project")
         if not isinstance(project_payload, dict):
             raise HTTPException(
@@ -604,6 +950,10 @@ class WhiteboardRepository:
             )
         if project_payload.get("theme_color") not in PROJECT_THEME_COLORS:
             project_payload["theme_color"] = "default"
+        if project_dir is not None:
+            project_payload["path"] = str(project_dir)
+            project_payload["storage_kind"] = storage_kind or self._storage_kind_for_path(project_dir)
+            project_payload["path_exists"] = path_exists
         return Project.model_validate(project_payload)
 
     def _page_entries(self, metadata: dict[str, object]) -> list[dict[str, object]]:
@@ -637,8 +987,12 @@ class WhiteboardRepository:
             if entry.get("id") == page_id:
                 file_name = entry.get("file")
                 if isinstance(file_name, str) and file_name:
-                    return project_dir / file_name
-                return project_dir / f"{page_id}.xml"
+                    page_path = self._project_data_dir(project_dir) / file_name
+                    legacy_page_path = project_dir / file_name
+                    if not page_path.exists() and legacy_page_path.exists():
+                        return legacy_page_path
+                    return page_path
+                return self._project_data_dir(project_dir) / f"{page_id}.xml"
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Page '{page_id}' was not found.",
@@ -666,7 +1020,7 @@ class WhiteboardRepository:
         next_page = current_page.model_copy(update={"updated_at": utc_timestamp()})
         self._replace_page_entry(metadata, next_page)
         self._touch_project(metadata, next_page.updated_at)
-        _write_json_atomic(project_dir / METADATA_FILENAME, metadata)
+        _write_json_atomic(self._metadata_path(project_dir), metadata)
         self._write_page_xml(
             self._page_path(project_dir, metadata, page.id),
             next_page,

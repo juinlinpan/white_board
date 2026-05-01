@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Storage Update Notes
+
+- `.pv_project` is a directory, not a file.
+- Project metadata lives at `<project_dir>/.pv_project/metadata.json`.
+- Page XML files live under `<project_dir>/.pv_project/`.
+
 這個檔案是本專案給 Codex 的固定啟動指引。每次開啟新的 Codex session，應先閱讀本檔，再閱讀 [spec.md](./spec.md) 與 [todo_list.md](./todo_list.md)，並確認本輪需求還會影響哪些其他文件。
 
 ## 1. 專案背景
@@ -30,8 +36,9 @@
 - backend 啟動目錄必須可寫入
 - Project 預設儲存根目錄必須位於 `<user_home>/.planvas/`
 - 每個 Project 是一個工作路徑：`<user_home>/.planvas/<project_name>/`
-- 每個 Project 目錄必須包含 `metadata.json`
-- 每個 Project 目錄底下的 Page 必須以 XML 檔案儲存
+- 每個 Project 目錄必須包含 `.pv_project/` 資料夾
+- 每個 Project 的 metadata 必須儲存在 `.pv_project/metadata.json`
+- 每個 Project 的 Page XML 檔案必須儲存在 `.pv_project/` 底下
 - Log 必須位於 `<backend_root>/logs/`
 - 不預設依賴雲端服務
 

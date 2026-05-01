@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response, status
@@ -33,6 +34,7 @@ from app.schemas import (
     PageViewportPayload,
     Project,
     ProjectCreatePayload,
+    ProjectOpenPathPayload,
     ProjectUpdatePayload,
     SuccessResponse,
 )
@@ -44,6 +46,32 @@ DEV_ORIGINS = [
 ]
 
 LOGGER = logging.getLogger("whiteboard.app")
+
+
+def select_project_directory() -> Path:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:
+        raise StarletteHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Native folder picker is not available on this system.",
+        ) from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected_path = filedialog.askdirectory(title="Open Planvas Project")
+    finally:
+        root.destroy()
+
+    if not selected_path:
+        raise StarletteHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project folder selection was cancelled.",
+        )
+    return Path(selected_path)
 
 
 def configure_logging(settings: AppSettings) -> None:
@@ -195,6 +223,24 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     ) -> SuccessResponse[Project]:
         project = repository.create_project(payload)
         LOGGER.info("Created project %s", project.id)
+        return SuccessResponse(data=project)
+
+    @app.post("/projects/open-path", response_model=SuccessResponse[Project])
+    def open_project_path(
+        payload: ProjectOpenPathPayload,
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> SuccessResponse[Project]:
+        project = repository.open_project_path(Path(payload.path))
+        LOGGER.info("Opened project %s from %s", project.id, project.path)
+        return SuccessResponse(data=project)
+
+    @app.post("/projects/open-dialog", response_model=SuccessResponse[Project])
+    def open_project_dialog(
+        repository: Annotated[WhiteboardRepository, Depends(get_repository)],
+    ) -> SuccessResponse[Project]:
+        selected_path = select_project_directory()
+        project = repository.open_project_path(selected_path)
+        LOGGER.info("Opened project %s from native dialog", project.id)
         return SuccessResponse(data=project)
 
     @app.get("/projects/{project_id}", response_model=SuccessResponse[Project])

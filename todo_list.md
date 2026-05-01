@@ -4,7 +4,12 @@
 
 - [x] Replace SQLite-backed repository persistence with file-based Planvas project storage.
 - [x] Add default Planvas root resolution at `<user_home>/.planvas/`, with `WHITEBOARD_PLANVAS_ROOT` override.
-- [x] Store each Project as a working directory containing `metadata.json` and one XML file per Page.
+- [x] Store each Project as a working directory containing `.pv_project/metadata.json` and one XML file per Page under `.pv_project/`.
+- [x] Add `<user_home>/.planvas/project.json` as the common project path index.
+- [x] Add `<user_home>/.planvas/project_store/<project_name>/` as the default location for newly created projects.
+- [x] Add `.pv_project/` data directory creation for initialized Project directories.
+- [x] Add Project path opening / registration for external folders without recreating existing Planvas metadata.
+- [x] Refresh Project listing so missing registered paths are detected and `project_store` projects are shown before other paths.
 - [x] Preserve existing backend HTTP API shapes while replacing the underlying storage engine.
 - [x] Update backend tests for Planvas storage initialization and restart persistence.
 - [x] Replace DB access with a filesystem repository.
@@ -24,6 +29,9 @@
 - [x] Treat browser file picker cancellation during Project / Page export as a normal cancel without showing an error banner.
 - [x] Keep duplicate out of the left sidebar while allowing page rename and delete icon buttons there.
 - [x] The workspace `Home` button now sits beside the `Planvas` heading.
+- [x] Home now shows `Create Project`, `Open Project`, and `Refresh`; project JSON import is removed from the home screen.
+- [x] Home project list is grouped into `project_store` projects first and other registered paths second.
+- [x] Home missing-path projects can be removed from `project.json` after Refresh.
 - [x] Clicking `嚗??啣? Page` now creates `untitled_n` directly without a prompt dialog.
 
 ## Toolbar Menu Update Notes
@@ -114,14 +122,14 @@
 ### 2. ?祆?鞈??楝敺???
 
 - [x] Initialize `.planvas` project storage and `logs/` runtime output.
-- [x] 閮剖? Planvas file storage 頝臬???`<user_home>/.planvas/<project_name>/metadata.json and page XML files`
+- [x] Planvas file storage uses `<user_home>/.planvas/<project_name>/.pv_project/metadata.json` and page XML files under `.pv_project/`.
 - [x] 閮剖? log 頝臬???`<backend_root>/logs/`
 - [x] ????遣蝡撩撠?鞈?憭?
 - [x] 鋆?頝臬??????航炊??
 
 ### 3. Planvas File Storage
 
-- [x] Store Project records in `<project_name>/metadata.json`.
+- [x] Store Project records in `<project_name>/.pv_project/metadata.json`.
 - [x] Store Page records in the Project metadata page list.
 - [x] Store board items inside each Page XML file.
 - [x] Store connector links inside each Page XML file.

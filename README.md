@@ -58,12 +58,15 @@ This mode keeps Vite on `5173` and the FastAPI backend on `18000`.
 
 The app now opens on a dedicated home page. From there you can:
 
-- open an existing `Project`
 - create a new `Project`
-- import a `Project` from a local JSON snapshot
+- open an existing `Project` folder with the native folder picker
+- refresh common projects to re-check whether registered paths still exist
+- remove missing registered projects from the common project list
 
-Import always creates a new local project under the Planvas storage root and regenerates page / item /
-connector ids to avoid collisions with existing data.
+New projects are created under `<user_home>/.planvas/project_store/`. Opened
+external folders are initialized as Planvas projects when needed, then registered
+in `<user_home>/.planvas/project.json`. The home list shows `project_store`
+projects first, then registered projects from other paths.
 
 ## Page JSON Export / Import
 
@@ -84,57 +87,6 @@ on top with regenerated local ids.
 Page export payloads now also include `page.item_hierarchy.roots` so downstream
 tools (including MCP/agent workflows) can directly read containment trees
 without rebuilding them from `parent_item_id`.
-
-## Project Import
-
-The home page accepts `.json` or `.whiteboard-project.json` files with a v1
-project snapshot payload. Supported top-level shapes are either:
-
-```json
-{
-  "version": 1,
-  "project": {
-    "name": "Roadmap",
-    "pages": []
-  }
-}
-```
-
-or:
-
-```json
-{
-  "name": "Roadmap",
-  "pages": []
-}
-```
-
-Each page entry can include either flat viewport fields or a nested `viewport`
-object:
-
-```json
-{
-  "name": "Sprint Planning",
-  "viewport": { "x": 0, "y": 0, "zoom": 1 },
-  "board_items": [
-    {
-      "id": "note-1",
-      "category": "small_item",
-      "type": "sticky_note",
-      "x": 120,
-      "y": 140,
-      "width": 180,
-      "height": 120
-    }
-  ],
-  "connector_links": []
-}
-```
-
-`board_items[].id` is required inside the import file so parent relations and
-connector references can be rebuilt correctly during import.
-When present, `page.item_hierarchy` must stay consistent with
-`board_items[].parent_item_id`.
 
 ## Single-Port Local Run
 
@@ -158,10 +110,16 @@ port.
 
 Project content is stored as regular files. By default the backend creates:
 
-- `<user_home>/.planvas/<project_name>/metadata.json`
-- `<user_home>/.planvas/<project_name>/<page_name>.xml`
+- `<user_home>/.planvas/project.json`
+- `<user_home>/.planvas/project_store/<project_name>/.pv_project/`
+- `<user_home>/.planvas/project_store/<project_name>/.pv_project/metadata.json`
+- `<user_home>/.planvas/project_store/<project_name>/.pv_project/<page_name>.xml`
 - `backend/logs/app.log`
 - `backend/logs/backend.log`
+
+Projects opened from other folders use the same `.pv_project/` data directory
+inside the selected folder, with metadata and page XML files under it. Their paths are tracked in
+`project.json`.
 
 You can override the project storage root with `WHITEBOARD_PLANVAS_ROOT`:
 

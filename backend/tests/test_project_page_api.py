@@ -123,6 +123,87 @@ def test_project_and_page_crud_flow(tmp_path: Path) -> None:
         }
 
 
+def test_project_index_project_store_and_external_paths(tmp_path: Path) -> None:
+    client, settings = create_client(tmp_path)
+    external_path = tmp_path / "outside" / "Client Plan"
+
+    with client:
+        project_store_project = response_data(
+            client.post("/projects", json={"name": "Roadmap"})
+        )
+        opened_project = response_data(
+            client.post("/projects/open-path", json={"path": str(external_path)})
+        )
+        response_data(
+            client.post(
+                f"/projects/{project_store_project['id']}/pages",
+                json={"name": "Main"},
+            )
+        )
+
+        assert (settings.planvas_root / "project.json").is_file()
+        assert (settings.planvas_root / "project_store" / "Roadmap" / ".pv_project").is_dir()
+        assert (
+            settings.planvas_root / "project_store" / "Roadmap" / ".pv_project" / "Main.xml"
+        ).is_file()
+        assert (external_path / ".pv_project").is_dir()
+        assert (external_path / ".pv_project" / "metadata.json").is_file()
+
+        projects = response_data(client.get("/projects"))
+        assert [project["id"] for project in projects] == [
+            project_store_project["id"],
+            opened_project["id"],
+        ]
+        assert projects[0]["storage_kind"] == "project_store"
+        assert projects[0]["path_exists"] is True
+        assert projects[1]["storage_kind"] == "external"
+        assert projects[1]["path"] == str(external_path.resolve())
+
+        second_open = response_data(
+            client.post("/projects/open-path", json={"path": str(external_path)})
+        )
+        assert second_open["id"] == opened_project["id"]
+        assert len(response_data(client.get("/projects"))) == 2
+
+        external_metadata = external_path / ".pv_project" / "metadata.json"
+        external_metadata.unlink()
+        (external_path / ".pv_project").rmdir()
+        external_path.rmdir()
+        refreshed_projects = response_data(client.get("/projects"))
+        missing_external = next(
+            project for project in refreshed_projects if project["id"] == opened_project["id"]
+        )
+        assert missing_external["path_exists"] is False
+
+        delete_missing_response = client.delete(f"/projects/{opened_project['id']}")
+        assert delete_missing_response.status_code == 204
+
+        projects_after_delete = response_data(client.get("/projects"))
+        assert [project["id"] for project in projects_after_delete] == [
+            project_store_project["id"]
+        ]
+
+
+def test_open_project_path_repairs_missing_planvas_metadata(tmp_path: Path) -> None:
+    client, _ = create_client(tmp_path)
+    external_path = tmp_path / "plain-folder"
+    external_path.mkdir()
+    (external_path / "metadata.json").write_text("{}", encoding="utf-8")
+
+    with client:
+        response = client.post("/projects/open-path", json={"path": str(external_path)})
+
+    assert response.status_code == 200
+    project = response_data(response)
+    assert project["name"] == "plain-folder"
+    assert project["path_exists"] is True
+    assert (external_path / ".pv_project").is_dir()
+
+    metadata = (external_path / ".pv_project" / "metadata.json").read_text(encoding="utf-8")
+    assert '"project"' in metadata
+    assert '"pages": []' in metadata
+
+
 def test_project_and_page_reorder_and_page_duplication(tmp_path: Path) -> None:
     client, _ = create_client(tmp_path)
 
